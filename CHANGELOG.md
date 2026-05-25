@@ -1,5 +1,6 @@
 ### 🆕 Changelog
 ### 🔧 Bug Fixes & Improvements
+- [֍](https://github.com/NyanTV/NyanTV/commit/70ab5d0)  keep kotlin stdlib and lifecycle classes for extensions
 - [֍](https://github.com/NyanTV/NyanTV/commit/a371182)  disable r8 full mode and add proguard rules for aniyomi extensions
 - [֍](https://github.com/NyanTV/NyanTV/commit/6e408f3)  add rules to prevent r8 from crashing the app at launch
 - [֍](https://github.com/NyanTV/NyanTV/commit/20b2ec1)  adjust apk renaming step for build
