@@ -1,0 +1,8 @@
+### 🔧 Bug Fixes & Improvements
+-   adjust apk renaming step for build
+
+### 🧹 Chores & Documentation
+-   add missing proguard-rules.pro file
+-   track gradle-wrapper.jar for ci builds
+
+ 
