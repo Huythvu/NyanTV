@@ -1,4 +1,6 @@
 ### 🔧 Bug Fixes & Improvements
+-   proguard stuff again
+-   proguard keeps fucking up
 -   preserve type references and data models for extension system
 -   keep kotlin stdlib and lifecycle classes for extensions
 -   disable r8 full mode and add proguard rules for aniyomi extensions
