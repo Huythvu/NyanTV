@@ -1,4 +1,5 @@
 ### 🔧 Bug Fixes & Improvements
+-   disable r8 full mode and add proguard rules for aniyomi extensions
 -   add rules to prevent r8 from crashing the app at launch
 -   adjust apk renaming step for build
 
