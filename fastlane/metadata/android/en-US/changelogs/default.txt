@@ -1,4 +1,5 @@
 ### 🔧 Bug Fixes & Improvements
+-   add rules to prevent r8 from crashing the app at launch
 -   adjust apk renaming step for build
 
 ### 🧹 Chores & Documentation
