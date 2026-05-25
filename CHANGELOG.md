@@ -1,5 +1,7 @@
 ### 🆕 Changelog
 ### 🔧 Bug Fixes & Improvements
+- [֍](https://github.com/NyanTV/NyanTV/commit/0b4a21c)  proguard stuff again
+- [֍](https://github.com/NyanTV/NyanTV/commit/84b3509)  proguard keeps fucking up
 - [֍](https://github.com/NyanTV/NyanTV/commit/9a08d4b)  preserve type references and data models for extension system
 - [֍](https://github.com/NyanTV/NyanTV/commit/70ab5d0)  keep kotlin stdlib and lifecycle classes for extensions
 - [֍](https://github.com/NyanTV/NyanTV/commit/a371182)  disable r8 full mode and add proguard rules for aniyomi extensions
