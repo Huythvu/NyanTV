@@ -1,49 +1,61 @@
-# App Core, Lifecycle & Reflection
+# App Core & Lifecycle Protection
 -keep class com.nyantv.** { *; }
 -keep interface com.nyantv.** { *; }
 -keep class androidx.lifecycle.** { *; }
--keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+-keep interface androidx.lifecycle.** { *; }
 
-# Kotlin Standard Library & Type Metadata (Crucial for Extensions)
+# Keep Attributes and Signatures intact (Crucial for Type matching)
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,MethodParameters,RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations
+-keepattributes KotlinBlankLines,LineNumberTable,SourceFile
+
+# Kotlin Standard Library & Reflect
 -keep class kotlin.** { *; }
 -keep interface kotlin.** { *; }
 -keep class kotlin.reflect.** { *; }
--keep class kotlin.reflect.jvm.internal.** { *; }
--keep class kotlin.jvm.internal.TypeReference { *; }
--keep class kotlin.text.Regex { *; }
--keep class kotlin.Pair { *; }
--keep class kotlin.ranges.** { *; }
--keep class java.lang.reflect.ParameterizedType { *; }
 -dontwarn kotlin.**
 
-# Tachiyomi / Aniyomi Core & Extension Loader
--keep class eu.kanade.tachiyomi.** { *; }
--keep interface eu.kanade.tachiyomi.** { *; }
--keep class dalvik.system.** { *; }
--keepattributes SourceFile,LineNumberTable
-
-# Fix for Extension Data Models (Prevents JSON parsing errors)
--keep class eu.kanade.tachiyomi.animeextension.** { *; }
--keep class eu.kanade.tachiyomi.multisrc.** { *; }
-
 # Injekt Dependency Injection
--keepattributes RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations
 -keep class uy.kohesive.injekt.** { *; }
 -keep interface uy.kohesive.injekt.** { *; }
 -keepclassmembers class * {
     @uy.kohesive.injekt.** *;
 }
 
-# RxJava & Coroutines
--keep class rx.** { *; }
+# Tachiyomi / Aniyomi Core Ecosystem & Extension Loader
+-keep class eu.kanade.tachiyomi.** { *; }
+-keep interface eu.kanade.tachiyomi.** { *; }
+-keep class dalvik.system.** { *; }
+
+# HARD PROTECTION: Prevent obfuscation of ALL Source structures & signatures
+-keep class eu.kanade.tachiyomi.animesource.** { *; }
+-keep interface eu.kanade.tachiyomi.animesource.** { *; }
+-keepclassmembers class eu.kanade.tachiyomi.animesource.** { *; }
+
+-keep class eu.kanade.tachiyomi.source.** { *; }
+-keep interface eu.kanade.tachiyomi.source.** { *; }
+-keepclassmembers class eu.kanade.tachiyomi.source.** { *; }
+
+-keep class eu.kanade.tachiyomi.animeextension.** { *; }
+-keep class eu.kanade.tachiyomi.multisrc.** { *; }
+
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
+-keepclassmembers class okhttp3.** { *; }
+-dontobfuscate class okhttp3.**
+
+-keep class okio.** { *; }
+-keep interface okio.** { *; }
+-keepclassmembers class okio.** { *; }
+
+# Networking & JSON Data
 -keep class kotlinx.serialization.** { *; }
 -keep class kotlinx.coroutines.** { *; }
--dontwarn kotlinx.serialization.**
-
-# Networking & Data
 -keep class org.jsoup.** { *; }
 -keep class androidx.datastore.** { *; }
+
+# Suppress Warnings that block compilation
 -dontwarn okhttp3.**
 -dontwarn okio.**
 -dontwarn javax.annotation.**
+-dontwarn kotlinx.serialization.**
 -dontwarn androidx.datastore.**
