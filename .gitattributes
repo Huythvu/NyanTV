@@ -1,0 +1,7 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# GitHub language statistics
+*.kt linguist-language=Kotlin
+*.kts linguist-language=Kotlin
+*.gradle linguist-detectable=false

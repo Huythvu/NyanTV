@@ -1,0 +1,135 @@
+<div align="center">
+<img src='github_assets/images/logo.png' alt='NyanTV Icon' style="border-radius: 50px; height: 150px; width: 150px;">
+
+<p align="center">
+   <img src="https://img.shields.io/badge/platforms-android tv-06599d?color=white&labelColor=black&style=for-the-badge"/>
+  <a href="https://github.com/NyanTV/NyanTV/releases"><img src="https://img.shields.io/github/downloads/NyanTV/NyanTV/total?color=white&labelColor=black&label=Downloads&style=for-the-badge" alt="GitHub Downloads"></a>
+</p>
+<p align="center">
+<a href="https://www.codefactor.io/repository/github/NyanTV/NyanTV"><img src="https://img.shields.io/codefactor/grade/github/NyanTV/NyanTV?color=white&labelColor=black&style=for-the-badge&label=Codefactor" alt="CodeFactor"/></a>
+  <!--<a href="https://hosted.weblate.org/engage/echo"><img alt="Weblate project translated" src="https://img.shields.io/weblate/progress/echo?color=white&labelColor=black&label=Translated&style=flat-square"></a>-->
+<!-- <a href="https://github.com/NyanTV/NyanTV/commits/main">
+    <img src="https://img.shields.io/github/last-commit/NyanTV/NyanTV?color=white&labelColor=black&label=Latest Commit&style=for-the-badge" alt="GitHub Last Commit">
+</a> -->
+<a href="https://github.com/NyanTV/NyanTV/stargazers">
+      <img src="https://img.shields.io/github/stars/NyanTV/NyanTV?color=white&labelColor=black&style=for-the-badge" alt="Stars" /></a>
+</p>
+<a href="https://trendshift.io/repositories/12529" target="_blank"><img src="https://trendshift.io/api/badge/repositories/12529" alt="NyanTV%2FNyanTV | Trendshift" style="width: 250px; height: 27.99px;" width="250" height="55"/></a>
+</div>
+
+# NyanTV: Multi-Service Tracking Client
+
+[**NyanTV**](https://nyantv.vercel.app/) is a multi-service tracking client for Android TV. It combines **anime tracking** (via [**AniList**](https://anilist.co/) & [**MyAnimeList**](https://myanimelist.net/)) with **TV show and movie tracking** (through [**Simkl**](https://simkl.com/)) in one seamless interface.
+
+> [!IMPORTANT]  
+> **NyanTV is a tracking tool only.** It does not host, provide, distribute, or endorse any streaming content, media, or third-party extensions.
+>
+> **User Responsibility:** Users are solely responsible for how they use the app and any third-party services or extensions they choose to interact with. Users must comply with all applicable laws, copyright, and intellectual property rights.
+>
+> **No Liability:** The developers of NyanTV disclaim all liability for misuse, legal issues, or violations arising from user actions. Legal concerns, including DMCA claims, should be directed to the respective third-party services, not NyanTV. The app is provided "as-is" without warranties.
+>
+> **Services:** NyanTV integrates only with the official APIs of supported services (AniList, MyAnimeList & Simkl). Third-party extensions are the responsibility of their creators, not the NyanTV developers.
+>
+> **By using NyanTV, you agree to comply with our [Terms of Service](./TOS.md). Please review the ToS to understand our DMCA-compliant, tracking functionality and our non-involvement with any content or services beyond AniList, MyAnimeList and Simkl.**
+
+## Downloads
+
+<div align="center">
+  <p>
+    <a href="https://github.com/NyanTV/NyanTV/releases/latest"><img src="https://img.shields.io/github/v/release/NyanTV/NyanTV?color=white&labelColor=black&display_name=tag&style=for-the-badge&label=Stable" alt="Latest Stable Release"/></a>
+  </p>
+
+</div>
+
+## Preview
+
+<p align="center">
+<img src="./github_assets/screenshots/preview.webp" width="100%" alt="NyanTV Preview Slideshow">
+<br>
+<a href="https://github.com/NyanTV/NyanTV/wiki/Screenshots">Static preview</a>
+</p>
+
+## Upcoming Features
+- [x] Watch next widget for Android Home Launcher
+- [x] Real-time Subtitle translation
+
+<details>
+  <summary>Implemented</summary>
+
+- [x] Full D-Pad integration
+
+</details>
+
+## Wiki
+
+For detailed setup instructions, check out the [Wiki](https://github.com/NyanTV/NyanTV/wiki).
+
+## Support Us
+
+> [!TIP]
+> Add your **Discord account** in the **NyanTV settings** to help spread it
+>
+> ⭐ **Star this repository to support the developer & encourage the development of the app!**
+>
+> ❤️ Heart this project at [__**miyomi.pages.dev**__](https://miyomi.pages.dev/software/nyantv) (No login required)
+
+<div align="center">
+<a href='https://ko-fi.com/hoemotion' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://ko-fi.com/img/githubbutton_sm.svg' border='0' alt='Leave a tip at ko-fi.com' /></a>
+<details>
+  <summary>Star History</summary>
+  <a href="https://github.com/NyanTV/NyanTV/stargazers">
+      <img alt="Star History Chart" src="https://bytecrank.com/nastyox/reporoster/php/stargazersSVG.php?theme=dark&format=notext&user=NyanTV&repo=NyanTV" />
+  </a>
+</details>
+
+## Official Communities
+
+Join our community to stay updated and contribute to the discussion:
+
+
+<a href="https://t.me/NyanSupport" style="display: inline-block;"><img src="https://files.catbox.moe/z66xwr.png" alt="Telegram" height="40" style="vertical-align: middle;"></a>
+<a href="https://stoat.chat/invite/fKzse8yy" style="display: inline-block;"><img src="./github_assets/images/stoat-icon.png" alt="Stoat" height="40" style="vertical-align: middle;"></a>
+
+<a href="https://discord.gg/y2vaFPXs4F">
+<img src="https://invite.casperiv.dev?inviteCode=y2vaFPXs4F" alt="Discord">
+</a>
+
+
+## Contribute
+
+We welcome contributions, from translations to new features.  
+Our development environment setup guide is available [here](./DEVELOPMENT.md).  
+For inquiries, join our [Telegram group](https://t.me/NyanSupport) / [Discord server](https://discord.gg/y2vaFPXs4F) / [Stoat server](https://stoat.chat/invite/fKzse8yy).  
+Pull requests are welcome; check the [open issues](https://github.com/NyanTV/NyanTV/issues) for guidance on major changes.
+
+<!--<details>
+<summary>Weblate Translation Graph</summary>
+<a href="https://hosted.weblate.org/projects/echo/#languages"><img src="https://hosted.weblate.org/widget/echo/app/multi-auto.svg" alt="Translation status" /></a>
+</details>-->
+
+## Visitors
+
+<img src="https://count.getloli.com/@NyanTV?name=nyantv&theme=rule34&padding=8&offset=0&align=top&scale=1&pixelated=1&darkmode=auto" />
+
+## Acknowledgments
+
+A heartfelt thank you to everyone who has contributed to the development of NyanTV.
+Your efforts are invaluable.
+
+<a href="https://github.com/NyanTV/NyanTV/graphs/contributors">
+  <img alt="GitHub contributors" src="https://img.shields.io/github/contributors/NyanTV/NyanTV?style=flat-square&label=Contributors%20%3A&labelColor=%230f1318&color=%230f1318" align="left">
+</a>
+<br>
+<a href="https://github.com/NyanTV/NyanTV/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=NyanTV/NyanTV" alt="Contributors">
+</a>
+
+## Stats
+
+![Alt](https://repobeats.axiom.co/api/embed/3def595751b3c9e9bff02749e0c56bf8274f3a72.svg "Repobeats analytics image")
+
+## License
+
+NyanTV is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). More info can be found [here](LICENSE.md).
+
+</div>

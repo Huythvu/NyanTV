@@ -1,0 +1,44 @@
+# Android/IntelliJ
+*.iml
+.idea/
+.gradle/
+local.properties
+*.jks
+*.keystore
+
+# Build outputs
+build/
+app/build/
+*/build/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin
+*.class
+*.log
+*.hprof
+
+# Gradle
+.gradle/
+gradle/wrapper/gradle-wrapper.jar
+
+# Environment and secrets
+.env
+.secrets
+nyantv.jks
+keystore.b64
+nyantv.jks.base64
+
+# Version management
+.fvm/
+.vscode/settings.json
+
+# Coverage
+coverage/
+*.exec
