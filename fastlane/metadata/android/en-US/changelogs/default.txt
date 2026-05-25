@@ -1,4 +1,5 @@
 ### 🔧 Bug Fixes & Improvements
+-   preserve type references and data models for extension system
 -   keep kotlin stdlib and lifecycle classes for extensions
 -   disable r8 full mode and add proguard rules for aniyomi extensions
 -   add rules to prevent r8 from crashing the app at launch
