@@ -14,6 +14,9 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+import androidx.media3.common.C
 
 /**
  * Runs in the dedicated `:player` process (see AndroidManifest).
@@ -76,18 +79,27 @@ class PlayerService : Service() {
                 val dataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
                     .setUserAgent(headers["User-Agent"] ?: "Mozilla/5.0")
                     .setDefaultRequestProperties(headers)
+                    .setConnectTimeoutMs(15_000)
+                    .setReadTimeoutMs(15_000)
 
                 val mediaItem = androidx.media3.common.MediaItem.fromUri(uri)
-
-                // HLS erkennen: .m3u8 ODER Content-Type-Header
                 val isHls = uri.contains(".m3u8", ignoreCase = true)
                         || headers["Content-Type"]?.contains("mpegurl", ignoreCase = true) == true
 
+                val errorPolicy = object : DefaultLoadErrorHandlingPolicy() {
+                    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+                        return if (loadErrorInfo.errorCount <= 5) 1_000L else C.TIME_UNSET
+                    }
+                    override fun getMinimumLoadableRetryCount(dataType: Int) = 5
+                }
+
                 val mediaSource = if (isHls) {
                     androidx.media3.exoplayer.hls.HlsMediaSource.Factory(dataSourceFactory)
+                        .setLoadErrorHandlingPolicy(errorPolicy)
                         .createMediaSource(mediaItem)
                 } else {
                     androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dataSourceFactory)
+                        .setLoadErrorHandlingPolicy(errorPolicy)
                         .createMediaSource(mediaItem)
                 }
 
