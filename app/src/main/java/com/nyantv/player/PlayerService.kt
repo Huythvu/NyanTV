@@ -18,122 +18,142 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import androidx.media3.common.C
 
-/**
- * Runs in the dedicated `:player` process (see AndroidManifest).
- *
- * ── Threading rules ──────────────────────────────────────────────────────────
- * ExoPlayer is built with setLooper(playerThread.looper). This means:
- *   - ALL ExoPlayer API calls (getters AND setters) MUST happen on playerThread.
- *   - mainHandler is only used for Service lifecycle (onCreate, onDestroy).
- *   - Position ticks MUST also run on playerHandler — NOT mainHandler.
- *     (v2 bug: ticks were on mainHandler → "Player accessed on wrong thread" crash)
- */
 @UnstableApi
 class PlayerService : Service() {
 
     companion object { private const val TAG = "NyanTV:PlayerService" }
 
     // ── Threads & handlers ─────────────────────────────────────────────────────
-
     private lateinit var playerThread: HandlerThread
     private lateinit var playerHandler: Handler
 
-    // ── Player ─────────────────────────────────────────────────────────────────
-
+    // ── ExoPlayer ──────────────────────────────────────────────────────────────
     private lateinit var player: ExoPlayer
-
     private lateinit var trackSelector: DefaultTrackSelector
 
-    // ── Callbacks ──────────────────────────────────────────────────────────────
+    // ── MPV ────────────────────────────────────────────────────────────────────
+    private var mpv: MpvPlayerWrapper? = null
+    private var usingMpv = false
+    private var currentSurface: Surface? = null
 
+    // ── Callbacks ──────────────────────────────────────────────────────────────
     private val callbacks = RemoteCallbackList<IPlayerCallback>()
     private var positionTick: Runnable? = null
 
-    // ── AIDL stub ──────────────────────────────────────────────────────────────
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    private fun isHls(uri: String) = uri.contains(".m3u8", ignoreCase = true)
 
+    private fun ensureMpv() {
+        if (mpv != null) return
+        mpv = MpvPlayerWrapper(this).also { m ->
+            m.initialize()
+            m.listener = object : MpvPlayerWrapper.Listener {
+                override fun onStateChanged(state: Int)                  = broadcast { it.onStateChanged(state) }
+                override fun onPositionChanged(posMs: Long, durMs: Long) = broadcast { it.onPositionChanged(posMs, durMs) }
+                override fun onBufferedChanged(bufferedMs: Long)          = broadcast { it.onBufferedChanged(bufferedMs) }
+                override fun onVideoSizeChanged(w: Int, h: Int)          = broadcast { it.onVideoSizeChanged(w, h) }
+                override fun onError(message: String)                    = broadcast { it.onError(message) }
+                override fun onPlayWhenReadyChanged(play: Boolean)       = broadcast { it.onPlayWhenReadyChanged(play) }
+            }
+        }
+    }
+
+    private fun useMpv(): Boolean =
+        getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE)
+            .getString("player_engine", "exoplayer") == "libmpv"
+
+    // ── AIDL stub ──────────────────────────────────────────────────────────────
     private val stub = object : IPlayerService.Stub() {
 
-        override fun load(uri: String) {
-            Log.d(TAG, "load: $uri")
+        override fun load(uri: String, startPositionMs: Long) {
             post {
-                val forceHighest = getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE)
-                    .getString("quality_mode", "abr") == "highest"
-                trackSelector.setParameters(
-                    trackSelector.buildUponParameters()
-                        .setForceHighestSupportedBitrate(forceHighest)
-                )
-                player.setMediaItem(MediaItem.fromUri(uri))
-                player.prepare()
-                player.playWhenReady = true
+                if (isHls(uri) && useMpv()) {
+                    usingMpv = true
+                    ensureMpv()
+                    currentSurface?.let { mpv?.attachSurface(it) }
+                    mpv?.load(uri = uri, startPositionMs = startPositionMs)
+                } else {
+                    usingMpv = false
+                    player.setMediaItem(MediaItem.fromUri(uri))
+                    player.seekTo(startPositionMs)
+                    player.prepare()
+                    player.playWhenReady = true
+                }
             }
         }
 
-        override fun loadWithHeaders(uri: String, headersJson: String) {
+        override fun loadWithHeaders(uri: String, headersJson: String, startPositionMs: Long) {
             post {
                 val headers = runCatching {
-                    org.json.JSONObject(headersJson).let { json ->
-                        json.keys().asSequence().associateWith { json.getString(it) }
+                    org.json.JSONObject(headersJson).let { j ->
+                        j.keys().asSequence().associateWith { j.getString(it) }
                     }
                 }.getOrDefault(emptyMap())
 
-                val dataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
-                    .setUserAgent(headers["User-Agent"] ?: "Mozilla/5.0")
-                    .setDefaultRequestProperties(headers)
-                    .setConnectTimeoutMs(15_000)
-                    .setReadTimeoutMs(15_000)
-
-                val mediaItem = androidx.media3.common.MediaItem.fromUri(uri)
-                val isHls = uri.contains(".m3u8", ignoreCase = true)
-                        || headers["Content-Type"]?.contains("mpegurl", ignoreCase = true) == true
-
-                val errorPolicy = object : DefaultLoadErrorHandlingPolicy() {
-                    override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
-                        return if (loadErrorInfo.errorCount <= 5) 1_000L else C.TIME_UNSET
-                    }
-                    override fun getMinimumLoadableRetryCount(dataType: Int) = 5
-                }
-
-                val mediaSource = if (isHls) {
-                    androidx.media3.exoplayer.hls.HlsMediaSource.Factory(dataSourceFactory)
-                        .setLoadErrorHandlingPolicy(errorPolicy)
-                        .createMediaSource(mediaItem)
+                if (isHls(uri) && useMpv()) {
+                    usingMpv = true
+                    ensureMpv()
+                    currentSurface?.let { mpv?.attachSurface(it) }
+                    mpv?.load(uri = uri, headers = headers, startPositionMs = startPositionMs)
                 } else {
-                    androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dataSourceFactory)
-                        .setLoadErrorHandlingPolicy(errorPolicy)
-                        .createMediaSource(mediaItem)
-                }
+                    usingMpv = false
+                    val dataSourceFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+                        .setUserAgent(headers["User-Agent"] ?: "Mozilla/5.0")
+                        .setDefaultRequestProperties(headers)
+                        .setConnectTimeoutMs(15_000)
+                        .setReadTimeoutMs(15_000)
+                        .setAllowCrossProtocolRedirects(true)
 
-                val forceHighest = getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE)
-                    .getString("quality_mode", "abr") == "highest"
-                trackSelector.setParameters(
-                    trackSelector.buildUponParameters()
-                        .setForceHighestSupportedBitrate(forceHighest)
-                )
-                player.setMediaSource(mediaSource)
-                player.prepare()
-                player.playWhenReady = true
+                    val errorPolicy = object : DefaultLoadErrorHandlingPolicy() {
+                        override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long =
+                            if (loadErrorInfo.errorCount <= 5) 1_000L else C.TIME_UNSET
+                        override fun getMinimumLoadableRetryCount(dataType: Int) = 5
+                    }
+
+                    val mediaSource = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dataSourceFactory)
+                        .setLoadErrorHandlingPolicy(errorPolicy)
+                        .createMediaSource(MediaItem.fromUri(uri))
+
+                    val forceHighest = getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE)
+                        .getString("quality_mode", "abr") == "highest"
+                    trackSelector.setParameters(
+                        trackSelector.buildUponParameters()
+                            .setForceHighestSupportedBitrate(forceHighest)
+                    )
+                    player.setMediaSource(mediaSource)
+                    player.seekTo(startPositionMs)
+                    player.prepare()
+                    player.playWhenReady = true
+                }
             }
         }
 
-        override fun play()  = post { player.play() }
-        override fun pause() = post { player.pause() }
+        override fun play()  = post { if (usingMpv) mpv?.play()  else player.play() }
+        override fun pause() = post { if (usingMpv) mpv?.pause() else player.pause() }
 
         override fun stop() = post {
-            player.stop()
-            player.clearMediaItems()
+            if (usingMpv) mpv?.stop()
+            else { player.stop(); player.clearMediaItems() }
         }
 
-        override fun seekTo(positionMs: Long)       = post { player.seekTo(positionMs) }
-        override fun seekForward()                  = post { player.seekForward() }
-        override fun seekBackward()                 = post { player.seekBack() }
-        override fun setPlaybackSpeed(speed: Float) = post { player.setPlaybackSpeed(speed) }
+        override fun seekTo(positionMs: Long)       = post { if (usingMpv) mpv?.seekTo(positionMs)      else player.seekTo(positionMs) }
+        override fun seekForward()                  = post { if (usingMpv) mpv?.seekForward()            else player.seekForward() }
+        override fun seekBackward()                 = post { if (usingMpv) mpv?.seekBackward()           else player.seekBack() }
+        override fun setPlaybackSpeed(speed: Float) = post { if (usingMpv) mpv?.setPlaybackSpeed(speed) else player.setPlaybackSpeed(speed) }
 
         override fun setSurface(surface: Surface?) {
             Log.d(TAG, "setSurface: $surface")
-            post { player.setVideoSurface(surface) }
+            currentSurface = surface
+            post {
+                if (usingMpv) surface?.let { mpv?.attachSurface(it) } ?: mpv?.detachSurface()
+                else player.setVideoSurface(surface)
+            }
         }
 
-        override fun clearSurface() = post { player.clearVideoSurface() }
+        override fun clearSurface() = post {
+            currentSurface = null
+            if (usingMpv) mpv?.detachSurface() else player.clearVideoSurface()
+        }
 
         override fun registerCallback(cb: IPlayerCallback?) {
             cb?.let {
@@ -146,14 +166,20 @@ class PlayerService : Service() {
             cb?.let { callbacks.unregister(it) }
         }
 
-        // Synchronous getters — must also be called from playerThread context.
-        // The UI calls these rarely (only in refreshPosition) and accepts the
-        // brief Binder blocking; ExoPlayer will throw if called from a wrong thread.
-        override fun getPosition()         = player.currentPosition
-        override fun getDuration()         = player.duration
-        override fun getBufferedPosition() = player.bufferedPosition
-        override fun getState()            = player.playbackState
-        override fun getPlayWhenReady()    = player.playWhenReady
+        private fun <T> runOnPlayerThread(block: () -> T): T {
+            if (Looper.myLooper() == playerThread.looper) return block()
+            val task = java.util.concurrent.FutureTask(block)
+            playerHandler.post(task)
+            return runCatching {
+                task.get(500, java.util.concurrent.TimeUnit.MILLISECONDS)
+            }.getOrThrow()
+        }
+
+        override fun getPosition()         = runOnPlayerThread { if (usingMpv) mpv?.getCurrentPosition() ?: 0L else player.currentPosition }
+        override fun getDuration()         = runOnPlayerThread { if (usingMpv) mpv?.getDuration()         ?: 0L else player.duration }
+        override fun getBufferedPosition() = runOnPlayerThread { if (usingMpv) mpv?.getBufferedPosition() ?: 0L else player.bufferedPosition }
+        override fun getState()            = runOnPlayerThread { if (usingMpv) 3                               else player.playbackState }
+        override fun getPlayWhenReady()    = runOnPlayerThread { if (usingMpv) mpv?.isPlaying() ?: false       else player.playWhenReady }
     }
 
     // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -167,8 +193,6 @@ class PlayerService : Service() {
             .also { it.start() }
         playerHandler = Handler(playerThread.looper)
 
-        // Build ExoPlayer synchronously; setLooper() tells it to use playerThread
-        // for ALL internal and external API calls.
         trackSelector = DefaultTrackSelector(this)
         player = ExoPlayer.Builder(this)
             .setLooper(playerThread.looper)
@@ -179,8 +203,6 @@ class PlayerService : Service() {
 
         Log.d(TAG, "ExoPlayer ready on thread: ${playerThread.name}")
 
-        // Position ticks must also run on playerHandler — player getters are
-        // only allowed on ExoPlayerThread.
         schedulePositionTicks()
     }
 
@@ -192,8 +214,10 @@ class PlayerService : Service() {
     override fun onDestroy() {
         Log.d(TAG, "onDestroy")
 
-        // Cancel ticks on the same handler they were scheduled on
         positionTick?.let { playerHandler.removeCallbacks(it) }
+
+        mpv?.release()
+        mpv = null
 
         playerHandler.post {
             player.removeListener(playerListener)
@@ -205,26 +229,30 @@ class PlayerService : Service() {
         super.onDestroy()
     }
 
-    // ── Player listener (fires on playerThread — same looper ExoPlayer uses) ───
+    // ── ExoPlayer listener ─────────────────────────────────────────────────────
 
     private val playerListener = object : Player.Listener {
 
         override fun onPlaybackStateChanged(state: Int) {
+            if (usingMpv) return
             Log.d(TAG, "onPlaybackStateChanged: $state")
             broadcast { it.onStateChanged(state) }
         }
 
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (usingMpv) return
             Log.d(TAG, "onPlayWhenReadyChanged: $playWhenReady")
             broadcast { it.onPlayWhenReadyChanged(playWhenReady) }
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            if (usingMpv) return
             Log.e(TAG, "onPlayerError: ${error.errorCode} — ${error.localizedMessage}", error)
             broadcast { it.onError(error.localizedMessage ?: "Playback error") }
         }
 
         override fun onVideoSizeChanged(videoSize: VideoSize) {
+            if (usingMpv) return
             Log.d(TAG, "onVideoSizeChanged: ${videoSize.width}x${videoSize.height}")
             broadcast { it.onVideoSizeChanged(videoSize.width, videoSize.height) }
         }
@@ -234,6 +262,7 @@ class PlayerService : Service() {
             newPos: Player.PositionInfo,
             reason: Int
         ) {
+            if (usingMpv) return
             if (reason == Player.DISCONTINUITY_REASON_SEEK) {
                 val pos = player.currentPosition
                 val dur = player.duration
@@ -248,19 +277,20 @@ class PlayerService : Service() {
     }
 
     // ── Position ticks ─────────────────────────────────────────────────────────
-    // Run on playerHandler so ExoPlayer getters are called on the correct thread.
 
     private fun schedulePositionTicks() {
         positionTick = object : Runnable {
             override fun run() {
-                val state = player.playbackState   // safe: we are on playerThread
-                if (state == Player.STATE_READY || state == Player.STATE_BUFFERING) {
-                    val pos = player.currentPosition
-                    val dur = player.duration
-                    val buf = player.bufferedPosition
-                    broadcast {
-                        it.onPositionChanged(pos, dur)
-                        it.onBufferedChanged(buf)
+                if (!usingMpv) {
+                    val state = player.playbackState
+                    if (state == Player.STATE_READY || state == Player.STATE_BUFFERING) {
+                        val pos = player.currentPosition
+                        val dur = player.duration
+                        val buf = player.bufferedPosition
+                        broadcast {
+                            it.onPositionChanged(pos, dur)
+                            it.onBufferedChanged(buf)
+                        }
                     }
                 }
                 playerHandler.postDelayed(this, 500L)
@@ -277,7 +307,6 @@ class PlayerService : Service() {
         callbacks.finishBroadcast()
     }
 
-    /** Dispatch to playerThread. If already on it, execute inline. */
     private fun post(block: () -> Unit) {
         if (Looper.myLooper() == playerThread.looper) block()
         else playerHandler.post(block)

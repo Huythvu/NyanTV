@@ -22,7 +22,7 @@ android {
 
     defaultConfig {
         applicationId = "com.nyantv"
-        minSdk = 23
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
@@ -115,12 +115,15 @@ dependencies {
     implementation("androidx.browser:browser:1.10.0")
 
     // Media player
-    val media3 = "1.3.1"
+    val media3 = "1.10.1"
     implementation("androidx.media3:media3-exoplayer:${media3}")
     implementation("androidx.media3:media3-exoplayer-hls:${media3}")
     implementation("androidx.media3:media3-exoplayer-dash:${media3}")
     implementation("androidx.media3:media3-exoplayer-smoothstreaming:${media3}")
     implementation("androidx.media3:media3-datasource-okhttp:${media3}")
+    implementation("androidx.media3:media3-extractor:${media3}")
+    // Libmpv fallback for hls
+    implementation("dev.jdtech.mpv:libmpv:1.0.0")
 
     // Aniyomi
     implementation("org.jsoup:jsoup:1.18.3")

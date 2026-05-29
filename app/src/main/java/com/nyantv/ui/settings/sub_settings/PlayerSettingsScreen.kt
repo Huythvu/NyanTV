@@ -31,6 +31,7 @@ fun PlayerSettingsScreen(navController: NavController) {
 
     // ── State ──────────────────────────────────────────────────────────────────
     var qualityMode   by remember { mutableStateOf(prefs.getString("quality_mode",  "highest") ?: "highest") }
+    var playerEngine by remember { mutableStateOf(prefs.getString("player_engine", "exoplayer") ?: "exoplayer") }
     var subEnabled    by remember { mutableStateOf(prefs.getBoolean("sub_enabled",  true)) }
     var fontSize      by remember { mutableFloatStateOf(prefs.getFloat("sub_size",  18f)) }
     var bold          by remember { mutableStateOf(prefs.getBoolean("sub_bold",     false)) }
@@ -39,7 +40,7 @@ fun PlayerSettingsScreen(navController: NavController) {
     var watchedThreshold by remember { mutableIntStateOf(prefs.getInt("watched_threshold", 80)) }
 
     // Auto-save whenever any value changes
-    LaunchedEffect(qualityMode, subEnabled, fontSize, bold, translateTo, bigSkipSec, watchedThreshold) {
+    LaunchedEffect(qualityMode, subEnabled, fontSize, bold, translateTo, bigSkipSec, watchedThreshold, playerEngine) {
         prefs.edit {
             putString("quality_mode",      qualityMode)
             putBoolean("sub_enabled",      subEnabled)
@@ -48,6 +49,7 @@ fun PlayerSettingsScreen(navController: NavController) {
             putString("sub_translate",     translateTo)
             putInt("big_skip_sec",         bigSkipSec)
             putInt("watched_threshold",    watchedThreshold)
+            putString("player_engine", playerEngine)
         }
     }
 
@@ -74,7 +76,7 @@ fun PlayerSettingsScreen(navController: NavController) {
                     ),
                     "highest" to Triple(
                         "Highest Available",
-                        "Always plays the best quality — may rebuffer on slow networks",
+                        "Always plays the best quality, may rebuffer on slow networks",
                         Icons.Filled.Hd
                     ),
                 ).forEach { (mode, triple) ->
@@ -94,6 +96,62 @@ fun PlayerSettingsScreen(navController: NavController) {
                         verticalAlignment     = Alignment.CenterVertically
                     ) {
                         RadioButton(selected = selected, onClick = { qualityMode = mode })
+                        Icon(
+                            icon, null,
+                            modifier = Modifier.size(20.dp),
+                            tint     = if (selected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                label,
+                                style      = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                            Text(
+                                description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        SectionCard(title = "Player Engine") {
+            Column(
+                modifier = Modifier.padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf(
+                    "exoplayer" to Triple(
+                        "ExoPlayer",
+                        "Recommended for most streams",
+                        Icons.Filled.PlayCircle
+                    ),
+                    "libmpv" to Triple(
+                        "libmpv",
+                        "Use when HLS streams stutter or get stuck on seek",
+                        Icons.Filled.Tune
+                    ),
+                ).forEach { (engine, triple) ->
+                    val (label, description, icon) = triple
+                    val selected = playerEngine == engine
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.small)
+                            .background(
+                                if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                                else Color.Transparent
+                            )
+                            .clickable { playerEngine = engine }
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment     = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selected, onClick = { playerEngine = engine })
                         Icon(
                             icon, null,
                             modifier = Modifier.size(20.dp),

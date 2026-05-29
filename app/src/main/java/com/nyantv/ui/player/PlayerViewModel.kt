@@ -471,10 +471,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val uri = pendingUri ?: return
         Log.d(TAG, "maybeStartPending: firing load($uri)")
         if (pendingHeaders.isEmpty()) {
-            svc.load(uri)
+            svc.load(uri, 0L)
         } else {
             val headersJson = org.json.JSONObject(pendingHeaders).toString()
-            svc.loadWithHeaders(uri, headersJson)
+            svc.loadWithHeaders(uri, headersJson, 0L)
         }
         pendingUri = null
         pendingHeaders = emptyMap()

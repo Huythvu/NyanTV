@@ -849,13 +849,14 @@ private fun ProgressBar(state: PlayerUiState) {
 
             segments.forEach { seg ->
                 val startFrac = (seg.startSec * 1000f / totalMs).coerceIn(0f, 1f)
-                val widthFrac = ((seg.endSec - seg.startSec) * 1000f / totalMs).coerceIn(0f, 1f - startFrac)
+                val rawWidth  = ((seg.endSec - seg.startSec) * 1000f / totalMs).coerceIn(0f, 1f)
+                val adjWidth  = if (startFrac < 1f) (rawWidth / (1f - startFrac)).coerceIn(0f, 1f) else 0f
                 Row(Modifier.fillMaxHeight()) {
                     Spacer(Modifier.fillMaxWidth(startFrac))
                     Box(
                         Modifier
                             .fillMaxHeight()
-                            .fillMaxWidth(widthFrac)
+                            .fillMaxWidth(adjWidth)
                             .background(seg.color.copy(alpha = 0.78f))
                     )
                 }

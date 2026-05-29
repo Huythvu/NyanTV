@@ -37,16 +37,13 @@ object AdaptiveBufferingHelper {
             .setBufferDurationsMs(
                 minMs,
                 bufMax,
-                minMs / 2,
-                minMs * 3 / 4
+                1_500,
+                2_500   // statt minMs * 3 / 4
             )
-            // On low-RAM: prefer time accuracy over size thresholds so we don't
-            // buffer more bytes than needed
-            .setPrioritizeTimeOverSizeThresholds(totalRamMb < 1024)
-            // Back-buffer: keep 10 s behind for seek-back; reduce to 5 s on low RAM
+            .setPrioritizeTimeOverSizeThresholds(true)
             .setBackBuffer(
-                /* backBufferDurationMs         = */ if (totalRamMb < 1024) 5_000 else 10_000,
-                /* retainBackBufferFromKeyframe = */ true
+                if (totalRamMb < 1024) 5_000 else 10_000,
+                true
             )
             .build()
     }

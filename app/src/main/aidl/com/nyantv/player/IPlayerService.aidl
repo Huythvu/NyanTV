@@ -17,8 +17,8 @@ import android.view.Surface;
 interface IPlayerService {
 
     // ── Playback commands (fire-and-forget) ────────────────────────────────────
-    oneway void load(String uri);
-    oneway void loadWithHeaders(String uri, String headersJson);
+    oneway void load(String uri, long startPositionMs);
+    oneway void loadWithHeaders(String uri, String headersJson, long startPositionMs);
     oneway void play();
     oneway void pause();
     oneway void stop();
