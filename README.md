@@ -50,8 +50,8 @@
 </p>
 
 ## Upcoming Features
-- [x] Watch next widget for Android Home Launcher
-- [x] Real-time Subtitle translation
+- [ ] Watch next widget for Android Home Launcher
+- [ ] Real-time Subtitle translation
 
 <details>
   <summary>Implemented</summary>

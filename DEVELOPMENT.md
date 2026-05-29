@@ -9,8 +9,8 @@ NyanTV is built with modern Android development tools:
 - **UI Framework:** Jetpack Compose for Android TV
 - **Architecture:** MVVM with Clean Architecture
 - **Build System:** Gradle with Kotlin DSL
-- **Minimum SDK:** Android 5.0 (API 21)
-- **Target SDK:** Android 14 (API 34)
+- **Minimum SDK:** Android 8.0 (API 26)
+- **Target SDK:** Android 15 (API 35)
 
 ## Prerequisites
 
