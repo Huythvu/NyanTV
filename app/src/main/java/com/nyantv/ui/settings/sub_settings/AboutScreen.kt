@@ -107,6 +107,32 @@ fun AboutScreen(navController: NavController) {
             AboutTile(icon = Icons.AutoMirrored.Filled.Chat,    title = "Stoat",    onClick = { openUrl("https://stoat.chat/invite/fKzse8yy") })
         }
 
+        // ── Contributors ─────────────────────────────────────────────────────────
+        AboutSection(title = "Contributors", subtitle = "Thanks to everyone who helped build NyanTV") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AsyncImage(
+                    model = "https://avatars.githubusercontent.com/u/167056923",
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("itsmechinmoy", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    Text("Contributor & Early-Supporter", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                }
+                IconButton(onClick = { openUrl("https://github.com/itsmechinmoy") }) {
+                    Icon(Icons.AutoMirrored.Filled.OpenInNew, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+
         // ── Development ────────────────────────────────────────────────────────
         AboutSection(title = "Development", subtitle = "Explore the project and contribute") {
             AboutTile(icon = Icons.Filled.Code,        title = "GitHub",          subtitle = "View source code", onClick = { openUrl("https://github.com/NyanTV/NyanTV") })
