@@ -65,15 +65,22 @@ fun PlayerTabScreen(
     var page by remember(episodeSuccess?.episodes?.size) { mutableStateOf(0) }
 
     Box(modifier = modifier.fillMaxSize()) {
+        var prevShowResultPicker by remember { mutableStateOf(false) }
         LaunchedEffect(showResultPicker) {
-            if (!showResultPicker) {
+            if (!showResultPicker && prevShowResultPicker) {
                 delay(50)
                 onOverlayDismiss()
             }
+            prevShowResultPicker = showResultPicker
         }
         LazyColumn(
             modifier            = Modifier.fillMaxSize(),
-            contentPadding      = PaddingValues(16.dp),
+            contentPadding = PaddingValues(
+                start  = 16.dp,
+                end    = 16.dp,
+                top    = 16.dp,
+                bottom = 80.dp,
+            ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // ── Source Dropdown ──────────────────────────────────────────
@@ -221,22 +228,34 @@ fun PlayerTabScreen(
                     }
 
                     // ── Episodes ─────────────────────────────────────────
-                    items(slice) { episode ->
-                        val epNum          = episode.episode_number.toInt()
-                        val isWatched      = epNum <= watchedEpisodeCount
-                        val progressFraction = watchProgress
-                            ?.takeIf { it.episodeNumber.toInt() == epNum && !isWatched }
-                            ?.let { (it.positionMs.toFloat() / it.durationMs.toFloat()).coerceIn(0f, 1f) }
-                        val meta = state.episodeMeta.resolveEpisodeMeta(episode.episode_number)
-                        EpisodeRow(
-                            episode          = episode,
-                            meta             = meta,
-                            isLoading        = state.selectedEpisode == episode && state.streamState is StreamState.Loading,
-                            isFiller         = epNum in fillerEpisodes,
-                            isWatched        = isWatched,
-                            progressFraction = progressFraction,
-                            onClick          = { vm.selectEpisode(episode) },
-                        )
+                    items(
+                        items = slice.chunked(2),
+                        key   = { pair -> pair.first().episode_number },
+                    ) { pair ->
+                        Row(
+                            modifier              = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            pair.forEach { episode ->
+                                val epNum            = episode.episode_number.toInt()
+                                val isWatched        = epNum <= watchedEpisodeCount
+                                val progressFraction = watchProgress
+                                    ?.takeIf { it.episodeNumber.toInt() == epNum && !isWatched }
+                                    ?.let { (it.positionMs.toFloat() / it.durationMs.toFloat()).coerceIn(0f, 1f) }
+                                val meta = state.episodeMeta.resolveEpisodeMeta(episode.episode_number)
+                                EpisodeRow(
+                                    episode          = episode,
+                                    meta             = meta,
+                                    isLoading        = state.selectedEpisode == episode && state.streamState is StreamState.Loading,
+                                    isFiller         = epNum in fillerEpisodes,
+                                    isWatched        = isWatched,
+                                    progressFraction = progressFraction,
+                                    onClick          = { vm.selectEpisode(episode) },
+                                    modifier         = Modifier.weight(1f),
+                                )
+                            }
+                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                        }
                     }
                 }
                 else -> {}
@@ -367,6 +386,7 @@ private fun EpisodeRow(
     isWatched:        Boolean,
     progressFraction: Float?,
     onClick:          () -> Unit,
+    modifier:         Modifier = Modifier,
 ) {
     val title = episode.name.takeIf { it.contains(":") }
         ?: meta?.title?.takeIf { it.isNotBlank() }
@@ -380,7 +400,7 @@ private fun EpisodeRow(
     }
     Surface(
         onClick  = onClick,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .alpha(if (isWatched) 0.45f else 1f),
         shape    = MaterialTheme.shapes.small,

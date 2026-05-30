@@ -156,7 +156,7 @@ fun DetailScreen(
             LazyColumn(
                 state               = listState,
                 modifier            = Modifier.fillMaxSize(),
-                contentPadding      = PaddingValues(bottom = 60.dp),
+                contentPadding      = PaddingValues(bottom = 0.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 // ── Banner + Back ─────────────────────────────────────────────
