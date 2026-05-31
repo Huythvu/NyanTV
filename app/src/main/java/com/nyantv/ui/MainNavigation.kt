@@ -52,6 +52,7 @@ import com.nyantv.ui.settings.sub_settings.PlayerSettingsScreen
 import com.nyantv.ui.settings.sub_settings.ThemeScreen
 import com.nyantv.ui.theme.FocusIndication
 import com.nyantv.viewmodel.AppViewModel
+import kotlinx.coroutines.launch
 
 // ─── Routes ────────────────────────────────────────────────────────────────────
 
@@ -69,11 +70,6 @@ fun Screen.displayLabel(serviceType: ServiceType) = when {
 
 private val navItems = listOf(Screen.Home, Screen.Anime, Screen.Library, Screen.Settings)
 
-private val fullscreenRoutes = setOf("player")
-
-private fun isFullscreenRoute(route: String?): Boolean =
-    fullscreenRoutes.any { route?.startsWith(it) == true }
-
 
 // ─── Root composable ───────────────────────────────────────────────────────────
 
@@ -88,9 +84,13 @@ fun MainNavigation(vm: AppViewModel = viewModel()) {
     val detailHistory   = remember { mutableStateListOf<String>() }
     val sidebarFocusReq = remember { FocusRequester() }
     val focusManager    = LocalFocusManager.current
+    val scope           = rememberCoroutineScope()
 
-    val detailOpen   = detailHistory.isNotEmpty()
-    val isFullscreen = isFullscreenRoute(currentRoute)
+    var showPlayer by remember { mutableStateOf(false) }
+
+    val returnFocusReq = remember { FocusRequester() }
+
+    val detailOpen = detailHistory.isNotEmpty()
 
     fun openDetail(id: String) {
         focusManager.clearFocus(force = true)
@@ -104,12 +104,12 @@ fun MainNavigation(vm: AppViewModel = viewModel()) {
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
                 .then(
-                    if (detailOpen && !isFullscreen)
+                    if (detailOpen && !showPlayer)
                         Modifier.focusProperties { onEnter = { cancelFocusChange() } }
                     else Modifier
                 )
         ) {
-            if (!detailOpen && !isFullscreen) {
+            if (!detailOpen && !showPlayer) {
                 Sidebar(
                     items           = navItems,
                     currentRoute    = currentRoute,
@@ -133,7 +133,7 @@ fun MainNavigation(vm: AppViewModel = viewModel()) {
                 modifier         = Modifier
                     .weight(1f)
                     .then(
-                        if (detailOpen && !isFullscreen)
+                        if (detailOpen && !showPlayer)
                             Modifier.focusProperties { onEnter = { cancelFocusChange() } }
                         else Modifier
                     ),
@@ -142,50 +142,63 @@ fun MainNavigation(vm: AppViewModel = viewModel()) {
                 popEnterTransition = { fadeIn(tween(450)) },
                 popExitTransition  = { fadeOut(tween(450)) }
             ) {
-                composable(Screen.Home.route)     { HomeScreen(vm, navController) { openDetail(it) } }
-                composable(Screen.Anime.route)    { AnimeScreen(vm, navController) { openDetail(it) } }
-                composable(Screen.Library.route)  { LibraryScreen(vm, navController) { openDetail(it) } }
-                composable("search")              { SearchScreen(vm, navController, sidebarFocusReq) { openDetail(it) } }
-                composable(Screen.Settings.route) { SettingsScreen(vm, navController) }
-                composable("settings/accounts")   { AccountsScreen(vm, navController) }
-                composable("settings/theme")      { ThemeScreen(vm, navController) }
-                composable("settings/logs")       { LogsScreen(navController) }
-                composable("settings/about")      { AboutScreen(navController) }
-                composable("settings/experimental")      { ExperimentalScreen(navController) }
-                composable("settings/player") { PlayerSettingsScreen(navController) }
+                composable(Screen.Home.route)       { HomeScreen(vm, navController) { openDetail(it) } }
+                composable(Screen.Anime.route)      { AnimeScreen(vm, navController) { openDetail(it) } }
+                composable(Screen.Library.route)    { LibraryScreen(vm, navController) { openDetail(it) } }
+                composable("search")                { SearchScreen(vm, navController, sidebarFocusReq) { openDetail(it) } }
+                composable(Screen.Settings.route)   { SettingsScreen(vm, navController) }
+                composable("settings/accounts")     { AccountsScreen(vm, navController) }
+                composable("settings/theme")        { ThemeScreen(vm, navController) }
+                composable("settings/logs")         { LogsScreen(navController) }
+                composable("settings/about")        { AboutScreen(navController) }
+                composable("settings/experimental") { ExperimentalScreen(navController) }
+                composable("settings/player")       { PlayerSettingsScreen(navController) }
                 composable("settings/extensions")   { ExtensionsScreen(navController) }
-                composable(route = "player") {
-                    val playerVm: PlayerViewModel = viewModel()
-                    PlayerScreen(
-                        vm     = playerVm,
-                        appVm  = vm,
-                        onBack = { navController.popBackStack() }
-                    )
-                }
             }
         }
 
-        // ── DetailScreen overlay ───────────────────────────────────────────────
-        if (!isFullscreen) {
+        // ── DetailScreen Overlay ───────────────────────────────────────────
+        if (detailHistory.isNotEmpty()) {
             detailHistory.lastOrNull()?.let { id ->
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .focusGroup()
-                        .focusProperties { onExit = { cancelFocusChange() } }
+                        .then(
+                            if (!showPlayer)
+                                Modifier.focusProperties { onExit = { cancelFocusChange() } }
+                            else Modifier
+                        )
                 ) {
                     DetailScreen(
-                        id = id,
-                        vm = vm,
-                        onBack = { detailHistory.removeLastOrNull() },
+                        id                 = id,
+                        vm                 = vm,
+                        returnFocusReq     = returnFocusReq,
+                        onBack             = { detailHistory.removeLastOrNull() },
                         onNavigateToDetail = { newId ->
                             detailHistory.remove(newId)
                             detailHistory.add(newId)
                         },
-                        onNavigateToPlayer = { navController.navigate("player") }
+                        onNavigateToPlayer = { showPlayer = true }
                     )
                 }
             }
+        }
+
+        // ── PlayerScreen Overlay ───────────────────────────────────────────
+        if (showPlayer) {
+            val playerVm: PlayerViewModel = viewModel()
+            PlayerScreen(
+                vm     = playerVm,
+                appVm  = vm,
+                onBack = {
+                    showPlayer = false
+                    scope.launch {
+                        delay(100)
+                        runCatching { returnFocusReq.requestFocus() }
+                    }
+                }
+            )
         }
     }
 }

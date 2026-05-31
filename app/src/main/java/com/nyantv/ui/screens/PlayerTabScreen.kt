@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.draw.alpha
@@ -59,10 +61,32 @@ fun PlayerTabScreen(
     var showResultPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { vm.refreshWatchProgress() }
+
     val changeFocusReq = remember { FocusRequester() }
+    val listState      = rememberLazyListState()
     val episodeSuccess = state.episodeState as? EpisodeState.Success
-    val pageSize = 12
-    var page by remember(episodeSuccess?.episodes?.size) { mutableStateOf(0) }
+    val pageSize       = 12
+
+    val initialPage = remember(episodeSuccess?.episodes?.size, state.selectedEpisode) {
+        val eps = episodeSuccess?.episodes ?: return@remember 0
+        val idx = eps.indexOfFirst { it == state.selectedEpisode }
+        if (idx >= 0) idx / pageSize else 0
+    }
+
+    var page by rememberSaveable(episodeSuccess?.episodes?.size) { mutableStateOf(initialPage) }
+
+    LaunchedEffect(initialPage) {
+        if (page != initialPage) page = initialPage
+    }
+
+    LaunchedEffect(page, state.selectedEpisode) {
+        val eps = (state.episodeState as? EpisodeState.Success)?.episodes ?: return@LaunchedEffect
+        val globalIdx = eps.indexOfFirst { it == state.selectedEpisode }.takeIf { it >= 0 } ?: return@LaunchedEffect
+        if (globalIdx / pageSize != page) return@LaunchedEffect
+        val rowInPage = (globalIdx % pageSize) / 2
+        delay(80)
+        listState.animateScrollToItem(rowInPage.coerceAtLeast(0))
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         var prevShowResultPicker by remember { mutableStateOf(false) }
@@ -73,9 +97,11 @@ fun PlayerTabScreen(
             }
             prevShowResultPicker = showResultPicker
         }
+
         LazyColumn(
+            state               = listState,
             modifier            = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
+            contentPadding      = PaddingValues(
                 start  = 16.dp,
                 end    = 16.dp,
                 top    = 16.dp,

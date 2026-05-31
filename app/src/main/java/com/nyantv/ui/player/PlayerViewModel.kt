@@ -205,6 +205,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var currentEpisodeIndex: Int = -1
     private var onLoadEpisodeVideos: (suspend (SEpisode) -> List<Video>)? = null
     fun loadTracks(snapshot: PlayerArgs.Snapshot) {
+        _state.update { it.copy(error = null) }
+
         val streams   = snapshot.streams
         val subtitles = snapshot.subtitleTracks
 
@@ -222,7 +224,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 selectedStreamIndex   = bestIdx,
                 subtitleTracks        = subtitles,
                 selectedSubtitleIndex = initialSubIdx,
-                skipTimes = snapshot.skipTimes,
+                skipTimes             = snapshot.skipTimes,
             )
         }
 
@@ -253,6 +255,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 hasPrevEpisode = currentEpisodeIndex > 0,
             )
         }
+    }
+
+    fun clearError() {
+        _state.update { it.copy(error = null) }
     }
 
     private fun checkAndTrackIfNeeded(positionMs: Long, durationMs: Long) {

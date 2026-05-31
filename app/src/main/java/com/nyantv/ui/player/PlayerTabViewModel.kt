@@ -442,7 +442,7 @@ class PlayerTabViewModel(
     }
 
     fun clearStreams() = _state.update {
-        it.copy(streamState = StreamState.Idle, selectedEpisode = null)
+        it.copy(streamState = StreamState.Idle)
     }
 
     // ── Factory ───────────────────────────────────────────────────────────────

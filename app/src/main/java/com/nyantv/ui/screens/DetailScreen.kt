@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.key.*
@@ -24,9 +25,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
@@ -48,10 +48,11 @@ private enum class DetailTab { INFO, PLAYER }
 
 @Composable
 fun DetailScreen(
-    id: String,
-    vm: AppViewModel,
-    modifier: Modifier = Modifier,
-    onBack: () -> Unit,
+    id:                 String,
+    vm:                 AppViewModel,
+    modifier:           Modifier = Modifier,
+    returnFocusReq:     FocusRequester,
+    onBack:             () -> Unit,
     onNavigateToDetail: (String) -> Unit,
     onNavigateToPlayer: () -> Unit,
 ) {
@@ -64,7 +65,7 @@ fun DetailScreen(
     var netState by remember { mutableStateOf(NetworkState.LOADING) }
     var showEdit by remember { mutableStateOf(false) }
     var retryKey by remember { mutableIntStateOf(0) }
-    var activeTab by remember { mutableStateOf(DetailTab.INFO) }
+    var activeTab by rememberSaveable { mutableStateOf(DetailTab.INFO) }
 
     val loggedIn     by vm.isLoggedIn.collectAsStateWithLifecycle()
     val currentEntry by vm.currentMedia.collectAsStateWithLifecycle()
@@ -125,7 +126,6 @@ fun DetailScreen(
         if (serviceType == ServiceType.SIMKL) {
             m.imdbId?.let { playerVm.setImdbId(it) }
         }
-
     }
 
     val listState = rememberLazyListState()
@@ -149,7 +149,8 @@ fun DetailScreen(
             }
     ) {
         BackHandler(enabled = !showEdit) { onBack() }
-        BackHandler(enabled = showEdit) { showEdit = false }
+        BackHandler(enabled = showEdit)  { showEdit = false }
+
         NetworkStatusContent(state = netState, serviceName = serviceName, onRetry = { retryKey++ }) {
             val m = media ?: return@NetworkStatusContent
 
@@ -175,6 +176,11 @@ fun DetailScreen(
                                 .clip(RoundedCornerShape(9.dp))
                                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f))
                                 .focusRequester(backFocusReq)
+                                .focusProperties {
+                                    up    = FocusRequester.Cancel
+                                    left  = FocusRequester.Cancel
+                                    right = FocusRequester.Cancel
+                                }
                                 .clickable(interactionSource = backInteraction, indication = backIndication) { onBack() },
                             contentAlignment = Alignment.Center,
                         ) {
@@ -188,11 +194,33 @@ fun DetailScreen(
                     }
                 }
 
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(0.dp)
+                            .focusRequester(returnFocusReq)
+                            .focusable()
+                    )
+                }
+
                 // ── Tabs ──────────────────────────────────────────────────────
                 item {
                     TabRow(
                         selectedTabIndex = activeTab.ordinal,
-                        modifier         = Modifier.fillMaxWidth().offset(y = (-20).dp),
+                        modifier         = Modifier
+                            .fillMaxWidth()
+                            .offset(y = (-20).dp)
+                            .onKeyEvent { keyEvent ->
+                                if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionUp) {
+                                    scope.launch {
+                                        listState.scrollToItem(0)
+                                        delay(5)
+                                        runCatching { backFocusReq.requestFocus() }
+                                    }
+                                    true
+                                } else false
+                            },
                         containerColor   = MaterialTheme.colorScheme.surface,
                         contentColor     = MaterialTheme.colorScheme.primary,
                     ) {
@@ -261,10 +289,10 @@ fun DetailScreen(
 // ── Info items (LazyListScope) ────────────────────────────────────────────────
 
 private fun LazyListScope.infoItems(
-    media: Media,
-    loggedIn: Boolean,
-    currentEntry: TrackedMedia?,
-    onShowEdit: () -> Unit,
+    media:              Media,
+    loggedIn:           Boolean,
+    currentEntry:       TrackedMedia?,
+    onShowEdit:         () -> Unit,
     onNavigateToDetail: (String) -> Unit,
 ) {
     item {
@@ -276,16 +304,35 @@ private fun LazyListScope.infoItems(
                 model              = media.poster,
                 contentDescription = null,
                 contentScale       = ContentScale.Crop,
-                modifier           = Modifier.size(100.dp, 148.dp).clip(MaterialTheme.shapes.medium),
+                modifier           = Modifier
+                    .size(100.dp, 148.dp)
+                    .clip(MaterialTheme.shapes.medium),
             )
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(media.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                Text(
+                    media.title,
+                    style      = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color      = MaterialTheme.colorScheme.onBackground
+                )
                 media.averageScore?.let {
-                    Text("★ ${"%.1f".format(it / 10f)}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "★ ${"%.1f".format(it / 10f)}",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
-                Text(listOfNotNull(media.format, media.status).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Text(
+                    listOfNotNull(media.format, media.status).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
                 media.episodes?.let {
-                    Text("$it episodes", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text(
+                        "$it episodes",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
                 }
             }
         }
@@ -293,16 +340,23 @@ private fun LazyListScope.infoItems(
 
     if (loggedIn) {
         item {
-            Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                modifier            = Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
                     Button(
                         onClick  = onShowEdit,
-                        modifier = Modifier.fillMaxWidth().focusBorder(MaterialTheme.shapes.medium),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusBorder(MaterialTheme.shapes.medium),
                         shape    = MaterialTheme.shapes.medium,
                     ) {
-                        Text(currentEntry?.watchingStatus?.let {
-                            it.lowercase().replaceFirstChar { c -> c.uppercase() }
-                        } ?: "Add to List")
+                        Text(
+                            currentEntry?.watchingStatus?.let {
+                                it.lowercase().replaceFirstChar { c -> c.uppercase() }
+                            } ?: "Add to List"
+                        )
                     }
                 }
                 currentEntry?.let {
@@ -315,11 +369,16 @@ private fun LazyListScope.infoItems(
     if (media.genres.isNotEmpty()) {
         item {
             Row(
-                modifier              = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+                modifier              = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 media.genres.forEach { genre ->
-                    SuggestionChip(onClick = {}, label = { Text(genre, style = MaterialTheme.typography.labelSmall) })
+                    SuggestionChip(
+                        onClick = {},
+                        label   = { Text(genre, style = MaterialTheme.typography.labelSmall) }
+                    )
                 }
             }
         }
@@ -348,14 +407,30 @@ private fun LazyListScope.infoItems(
                 verticalAlignment     = Alignment.Top,
             ) {
                 directPrequel?.let { prequel ->
-                    Column(modifier = Modifier.width(120.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Prequel", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    Column(
+                        modifier            = Modifier.width(120.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "Prequel",
+                            style      = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color      = MaterialTheme.colorScheme.onBackground
+                        )
                         MediaCard(media = prequel, onClick = { onNavigateToDetail(prequel.id) })
                     }
                 }
                 directSequel?.let { sequel ->
-                    Column(modifier = Modifier.width(120.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Sequel", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                    Column(
+                        modifier            = Modifier.width(120.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "Sequel",
+                            style      = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color      = MaterialTheme.colorScheme.onBackground
+                        )
                         MediaCard(media = sequel, onClick = { onNavigateToDetail(sequel.id) })
                     }
                 }
@@ -365,11 +440,23 @@ private fun LazyListScope.infoItems(
 
     val otherRelations = media.relations.filter { it.id !in neighborIds }
     if (otherRelations.isNotEmpty()) {
-        item { SectionRow(title = "Relations", items = otherRelations, onItemClick = { onNavigateToDetail(it.id) }) }
+        item {
+            SectionRow(
+                title      = "Relations",
+                items      = otherRelations,
+                onItemClick = { onNavigateToDetail(it.id) }
+            )
+        }
     }
 
     if (media.recommendations.isNotEmpty()) {
-        item { SectionRow(title = "Recommended", items = media.recommendations, onItemClick = { onNavigateToDetail(it.id) }) }
+        item {
+            SectionRow(
+                title       = "Recommended",
+                items       = media.recommendations,
+                onItemClick = { onNavigateToDetail(it.id) }
+            )
+        }
     }
 }
 
@@ -405,7 +492,12 @@ private fun ListEditorDialog(
                         FilterChip(
                             selected = status == s,
                             onClick  = { status = s },
-                            label    = { Text(s.lowercase().replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall) }
+                            label    = {
+                                Text(
+                                    s.lowercase().replaceFirstChar { it.uppercase() },
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                         )
                     }
                 }
@@ -432,7 +524,9 @@ private fun ListEditorDialog(
         dismissButton = {
             Row {
                 onDelete?.let { del ->
-                    TextButton(onClick = del) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                    TextButton(onClick = del) {
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    }
                 }
                 TextButton(onClick = onDismiss) { Text("Cancel") }
             }

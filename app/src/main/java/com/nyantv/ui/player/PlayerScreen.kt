@@ -7,6 +7,7 @@ import android.view.SurfaceView
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.*
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -84,7 +85,7 @@ private fun EpisodeSkipTimes.toDisplaySegments(): List<DisplaySegment> = buildLi
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
-    vm:     PlayerViewModel = viewModel(),
+    vm:    PlayerViewModel = viewModel(),
     appVm: AppViewModel,
     onBack: () -> Unit
 ) {
@@ -97,22 +98,29 @@ fun PlayerScreen(
     var showStreamPicker          by remember { mutableStateOf(false) }
     var showSubPicker             by remember { mutableStateOf(false) }
     var showTrackingConsentDialog by remember { mutableStateOf(false) }
+    var panelExiting              by remember { mutableStateOf(false) }
+    val subSettingsState  = remember { MutableTransitionState(false) }
+    val streamPickerState = remember { MutableTransitionState(false) }
+    val subPickerState    = remember { MutableTransitionState(false) }
 
-    val anyPanelOpen = showSubSettings || showStreamPicker || showSubPicker ||
+    subSettingsState.targetState  = showSubSettings
+    streamPickerState.targetState = showStreamPicker
+    subPickerState.targetState    = showSubPicker
+
+    val anyPanelOpen = !subSettingsState.isIdle || !streamPickerState.isIdle || !subPickerState.isIdle ||
+            subSettingsState.currentState || streamPickerState.currentState || subPickerState.currentState ||
             state.pendingEpisodeVideos.isNotEmpty() ||
             state.fillerWarning != null
 
     val mainFocusRequester    = remember { FocusRequester() }
     val playBtnFocusRequester = remember { FocusRequester() }
-
-    val scope  = rememberCoroutineScope()
-    var hideJob         by remember { mutableStateOf<Job?>(null) }
-    var pausedBySettings by remember { mutableStateOf(false) }
-
-    // ── Focus-Requester für beide Buttons ─────────────────────────────────────────
     val skipBtnFocusRequester    = remember { FocusRequester() }
     val bigSkipBtnFocusRequester = remember { FocusRequester() }
     var skipBtnOverrideVisible   by remember { mutableStateOf(false) }
+
+    val scope        = rememberCoroutineScope()
+    var hideJob      by remember { mutableStateOf<Job?>(null) }
+    var pausedBySettings by remember { mutableStateOf(false) }
 
     fun pauseForSettings() {
         if (state.isPlaying) { vm.togglePlayPause(); pausedBySettings = true }
@@ -123,15 +131,24 @@ fun PlayerScreen(
     }
 
     fun closePanel() {
+        panelExiting = true
+        runCatching { mainFocusRequester.requestFocus() }
+
         showSubSettings  = false
         showStreamPicker = false
         showSubPicker    = false
         resumeFromSettings()
-        scope.launch {
-            delay(50)
-            runCatching {
-                if (controlsVisible) playBtnFocusRequester.requestFocus()
-                else mainFocusRequester.requestFocus()
+
+        controlsVisible = true
+        hideJob?.cancel()
+
+        hideJob = scope.launch {
+            delay(CONTROLS_HIDE_MS)
+            if (!showSubSettings && !showStreamPicker && !showSubPicker &&
+                state.pendingEpisodeVideos.isEmpty() && state.fillerWarning == null
+            ) {
+                controlsVisible = false
+                runCatching { mainFocusRequester.requestFocus() }
             }
         }
     }
@@ -143,14 +160,16 @@ fun PlayerScreen(
         if (anyPanelOpen) return
         hideJob = scope.launch {
             delay(CONTROLS_HIDE_MS)
-            if (!anyPanelOpen) {
+            if (!showSubSettings && !showStreamPicker && !showSubPicker &&
+                state.pendingEpisodeVideos.isEmpty() && state.fillerWarning == null
+            ) {
                 controlsVisible = false
                 runCatching { mainFocusRequester.requestFocus() }
             }
         }
     }
 
-    // ── BackHandler stack ──────────────────────────────────────────────────────
+    // ── BackHandler stack ──────────────────────────────────────────────────
     BackHandler(enabled = showSubSettings)  { closePanel() }
     BackHandler(enabled = showSubPicker)    { closePanel() }
     BackHandler(enabled = showStreamPicker) { closePanel() }
@@ -159,8 +178,12 @@ fun PlayerScreen(
         hideJob?.cancel()
         scope.launch { runCatching { mainFocusRequester.requestFocus() } }
     }
+    BackHandler(enabled = !controlsVisible && !anyPanelOpen) {
+        vm.stop()
+        onBack()
+    }
 
-    // ── Load tracks once ───────────────────────────────────────────────────────
+    // ── Load tracks once ───────────────────────────────────────────────────
     LaunchedEffect(Unit) {
         vm.loadTracks(PlayerArgs.consume())
         mainFocusRequester.requestFocus()
@@ -178,9 +201,18 @@ fun PlayerScreen(
         }
     }
 
+    LaunchedEffect(subSettingsState.isIdle, streamPickerState.isIdle, subPickerState.isIdle) {
+        val allIdle   = subSettingsState.isIdle && streamPickerState.isIdle && subPickerState.isIdle
+        val allClosed = !subSettingsState.currentState && !streamPickerState.currentState && !subPickerState.currentState
+        if (allIdle && allClosed && controlsVisible && panelExiting) {
+            panelExiting = false
+            runCatching { playBtnFocusRequester.requestFocus() }
+        }
+    }
+
     LaunchedEffect(controlsVisible) {
-        if (controlsVisible && !anyPanelOpen) {
-            delay(60)
+        if (controlsVisible && !anyPanelOpen && !panelExiting) {
+            delay(1)
             runCatching { playBtnFocusRequester.requestFocus() }
         }
     }
@@ -196,6 +228,8 @@ fun PlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .focusGroup()
+            .focusProperties { onExit = { cancelFocusChange() } }
             .focusRequester(mainFocusRequester)
             .focusable()
             .onPreviewKeyEvent { event ->
@@ -251,8 +285,8 @@ fun PlayerScreen(
 
         AnimatedVisibility(
             visible  = controlsVisible,
-            enter    = fadeIn(tween(200)),
-            exit     = fadeOut(tween(400)),
+            enter    = fadeIn(tween(50)),
+            exit     = fadeOut(tween(50)),
             modifier = Modifier.fillMaxSize()
         ) {
             PlayerControls(
@@ -269,9 +303,9 @@ fun PlayerScreen(
 
         // ── Stream picker ──────────────────────────────────────────────────────
         AnimatedVisibility(
-            visible  = showStreamPicker,
-            enter    = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit     = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            visibleState = streamPickerState,
+            enter        = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit         = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             TrackPickerPanel(
@@ -286,9 +320,9 @@ fun PlayerScreen(
 
         // ── Subtitle track picker ──────────────────────────────────────────────
         AnimatedVisibility(
-            visible  = showSubPicker,
-            enter    = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit     = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            visibleState = subPickerState,
+            enter        = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit         = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             TrackPickerPanel(
@@ -303,9 +337,9 @@ fun PlayerScreen(
 
         // ── Subtitle settings panel ────────────────────────────────────────────
         AnimatedVisibility(
-            visible  = showSubSettings,
-            enter    = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-            exit     = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            visibleState = subSettingsState,
+            enter        = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit         = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             SubtitleSettingsPanel(
@@ -453,6 +487,10 @@ fun PlayerScreen(
         }
 
         state.error?.let { msg ->
+            LaunchedEffect(msg) {
+                delay(4_000)
+                vm.clearError()
+            }
             Snackbar(
                 modifier       = Modifier.align(Alignment.BottomCenter).padding(16.dp),
                 containerColor = MaterialTheme.colorScheme.errorContainer,
@@ -638,10 +676,21 @@ private fun TrackPickerPanel(
     onDismiss:     () -> Unit
 ) {
     val closeFocus = remember { FocusRequester() }
+    val trapRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { closeFocus.requestFocus() } }
 
     Surface(
-        modifier       = Modifier.fillMaxWidth().focusGroup(),
+        modifier       = Modifier
+            .fillMaxWidth()
+            .focusRequester(trapRequester)
+            .focusProperties {
+                onExit = { cancelFocusChange() }
+                up     = FocusRequester.Cancel
+                down   = FocusRequester.Cancel
+                left   = FocusRequester.Cancel
+                right  = FocusRequester.Cancel
+            }
+            .focusGroup(),
         color          = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
         tonalElevation = 8.dp
     ) {
@@ -649,7 +698,6 @@ private fun TrackPickerPanel(
             modifier            = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Header
             Row(
                 modifier          = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -668,7 +716,6 @@ private fun TrackPickerPanel(
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
-            // "None" / Off row
             if (showNone) {
                 TrackPickerRow(
                     name       = "Off",
@@ -677,7 +724,6 @@ private fun TrackPickerPanel(
                 )
             }
 
-            // Track rows
             tracks.forEachIndexed { idx, name ->
                 TrackPickerRow(
                     name       = name,
@@ -947,12 +993,21 @@ private fun SubtitleSettingsPanel(
     onDismiss: () -> Unit
 ) {
     val closeBtnFocus = remember { FocusRequester() }
-    val trapRequester =
-        remember { FocusRequester() }
+    val trapRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { closeBtnFocus.requestFocus() } }
 
     Surface(
-        modifier       = Modifier.fillMaxWidth().focusRequester(trapRequester).focusProperties { onExit = { cancelFocusChange() } }.focusGroup(),
+        modifier       = Modifier
+            .fillMaxWidth()
+            .focusRequester(trapRequester)
+            .focusProperties {
+                onExit = { cancelFocusChange() }
+                up     = FocusRequester.Cancel
+                down   = FocusRequester.Cancel
+                left   = FocusRequester.Cancel
+                right  = FocusRequester.Cancel
+            }
+            .focusGroup(),
         color          = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
         tonalElevation = 8.dp
     ) {
@@ -960,16 +1015,16 @@ private fun SubtitleSettingsPanel(
             modifier            = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Header
             Row(
                 modifier          = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     "Subtitles",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface
+                    modifier   = Modifier.weight(1f),
+                    style      = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium,
+                    color      = MaterialTheme.colorScheme.onSurface
                 )
                 TvIconButton(
                     onClick  = onDismiss,
@@ -979,9 +1034,7 @@ private fun SubtitleSettingsPanel(
                 }
             }
 
-            // ── Appearance ─────────────────────────────────────────────────
             SectionCard(title = "Appearance") {
-                // Show subtitles toggle
                 SettingsToggleRow(
                     label    = "Show subtitles",
                     subtitle = "Display subtitles during playback",
@@ -989,7 +1042,6 @@ private fun SubtitleSettingsPanel(
                     onToggle = { onUpdate(prefs.copy(enabled = it)) }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-                // Font size slider
                 SettingsSliderRow(
                     label    = "Font size",
                     subtitle = "Adjust subtitle text size",
@@ -1000,7 +1052,6 @@ private fun SubtitleSettingsPanel(
                     onChange = { onUpdate(prefs.copy(fontSize = it)) }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-                // Bold toggle
                 SettingsToggleRow(
                     label    = "Bold text",
                     subtitle = "Make subtitle text bold",
@@ -1009,7 +1060,6 @@ private fun SubtitleSettingsPanel(
                 )
             }
 
-            // ── Translation ────────────────────────────────────────────────
             SectionCard(title = "Translation") {
                 SettingsDropdownRow(
                     label    = "Auto-translate to",
@@ -1202,10 +1252,6 @@ private fun <T> SettingsDropdownRow(
         }
     }
 }
-/**
- * Eigener Toggle-Indikator für TV: nicht fokussierbar (kein Interference mit
- * dem focusable() der Row), rein visuell.
- */
 
 // ── Hilfsfunktionen ────────────────────────────────────────────────────────────
 

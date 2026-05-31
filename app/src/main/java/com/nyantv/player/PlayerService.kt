@@ -74,8 +74,15 @@ class PlayerService : Service() {
                     mpv?.load(uri = uri, startPositionMs = startPositionMs)
                 } else {
                     usingMpv = false
-                    player.setMediaItem(MediaItem.fromUri(uri))
-                    player.seekTo(startPositionMs)
+                    val mediaItem = MediaItem.Builder()
+                        .setUri(uri)
+                        .setClippingConfiguration(
+                            MediaItem.ClippingConfiguration.Builder()
+                                .setStartPositionMs(startPositionMs)
+                                .build()
+                        )
+                        .build()
+                    player.setMediaItem(mediaItem)
                     player.prepare()
                     player.playWhenReady = true
                 }
@@ -110,9 +117,17 @@ class PlayerService : Service() {
                         override fun getMinimumLoadableRetryCount(dataType: Int) = 5
                     }
 
-                    val mediaSource = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dataSourceFactory)
+                    val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dataSourceFactory)
                         .setLoadErrorHandlingPolicy(errorPolicy)
-                        .createMediaSource(MediaItem.fromUri(uri))
+
+                    val mediaItem = MediaItem.Builder()
+                        .setUri(uri)
+                        .setClippingConfiguration(
+                            MediaItem.ClippingConfiguration.Builder()
+                                .setStartPositionMs(startPositionMs)
+                                .build()
+                        )
+                        .build()
 
                     val forceHighest = getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE)
                         .getString("quality_mode", "abr") == "highest"
@@ -120,8 +135,7 @@ class PlayerService : Service() {
                         trackSelector.buildUponParameters()
                             .setForceHighestSupportedBitrate(forceHighest)
                     )
-                    player.setMediaSource(mediaSource)
-                    player.seekTo(startPositionMs)
+                    player.setMediaSource(mediaSourceFactory.createMediaSource(mediaItem))
                     player.prepare()
                     player.playWhenReady = true
                 }
