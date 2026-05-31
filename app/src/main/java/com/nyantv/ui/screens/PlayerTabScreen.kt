@@ -733,7 +733,7 @@ private fun ResumeCard(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .focusBorder(MaterialTheme.shapes.medium, inset = true, color = MaterialTheme.colorScheme.primary),
+            .focusBorder(MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f), gap = 0.5.dp),
         shape   = MaterialTheme.shapes.medium,
         color   = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
         border  = androidx.compose.foundation.BorderStroke(
@@ -793,14 +793,14 @@ private fun ResumeCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(3.dp)
+                    .height(4.dp)
                     .align(Alignment.BottomStart)
                     .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
             )
             Box(
                 modifier = Modifier
                     .fillMaxWidth(fraction)
-                    .height(3.dp)
+                    .height(4.dp)
                     .align(Alignment.BottomStart)
                     .background(MaterialTheme.colorScheme.primary)
             )

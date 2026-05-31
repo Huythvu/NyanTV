@@ -51,15 +51,12 @@ class PlayerTabViewModel(
 
     // ── Watch progress ─────────────────────────────────────────────────────────
 
-    // Resume: letzte aktiv geschaute Episode (für Resume-Karte)
     private val _resumeProgress = MutableStateFlow<EpisodeProgress?>(null)
     val resumeProgress: StateFlow<EpisodeProgress?> = _resumeProgress.asStateFlow()
 
-    // Pro-Episode Timestamps (für Fortschrittsbalken)
     private val _episodeProgressMap = MutableStateFlow<Map<Int, EpisodeProgress>>(emptyMap())
     val episodeProgressMap: StateFlow<Map<Int, EpisodeProgress>> = _episodeProgressMap.asStateFlow()
 
-    // Lokal getrackte watched Episodes
     private val _watchedEpisodes = MutableStateFlow<Set<Int>>(emptySet())
     val watchedEpisodes: StateFlow<Set<Int>> = _watchedEpisodes.asStateFlow()
 
@@ -67,7 +64,7 @@ class PlayerTabViewModel(
     val currentMalId: String? get() = _malId
 
     fun refreshWatchProgress() {
-        _episodeProgressMap.value = emptyMap() // ← Cache leeren, sonst alte Balken
+        _episodeProgressMap.value = emptyMap()
 
         _resumeProgress.value = if (serviceKey == "simkl") {
             watchHistoryStore.loadSimkl(mediaId)
