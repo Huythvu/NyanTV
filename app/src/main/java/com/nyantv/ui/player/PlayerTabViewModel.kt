@@ -39,7 +39,7 @@ data class PlayerTabUiState(
 class PlayerTabViewModel(
     app: Application,
     val mediaId:      String,
-    private val mediaTitle:   String,
+    mediaTitle:   String,
     val serviceKey:   String,
     private val serviceType:  ServiceType,
     private val malId:        String?,
@@ -62,6 +62,19 @@ class PlayerTabViewModel(
 
     val anilistId:    String? get() = if (serviceType == ServiceType.ANILIST) mediaId else null
     val currentMalId: String? get() = _malId
+
+    val mediaBannerUrl: String get() = _mediaBannerUrl
+    val mediaPosterUrl: String get() = _mediaPosterUrl
+    private var _mediaBannerUrl: String = ""
+    private var _mediaPosterUrl: String = ""
+
+    var mediaTitle: String = mediaTitle
+        private set
+
+    fun setMediaImages(banner: String?, poster: String?) {
+        _mediaBannerUrl = banner ?: ""
+        _mediaPosterUrl = poster ?: ""
+    }
 
     fun refreshWatchProgress() {
         _episodeProgressMap.value = emptyMap()
@@ -192,6 +205,7 @@ class PlayerTabViewModel(
 
     fun updateMediaTitle(title: String) {
         if (title.isBlank()) return
+        if (mediaTitle.isBlank()) mediaTitle = title
         val s = _state.value
         if (s.searchQuery.isNotBlank()) return
         _state.update { it.copy(searchQuery = title) }

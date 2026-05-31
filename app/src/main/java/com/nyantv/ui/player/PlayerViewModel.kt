@@ -18,8 +18,10 @@ import com.nyantv.player.EpisodeProgress
 import com.nyantv.player.IPlayerCallback
 import com.nyantv.player.IPlayerService
 import com.nyantv.player.PlayerService
+import com.nyantv.player.TvWatchNextHelper
 import com.nyantv.player.WatchHistoryStore
 import com.nyantv.ui.utils.displayName
+import com.nyantv.ui.utils.resolveEpisodeMeta
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import kotlinx.coroutines.flow.*
@@ -107,8 +109,21 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var hasResumed          = false
     private var lastSavedPositionMs = -1L
 
+    // Watch next
+    private val tvWatchNext = TvWatchNextHelper(getApplication<Application>())
+    private var mediaCoverUrl:  String = ""
+    private var mediaBannerUrl: String = ""
+    private var mediaPosterUrl: String = ""
+
+    fun setMediaImages(cover: String?, banner: String?, poster: String?) {
+        mediaCoverUrl  = cover  ?: ""
+        mediaBannerUrl = banner ?: ""
+        mediaPosterUrl = poster ?: ""
+    }
+
     // ── Auto-tracking ──────────────────────────────────────────────────────────
     private var mediaId                  = ""
+    private var seriesTitle              = ""
     private var sessionTrackingEnabled   = false
     private var hasTrackedCurrentEpisode = false
 
@@ -163,6 +178,23 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                             watchHistoryStore.saveSimkl(mediaId, p)
                         } else {
                             watchHistoryStore.saveAnilistMal(anilistId, malId, p)
+                        }
+                        val meta = episodeMeta.resolveEpisodeMeta(ep.episode_number)
+                        viewModelScope.launch {
+                            tvWatchNext.updateWatchNext(
+                                serviceKey    = serviceKey,
+                                mediaId       = mediaId,
+                                seriesTitle   = seriesTitle,
+                                episodeTitle  = ep.displayName(episodeMeta),
+                                episodeNumber = ep.episode_number.toInt(),
+                                coverUrl      = meta?.image?.takeIf { it.isNotBlank() },
+                                bannerUrl     = mediaBannerUrl.takeIf { it.isNotBlank() },
+                                posterUrl     = mediaPosterUrl.takeIf { it.isNotBlank() },
+                                positionMs    = positionMs,
+                                durationMs    = durationMs,
+                                episodeDescription  = meta?.summary?.takeIf { it.isNotBlank() }
+                                    ?: meta?.overview?.takeIf { it.isNotBlank() },
+                            )
                         }
                     }
                 }
@@ -242,6 +274,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         onLoadEpisodeVideos      = snapshot.onLoadEpisodeVideos
         fillerEpisodes           = snapshot.fillerEpisodes
         mediaId                  = snapshot.mediaId
+        seriesTitle              = snapshot.seriesTitle
         serviceKey               = snapshot.serviceKey
         anilistId                = snapshot.anilistId
         malId                    = snapshot.malId
@@ -251,6 +284,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         hasResumed               = false
         lastSavedPositionMs      = -1L
         episodeMeta              = snapshot.episodeMeta
+        mediaCoverUrl            = snapshot.mediaCoverUrl
+        mediaBannerUrl           = snapshot.mediaBannerUrl
+        mediaPosterUrl           = snapshot.mediaPosterUrl
 
         _state.update {
             it.copy(
@@ -282,6 +318,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             } else {
                 watchHistoryStore.markWatchedAnilistMal(anilistId, malId, epNum)
             }
+            viewModelScope.launch { tvWatchNext.remove(mediaId) }
         }
 
         viewModelScope.launch { _watchedEvent.emit(WatchedEvent(episode, mediaId)) }

@@ -28,6 +28,7 @@ object PlayerArgs {
     var subtitleTracks:     List<SubtitleTrack> = emptyList()
     var initialStreamIndex: Int                 = 0
     var title:              String              = ""
+    var seriesTitle:        String              = ""
     var mediaId:            String              = ""
     var resumePositionMs:   Long                = 0L
     var serviceKey:         String              = "anilist_mal"
@@ -40,12 +41,15 @@ object PlayerArgs {
     var fillerEpisodes: Set<Int> = emptySet()
     var skipTimes:           EpisodeSkipTimes?   = null
     var episodeMeta: Map<String, AniZipEpisodeMeta> = emptyMap()
+    var mediaCoverUrl:  String = ""
+    var mediaBannerUrl: String = ""
+    var mediaPosterUrl: String = ""
 
     fun consume(): Snapshot {
         val snapshot = Snapshot(
-            streams, subtitleTracks, initialStreamIndex, title,
+            streams, subtitleTracks, initialStreamIndex, title, seriesTitle,
             mediaId, resumePositionMs, serviceKey, anilistId, malId,
-            episodes, currentEpisodeIndex, onLoadEpisodeVideos, fillerEpisodes, skipTimes, episodeMeta,
+            episodes, currentEpisodeIndex, onLoadEpisodeVideos, fillerEpisodes, skipTimes, episodeMeta, mediaCoverUrl, mediaBannerUrl, mediaPosterUrl
         )
         clear()
         return snapshot
@@ -56,6 +60,7 @@ object PlayerArgs {
         subtitleTracks      = emptyList()
         initialStreamIndex  = 0
         title               = ""
+        seriesTitle         = ""
         mediaId             = ""
         resumePositionMs    = 0L
         serviceKey          = "anilist_mal"
@@ -67,6 +72,9 @@ object PlayerArgs {
         fillerEpisodes      = emptySet()
         skipTimes           = null
         episodeMeta         = emptyMap()
+        mediaCoverUrl       = ""
+        mediaBannerUrl      = ""
+        mediaPosterUrl      = ""
     }
 
     data class Snapshot(
@@ -74,6 +82,7 @@ object PlayerArgs {
         val subtitleTracks:      List<SubtitleTrack>,
         val initialStreamIndex:  Int,
         val title:               String,
+        val seriesTitle:               String,
         val mediaId:             String                               = "",
         val resumePositionMs:    Long                                 = 0L,
         val serviceKey:          String                               = "anilist_mal",
@@ -84,6 +93,9 @@ object PlayerArgs {
         val onLoadEpisodeVideos: (suspend (SEpisode) -> List<Video>)? = null,
         val fillerEpisodes:      Set<Int>                             = emptySet(),
         val skipTimes:           EpisodeSkipTimes?                    = null,
-        val episodeMeta:         Map<String, AniZipEpisodeMeta>       = emptyMap()
+        val episodeMeta:         Map<String, AniZipEpisodeMeta>       = emptyMap(),
+        val mediaCoverUrl:  String = "",
+        val mediaBannerUrl: String = "",
+        val mediaPosterUrl: String = "",
     )
 }

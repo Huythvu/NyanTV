@@ -135,5 +135,8 @@ dependencies {
     implementation("androidx.preference:preference-ktx:1.2.1")
     implementation("uy.kohesive.injekt:injekt-core:1.16.1")
 
+    // Watch next
+    implementation("androidx.tvprovider:tvprovider:1.1.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

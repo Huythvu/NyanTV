@@ -75,7 +75,11 @@ private val navItems = listOf(Screen.Home, Screen.Anime, Screen.Library, Screen.
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun MainNavigation(vm: AppViewModel = viewModel()) {
+fun MainNavigation(
+    vm:                AppViewModel = viewModel(),
+    deepLink:          Triple<String, String, String>? = null,
+   onDeepLinkConsumed: () -> Unit = {},
+    ) {
     val navController = rememberNavController()
     val backEntry     by navController.currentBackStackEntryAsState()
     val currentRoute   = backEntry?.destination?.route
@@ -93,6 +97,27 @@ fun MainNavigation(vm: AppViewModel = viewModel()) {
     val detailOpen = detailHistory.isNotEmpty()
 
     var playerReturnCount by remember { mutableIntStateOf(0) }
+
+    var pendingPlayerTab by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(deepLink) {
+        val (linkServiceKey, mediaId, _) = deepLink ?: return@LaunchedEffect
+
+        val currentServiceKey = when (vm.serviceType.value) {
+            ServiceType.ANILIST, ServiceType.MAL -> "anilist_mal"
+            ServiceType.SIMKL                    -> "simkl"
+        }
+
+        if (linkServiceKey != currentServiceKey) {
+            onDeepLinkConsumed()
+            return@LaunchedEffect
+        }
+
+        detailHistory.clear()
+        detailHistory.add(mediaId)
+        pendingPlayerTab = mediaId
+        onDeepLinkConsumed()
+    }
 
     fun openDetail(id: String) {
         focusManager.clearFocus(force = true)
@@ -177,6 +202,8 @@ fun MainNavigation(vm: AppViewModel = viewModel()) {
                         vm                 = vm,
                         returnFocusReq     = returnFocusReq,
                         playerReturnCount  = playerReturnCount,
+                        autoOpenPlayerTab  = pendingPlayerTab == id,
+                        onAutoTabConsumed  = { pendingPlayerTab = null },
                         onBack             = { detailHistory.removeLastOrNull() },
                         onNavigateToDetail = { newId ->
                             detailHistory.remove(newId)

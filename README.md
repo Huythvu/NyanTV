@@ -50,13 +50,13 @@
 </p>
 
 ## Upcoming Features
-- [ ] Watch next widget for Android Home Launcher
 - [ ] Real-time Subtitle translation
 
 <details>
   <summary>Implemented</summary>
 
 - [x] Full D-Pad integration
+- [x] Watch next widget for Android Home Launcher
 
 </details>
 

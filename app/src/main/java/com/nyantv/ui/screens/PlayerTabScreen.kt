@@ -372,6 +372,12 @@ fun PlayerTabScreen(
                                         ?: 0L
                                     PlayerArgs.episodeMeta         = state.episodeMeta
                                     PlayerArgs.title               = state.selectedEpisode?.displayName(state.episodeMeta) ?: ""
+                                    PlayerArgs.seriesTitle         = vm.mediaTitle
+                                    PlayerArgs.mediaCoverUrl  = state.episodeMeta
+                                        .resolveEpisodeMeta(state.selectedEpisode?.episode_number ?: 0f)
+                                        ?.image?.takeIf { it.isNotBlank() } ?: ""
+                                    PlayerArgs.mediaBannerUrl = vm.mediaBannerUrl
+                                    PlayerArgs.mediaPosterUrl = vm.mediaPosterUrl
                                     vm.clearStreams()
                                     onEpisodeSelected()
                                 },

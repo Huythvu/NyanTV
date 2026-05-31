@@ -53,6 +53,8 @@ fun DetailScreen(
     modifier:           Modifier = Modifier,
     returnFocusReq:     FocusRequester,
     playerReturnCount:  Int = 0,
+    autoOpenPlayerTab: Boolean = false,
+    onAutoTabConsumed: () -> Unit = {},
     onBack:             () -> Unit,
     onNavigateToDetail: (String) -> Unit,
     onNavigateToPlayer: () -> Unit,
@@ -123,6 +125,7 @@ fun DetailScreen(
         delay(150)
         runCatching { backFocusReq.requestFocus() }
         playerVm.updateMediaTitle(m.title)
+        playerVm.setMediaImages(m.cover, m.poster)
         m.idMal?.let { playerVm.updateMalId(it) }
         if (serviceType == ServiceType.SIMKL) {
             m.imdbId?.let { playerVm.setImdbId(it) }
@@ -132,6 +135,12 @@ fun DetailScreen(
     val listState = rememberLazyListState()
     LaunchedEffect(id)       { listState.scrollToItem(0) }
     LaunchedEffect(showEdit) { if (!showEdit) listState.animateScrollToItem(0) }
+    LaunchedEffect(autoOpenPlayerTab) {
+        if (!autoOpenPlayerTab) return@LaunchedEffect
+        delay(800)
+        activeTab = DetailTab.PLAYER
+        onAutoTabConsumed()
+    }
 
     val primary         = MaterialTheme.colorScheme.primary
     val backIndication  = remember(primary) { FocusIndication(primary, cornerRadiusDp = 8.dp) }

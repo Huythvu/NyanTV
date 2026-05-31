@@ -45,6 +45,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="nyantv" android:host="callback" />
             </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="nyantv" android:host="watch" />
+            </intent-filter>
         </activity>
 
         <provider
