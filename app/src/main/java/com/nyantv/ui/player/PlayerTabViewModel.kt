@@ -22,84 +22,88 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// ── UI State ──────────────────────────────────────────────────────────────────
-
-sealed interface EpisodeState {
-    data object Idle : EpisodeState
-    data object Loading : EpisodeState
-    data class Success(val episodes: List<SEpisode>) : EpisodeState
-    data class Error(val message: String) : EpisodeState
-}
-
-sealed interface SearchState {
-    data object Idle : SearchState
-    data object Loading : SearchState
-    data class Results(val items: List<SAnime>) : SearchState
-    data class Error(val message: String) : SearchState
-}
-
-sealed interface StreamState {
-    data object Idle : StreamState
-    data object Loading : StreamState
-    data class Ready(val videos: List<Video>) : StreamState
-    data class Error(val message: String) : StreamState
-}
-
 data class PlayerTabUiState(
-    val sources: List<SearchableSource> = emptyList(),
-    val selectedSource: SearchableSource? = null,
-    val searchQuery: String = "",
-    val isEditingQuery: Boolean = false,
-    val searchState: SearchState = SearchState.Idle,
-    val selectedAnime: SAnime? = null,
-    val episodeState: EpisodeState = EpisodeState.Idle,
-    val selectedEpisode: SEpisode? = null,
-    val streamState: StreamState = StreamState.Idle,
-    val skipTimes: EpisodeSkipTimes? = null,
-    val episodeMeta: Map<String, AniZipEpisodeMeta> = emptyMap(),
+    val sources:        List<SearchableSource>          = emptyList(),
+    val selectedSource: SearchableSource?               = null,
+    val searchQuery:    String                          = "",
+    val isEditingQuery: Boolean                         = false,
+    val searchState:    SearchState                     = SearchState.Idle,
+    val selectedAnime:  SAnime?                         = null,
+    val episodeState:   EpisodeState                    = EpisodeState.Idle,
+    val selectedEpisode: SEpisode?                      = null,
+    val streamState:    StreamState                     = StreamState.Idle,
+    val skipTimes:      EpisodeSkipTimes?               = null,
+    val episodeMeta:    Map<String, AniZipEpisodeMeta>  = emptyMap(),
 )
-
-// ── ViewModel ─────────────────────────────────────────────────────────────────
 
 class PlayerTabViewModel(
     app: Application,
-    val mediaId: String,
-    private val mediaTitle: String,
-    val serviceKey: String,
-    private val serviceType: ServiceType,
-    private val malId: String?,
+    val mediaId:      String,
+    private val mediaTitle:   String,
+    val serviceKey:   String,
+    private val serviceType:  ServiceType,
+    private val malId:        String?,
 ) : AndroidViewModel(app) {
 
     private val cache             = PlayerCache(app)
     private val aniyomi           = AniyomiExtensions(app)
     private val watchHistoryStore = WatchHistoryStore(app)
 
-    private val _watchProgress = MutableStateFlow<EpisodeProgress?>(null)
-    val watchProgress: StateFlow<EpisodeProgress?> = _watchProgress.asStateFlow()
+    // ── Watch progress ─────────────────────────────────────────────────────────
 
-    /** AniList-ID wenn AniList-Service aktiv, sonst null */
+    // Resume: letzte aktiv geschaute Episode (für Resume-Karte)
+    private val _resumeProgress = MutableStateFlow<EpisodeProgress?>(null)
+    val resumeProgress: StateFlow<EpisodeProgress?> = _resumeProgress.asStateFlow()
+
+    // Pro-Episode Timestamps (für Fortschrittsbalken)
+    private val _episodeProgressMap = MutableStateFlow<Map<Int, EpisodeProgress>>(emptyMap())
+    val episodeProgressMap: StateFlow<Map<Int, EpisodeProgress>> = _episodeProgressMap.asStateFlow()
+
+    // Lokal getrackte watched Episodes
+    private val _watchedEpisodes = MutableStateFlow<Set<Int>>(emptySet())
+    val watchedEpisodes: StateFlow<Set<Int>> = _watchedEpisodes.asStateFlow()
+
     val anilistId:    String? get() = if (serviceType == ServiceType.ANILIST) mediaId else null
-    /** Immer die MAL-ID, unabhängig vom aktiven Service */
     val currentMalId: String? get() = _malId
 
     fun refreshWatchProgress() {
-        _watchProgress.value = if (serviceKey == "simkl") {
+        _episodeProgressMap.value = emptyMap() // ← Cache leeren, sonst alte Balken
+
+        _resumeProgress.value = if (serviceKey == "simkl") {
             watchHistoryStore.loadSimkl(mediaId)
         } else {
             watchHistoryStore.loadAnilistMal(anilistId = anilistId, malId = _malId)
         }
+        _watchedEpisodes.value = if (serviceKey == "simkl") {
+            watchHistoryStore.getWatchedSimkl(mediaId)
+        } else {
+            watchHistoryStore.getWatchedAnilistMal(anilistId = anilistId, malId = _malId)
+        }
+    }
+
+    fun episodeProgressFor(episodeNumber: Float): EpisodeProgress? {
+        val cached = _episodeProgressMap.value[episodeNumber.toInt()]
+        if (cached != null) return cached
+        val loaded = if (serviceKey == "simkl") {
+            watchHistoryStore.loadEpisodeProgressSimkl(mediaId, episodeNumber)
+        } else {
+            watchHistoryStore.loadEpisodeProgressAnilistMal(anilistId, _malId, episodeNumber)
+        }
+        if (loaded != null) {
+            _episodeProgressMap.update { it + (episodeNumber.toInt() to loaded) }
+        }
+        return loaded
     }
 
     private val _state = MutableStateFlow(PlayerTabUiState())
     val state: StateFlow<PlayerTabUiState> = _state.asStateFlow()
     private var _malId: String? = malId
-
     private var imdbId: String? = null
 
     private val _fillerEpisodes = MutableStateFlow<Set<Int>>(emptySet())
     val fillerEpisodes: StateFlow<Set<Int>> = _fillerEpisodes
 
-    private var searchJob: Job? = null
+    private var searchJob:      Job? = null
     private var episodeMetaJob: Job? = null
     private var episodeMetaKey: String? = null
 
@@ -169,26 +173,22 @@ class PlayerTabViewModel(
                 }
             }
         }
+
         if (serviceKey != "simkl" && malId != null) {
             viewModelScope.launch {
                 _fillerEpisodes.value = JikanService.getFillerEpisodes(malId)
             }
         }
         if (malId != null) {
-            loadEpisodeMetadata()//malId)
+            loadEpisodeMetadata()
         }
     }
-
-    // ── Source building ───────────────────────────────────────────────────────
 
     private fun buildSources(): List<SearchableSource> {
         return aniyomi.installedExtensions.value
             .flatMap { ext ->
                 ext.sources.filterIsInstance<AnimeHttpSource>().map { httpSource ->
-                    AniyomiSearchableSource(
-                        httpSource = httpSource,
-                        iconUrl    = ext.iconUrl,
-                    )
+                    AniyomiSearchableSource(httpSource = httpSource, iconUrl = ext.iconUrl)
                 }
             }
     }
@@ -214,17 +214,15 @@ class PlayerTabViewModel(
         loadEpisodeMetadata()
     }
 
-    fun setImdbId(id: String) {
-        imdbId = id
-    }
+    fun setImdbId(id: String) { imdbId = id }
 
     private fun loadEpisodeMetadata() {
         val anilistId = anilistId
-        val malId = _malId
+        val malId     = _malId
         val key = when (serviceType) {
             ServiceType.ANILIST -> anilistId?.let { "anilist:$it" }
-            ServiceType.MAL -> malId?.let { "mal:$it" }
-            ServiceType.SIMKL -> null
+            ServiceType.MAL     -> malId?.let     { "mal:$it" }
+            ServiceType.SIMKL   -> null
         } ?: return
 
         if (episodeMetaKey == key && _state.value.episodeMeta.isNotEmpty()) return
@@ -234,8 +232,8 @@ class PlayerTabViewModel(
         episodeMetaJob = viewModelScope.launch {
             val result = when (serviceType) {
                 ServiceType.ANILIST -> AniZipService.getEpisodesByAnilistId(anilistId!!)
-                ServiceType.MAL -> AniZipService.getEpisodesByMalId(malId!!)
-                ServiceType.SIMKL -> emptyMap()
+                ServiceType.MAL     -> AniZipService.getEpisodesByMalId(malId!!)
+                ServiceType.SIMKL   -> emptyMap()
             }
             _state.update { it.copy(episodeMeta = result) }
         }
@@ -259,7 +257,6 @@ class PlayerTabViewModel(
         }
     }
 
-
     fun loadSkipTimesSimkl(imdbId: String, season: String, episode: String) {
         viewModelScope.launch {
             _state.update { it.copy(skipTimes = null) }
@@ -267,10 +264,6 @@ class PlayerTabViewModel(
             _state.update { it.copy(skipTimes = result) }
         }
     }
-
-
-
-    // ── Source selection ──────────────────────────────────────────────────────
 
     fun selectSource(source: SearchableSource) {
         if (source.id == _state.value.selectedSource?.id) return
@@ -298,30 +291,18 @@ class PlayerTabViewModel(
         }
     }
 
-    private suspend fun resolveSource(
-        savedId:  Long?,
-        fallback: SearchableSource?,
-    ): SearchableSource? {
+    private suspend fun resolveSource(savedId: Long?, fallback: SearchableSource?): SearchableSource? {
         if (savedId == null) return fallback
-
-        repeat(5) { attempt ->
+        repeat(5) {
             val found = buildSources().firstOrNull { it.id == savedId }
             if (found != null) return found
             kotlinx.coroutines.delay(100L)
         }
-
         return fallback
     }
 
-    // ── Search ────────────────────────────────────────────────────────────────
-
-    fun setSearchQuery(query: String) {
-        _state.update { it.copy(searchQuery = query) }
-    }
-
-    fun setEditingQuery(editing: Boolean) {
-        _state.update { it.copy(isEditingQuery = editing) }
-    }
+    fun setSearchQuery(query: String)    { _state.update { it.copy(searchQuery = query) } }
+    fun setEditingQuery(editing: Boolean){ _state.update { it.copy(isEditingQuery = editing) } }
 
     fun submitSearch() {
         val source = _state.value.selectedSource ?: return
@@ -364,8 +345,6 @@ class PlayerTabViewModel(
         }
     }
 
-    // ── Result selection ──────────────────────────────────────────────────────
-
     fun selectAnimeResult(anime: SAnime, autoSelected: Boolean = false) {
         val source = _state.value.selectedSource ?: return
         _state.update { it.copy(selectedAnime = anime) }
@@ -383,8 +362,6 @@ class PlayerTabViewModel(
             loadEpisodes(source, anime)
         }
     }
-
-    // ── Episodes ──────────────────────────────────────────────────────────────
 
     private fun loadEpisodes(source: SearchableSource, anime: SAnime, retryCount: Int = 0) {
         viewModelScope.launch {
@@ -418,42 +395,30 @@ class PlayerTabViewModel(
         return withContext(Dispatchers.IO) { source.getVideoList(episode) }
     }
 
-    // ── Streams ───────────────────────────────────────────────────────────────
-
     fun selectEpisode(episode: SEpisode) {
         val source = _state.value.selectedSource ?: return
         _state.update { it.copy(selectedEpisode = episode, streamState = StreamState.Loading) }
-
         loadSkipTimes(episode.episode_number)
         viewModelScope.launch {
             runCatching { withContext(Dispatchers.IO) { source.getVideoList(episode) } }
                 .onSuccess { videos ->
-                    android.util.Log.d("PlayerTab", "videos count=${videos.size}")
-                    videos.forEach { v ->
-                        android.util.Log.d("PlayerTab", "  quality=${v.quality} url=${v.videoUrl} headers=${v.headers}")
-                    }
                     _state.update { it.copy(streamState = StreamState.Ready(videos)) }
                 }
                 .onFailure { e ->
-                    android.util.Log.e("PlayerTab", "getVideoList failed", e)
                     _state.update { it.copy(streamState = StreamState.Error(e.message ?: "Stream-Fehler")) }
                 }
         }
     }
 
-    fun clearStreams() = _state.update {
-        it.copy(streamState = StreamState.Idle)
-    }
-
-    // ── Factory ───────────────────────────────────────────────────────────────
+    fun clearStreams() = _state.update { it.copy(streamState = StreamState.Idle) }
 
     class Factory(
-        private val app: Application,
-        private val mediaId: String,
-        private val mediaTitle: String,
-        private val serviceKey: String,
+        private val app:         Application,
+        private val mediaId:     String,
+        private val mediaTitle:  String,
+        private val serviceKey:  String,
         private val serviceType: ServiceType,
-        private val malId: String? = null,
+        private val malId:       String? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T =

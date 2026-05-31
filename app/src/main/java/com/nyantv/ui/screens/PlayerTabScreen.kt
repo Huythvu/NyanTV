@@ -2,8 +2,10 @@ package com.nyantv.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.*
@@ -51,18 +53,21 @@ import kotlinx.coroutines.delay
 fun PlayerTabScreen(
     vm:                  PlayerTabViewModel,
     watchedEpisodeCount: Int                = 0,
+    playerReturnCount:   Int     = 0,
     onEpisodeSelected:   () -> Unit,
     onOverlayDismiss:    () -> Unit         = {},
     modifier:            Modifier           = Modifier,
 ) {
-    val state          by vm.state.collectAsStateWithLifecycle()
-    val fillerEpisodes by vm.fillerEpisodes.collectAsStateWithLifecycle()
-    val watchProgress  by vm.watchProgress.collectAsStateWithLifecycle()
+    val state            by vm.state.collectAsStateWithLifecycle()
+    val fillerEpisodes   by vm.fillerEpisodes.collectAsStateWithLifecycle()
+    val resumeProgress   by vm.resumeProgress.collectAsStateWithLifecycle()
+    val watchedEpisodes  by vm.watchedEpisodes.collectAsStateWithLifecycle()
     var showResultPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { vm.refreshWatchProgress() }
 
     val changeFocusReq = remember { FocusRequester() }
+    val resumeCardFocusReq = remember { FocusRequester() }
     val listState      = rememberLazyListState()
     val episodeSuccess = state.episodeState as? EpisodeState.Success
     val pageSize       = 12
@@ -87,6 +92,15 @@ fun PlayerTabScreen(
         delay(80)
         listState.animateScrollToItem(rowInPage.coerceAtLeast(0))
     }
+
+    LaunchedEffect(playerReturnCount) {
+        if (playerReturnCount > 0) {
+            vm.refreshWatchProgress()
+            delay(150)
+            runCatching { resumeCardFocusReq.requestFocus() }
+        }
+    }
+    LaunchedEffect(Unit) { vm.refreshWatchProgress() }
 
     Box(modifier = modifier.fillMaxSize()) {
         var prevShowResultPicker by remember { mutableStateOf(false) }
@@ -202,11 +216,7 @@ fun PlayerTabScreen(
                 }
                 is EpisodeState.Error -> item {
                     Column {
-                        Text(
-                            es.message,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                        Text(es.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                         TextButton(onClick = { vm.retryEpisodes() }) { Text("Retry") }
                     }
                 }
@@ -222,6 +232,23 @@ fun PlayerTabScreen(
                         ) { Text("Change") }
                     }
 
+                    resumeProgress?.let { resume ->
+                        val resumeEp = es.episodes.firstOrNull {
+                            it.episode_number.toInt() == resume.episodeNumber.toInt()
+                        }
+                        if (resumeEp != null && resume.durationMs > 0L) {
+                            item {
+                                ResumeCard(
+                                    episode     = resumeEp,
+                                    progress    = resume,
+                                    episodeMeta = state.episodeMeta,
+                                    onClick     = { vm.selectEpisode(resumeEp) },
+                                    modifier    = Modifier.focusRequester(resumeCardFocusReq),
+                                )
+                            }
+                        }
+                    }
+
                     // ── Page chips ───────────────────────────────────────
                     if (totalPages > 1) {
                         item {
@@ -235,19 +262,33 @@ fun PlayerTabScreen(
                                     val from       = index * pageSize + 1
                                     val to         = minOf((index + 1) * pageSize, es.episodes.size)
                                     val isSelected = page == index
-                                    FilterChip(
-                                        selected = isSelected,
-                                        onClick  = { page = index },
-                                        label    = {
-                                            Text(
-                                                "$from–$to",
-                                                color = if (isSelected)
-                                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                                else
-                                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+
+                                    val chipShape = RoundedCornerShape(6.dp)
+
+                                    Box(
+                                        modifier = Modifier
+                                            .focusBorder(shape = chipShape, color = MaterialTheme.colorScheme.primary, inset = true)
+                                            .clip(chipShape)
+                                            .background(
+                                                if (isSelected) MaterialTheme.colorScheme.secondaryContainer
+                                                else MaterialTheme.colorScheme.surfaceContainer
                                             )
-                                        },
-                                    )
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication        = null,
+                                            ) { page = index }
+                                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            "$from–$to",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (isSelected)
+                                                MaterialTheme.colorScheme.onSecondaryContainer
+                                            else
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -264,10 +305,10 @@ fun PlayerTabScreen(
                         ) {
                             pair.forEach { episode ->
                                 val epNum            = episode.episode_number.toInt()
-                                val isWatched        = epNum <= watchedEpisodeCount
-                                val progressFraction = watchProgress
-                                    ?.takeIf { it.episodeNumber.toInt() == epNum && !isWatched }
+                                val isWatched        = epNum in watchedEpisodes
+                                val progressFraction = vm.episodeProgressFor(episode.episode_number)
                                     ?.let { (it.positionMs.toFloat() / it.durationMs.toFloat()).coerceIn(0f, 1f) }
+                                    ?.takeIf { it > 0f && !isWatched }
                                 val meta = state.episodeMeta.resolveEpisodeMeta(episode.episode_number)
                                 EpisodeRow(
                                     episode          = episode,
@@ -309,8 +350,8 @@ fun PlayerTabScreen(
                                                 ?: emptyMap(),
                                         )
                                     }
-                                    PlayerArgs.skipTimes  = state.skipTimes
-                                    PlayerArgs.subtitleTracks = videos
+                                    PlayerArgs.skipTimes          = state.skipTimes
+                                    PlayerArgs.subtitleTracks     = videos
                                         .flatMap { v -> v.subtitleTracks }
                                         .distinctBy { it.url }
                                         .map { track -> SubtitleTrack(track.lang, track.url) }
@@ -323,11 +364,14 @@ fun PlayerTabScreen(
                                     PlayerArgs.serviceKey          = vm.serviceKey
                                     PlayerArgs.anilistId           = vm.anilistId
                                     PlayerArgs.malId               = vm.currentMalId
-                                    PlayerArgs.resumePositionMs    = watchProgress
-                                        ?.takeIf { it.episodeNumber.toInt() == state.selectedEpisode?.episode_number?.toInt() }
-                                        ?.positionMs ?: 0L
+                                    PlayerArgs.resumePositionMs    = vm.episodeProgressFor(
+                                        state.selectedEpisode?.episode_number ?: 0f
+                                    )
+                                        ?.takeIf { it.positionMs > 0L && it.positionMs < it.durationMs - 10_000L }
+                                        ?.positionMs
+                                        ?: 0L
                                     PlayerArgs.episodeMeta         = state.episodeMeta
-                                    PlayerArgs.title = state.selectedEpisode?.displayName(state.episodeMeta) ?: ""
+                                    PlayerArgs.title               = state.selectedEpisode?.displayName(state.episodeMeta) ?: ""
                                     vm.clearStreams()
                                     onEpisodeSelected()
                                 },
@@ -340,11 +384,8 @@ fun PlayerTabScreen(
             )
         }
 
-        // ── Result picker overlay ─────────────────────────────────────────
         if (showResultPicker) {
-            LaunchedEffect(Unit) {
-                vm.ensureSearched()
-            }
+            LaunchedEffect(Unit) { vm.ensureSearched() }
             ResultPickerOverlay(
                 state     = state,
                 onSearch  = { vm.setSearchQuery(it); vm.submitSearch() },
@@ -428,7 +469,8 @@ private fun EpisodeRow(
         onClick  = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .alpha(if (isWatched) 0.45f else 1f),
+            .alpha(if (isWatched) 0.45f else 1f)
+            .focusBorder(MaterialTheme.shapes.small, inset = true, color = MaterialTheme.colorScheme.primary),
         shape    = MaterialTheme.shapes.small,
         color    = MaterialTheme.colorScheme.surfaceContainer,
     ) {
@@ -664,6 +706,103 @@ private fun ResultCard(anime: SAnime, onClick: () -> Unit) {
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ResumeCard(
+    episode:     SEpisode,
+    progress:    EpisodeProgress,
+    episodeMeta: Map<String, AniZipEpisodeMeta>,
+    onClick:     () -> Unit,
+    modifier:    Modifier = Modifier,
+) {
+    val fraction = (progress.positionMs.toFloat() / progress.durationMs).coerceIn(0f, 1f)
+    val meta     = episodeMeta.resolveEpisodeMeta(episode.episode_number)
+    val title    = episode.name.takeIf { it.contains(":") }
+        ?: meta?.title?.takeIf { it.isNotBlank() }
+            ?.let { "Episode ${episode.episode_number.toInt()}: $it" }
+        ?: episode.name.ifBlank { "Episode ${episode.episode_number.toInt()}" }
+
+    val remainingMs = progress.durationMs - progress.positionMs
+    val remainingMin = (remainingMs / 60_000).toInt()
+
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusBorder(MaterialTheme.shapes.medium, inset = true, color = MaterialTheme.colorScheme.primary),
+        shape   = MaterialTheme.shapes.medium,
+        color   = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+        border  = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+        ),
+    ) {
+        Box {
+            Row(
+                modifier              = Modifier.padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                meta?.image?.takeIf { it.isNotBlank() }?.let { image ->
+                    AsyncImage(
+                        model              = image,
+                        contentDescription = null,
+                        contentScale       = ContentScale.Crop,
+                        modifier           = Modifier
+                            .size(120.dp, 68.dp)
+                            .clip(RoundedCornerShape(6.dp)),
+                    )
+                }
+                Column(
+                    modifier            = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        "Continue watching",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        title,
+                        style    = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (remainingMin > 0) {
+                        Text(
+                            "${remainingMin}min left",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                }
+                Icon(
+                    Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint     = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(3.dp)
+                    .align(Alignment.BottomStart)
+                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction)
+                    .height(3.dp)
+                    .align(Alignment.BottomStart)
+                    .background(MaterialTheme.colorScheme.primary)
             )
         }
     }

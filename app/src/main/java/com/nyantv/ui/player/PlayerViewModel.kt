@@ -159,8 +159,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 episodes.getOrNull(currentEpisodeIndex)?.let { ep ->
                     if (mediaId.isNotEmpty()) {
                         val p = EpisodeProgress(ep.episode_number, positionMs, durationMs)
-                        if (serviceKey == "simkl") watchHistoryStore.saveSimkl(mediaId, p)
-                        else                       watchHistoryStore.saveAnilistMal(anilistId, malId, p)
+                        if (serviceKey == "simkl") {
+                            watchHistoryStore.saveSimkl(mediaId, p)
+                        } else {
+                            watchHistoryStore.saveAnilistMal(anilistId, malId, p)
+                        }
                     }
                 }
             }
@@ -269,12 +272,34 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         if (positionMs.toFloat() / durationMs < threshold) return
 
         hasTrackedCurrentEpisode = true
-        if (mediaId.isNotEmpty()) {
-            if (serviceKey == "simkl") watchHistoryStore.clearSimkl(mediaId)
-            else                       watchHistoryStore.clearAnilistMal(anilistId, malId)
-        }
+
         val episode = episodes.getOrNull(currentEpisodeIndex) ?: return
+        val epNum   = episode.episode_number.toInt()
+
+        if (mediaId.isNotEmpty()) {
+            if (serviceKey == "simkl") {
+                watchHistoryStore.markWatchedSimkl(mediaId, epNum)
+            } else {
+                watchHistoryStore.markWatchedAnilistMal(anilistId, malId, epNum)
+            }
+        }
+
         viewModelScope.launch { _watchedEvent.emit(WatchedEvent(episode, mediaId)) }
+    }
+
+    private fun saveCurrentProgress() {
+        val ep  = episodes.getOrNull(currentEpisodeIndex) ?: return
+        if (mediaId.isEmpty()) return
+        val pos = _state.value.positionMs
+        val dur = _state.value.durationMs
+        if (dur <= 0L || pos <= 0L) return
+        val p = EpisodeProgress(ep.episode_number, pos, dur)
+        if (serviceKey == "simkl") {
+            watchHistoryStore.saveSimkl(mediaId, p)
+        } else {
+            watchHistoryStore.saveAnilistMal(anilistId, malId, p)
+        }
+        lastSavedPositionMs = pos
     }
 
     private fun computeActiveSkip(positionSec: Int): ActiveSkip? {
@@ -341,10 +366,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun doNavigateEpisode(delta: Int) {
+        saveCurrentProgress()
         val targetIndex = currentEpisodeIndex + delta
         val episode     = episodes.getOrNull(targetIndex) ?: return
         val loader      = onLoadEpisodeVideos ?: return
-        _pendingDelta = delta
+        _pendingDelta   = delta
 
         viewModelScope.launch {
             _state.update { it.copy(episodeNavigating = true) }
@@ -490,7 +516,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun play()                     = service?.play()
     fun pause()                    = service?.pause()
-    fun stop()                     = service?.stop()
+    fun stop() {
+        saveCurrentProgress()
+        service?.stop()
+    }
     fun seekTo(ms: Long)           = service?.seekTo(ms)
     fun seekForward()              = service?.seekForward()
     fun seekBackward()             = service?.seekBackward()

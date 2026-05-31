@@ -92,6 +92,8 @@ fun MainNavigation(vm: AppViewModel = viewModel()) {
 
     val detailOpen = detailHistory.isNotEmpty()
 
+    var playerReturnCount by remember { mutableIntStateOf(0) }
+
     fun openDetail(id: String) {
         focusManager.clearFocus(force = true)
         detailHistory.add(id)
@@ -174,6 +176,7 @@ fun MainNavigation(vm: AppViewModel = viewModel()) {
                         id                 = id,
                         vm                 = vm,
                         returnFocusReq     = returnFocusReq,
+                        playerReturnCount  = playerReturnCount,
                         onBack             = { detailHistory.removeLastOrNull() },
                         onNavigateToDetail = { newId ->
                             detailHistory.remove(newId)
@@ -193,6 +196,7 @@ fun MainNavigation(vm: AppViewModel = viewModel()) {
                 appVm  = vm,
                 onBack = {
                     showPlayer = false
+                    playerReturnCount++
                     scope.launch {
                         delay(100)
                         runCatching { returnFocusReq.requestFocus() }

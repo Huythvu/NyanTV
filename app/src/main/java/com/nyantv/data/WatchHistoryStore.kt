@@ -37,25 +37,91 @@ class WatchHistoryStore(context: Context) {
         }
     }
 
-    // ── AniList + MAL ────────────────────
+    fun saveResume(key: String, p: EpisodeProgress)  = saveByKey("resume_$key", p)
+    fun loadResume(key: String): EpisodeProgress?    = loadByKey("resume_$key")
+    fun clearResume(key: String)                     = clearByKey("resume_$key")
+
+    fun saveEpisodeProgress(key: String, p: EpisodeProgress) =
+        saveByKey("ep_${key}_${p.episodeNumber.toInt()}", p)
+
+    fun loadEpisodeProgress(key: String, episodeNumber: Float): EpisodeProgress? =
+        loadByKey("ep_${key}_${episodeNumber.toInt()}")
+
+    fun clearEpisodeProgress(key: String, episodeNumber: Float) =
+        clearByKey("ep_${key}_${episodeNumber.toInt()}")
+
+    // ── Watched Set ───────────────────────────────────────────────────────────
+
+    fun markWatched(key: String, episodeNumber: Int) {
+        val current = getWatchedEpisodes(key).toMutableSet()
+        current.add(episodeNumber)
+        prefs.edit { putString("watched_$key", current.joinToString(",")) }
+    }
+
+    fun getWatchedEpisodes(key: String): Set<Int> {
+        val raw = prefs.getString("watched_$key", "") ?: return emptySet()
+        if (raw.isBlank()) return emptySet()
+        return raw.split(",").mapNotNull { it.toIntOrNull() }.toSet()
+    }
+
+    fun clearWatched(key: String) {
+        prefs.edit { remove("watched_$key") }
+    }
+
+    // ── AniList + MAL ────────────────────────────────────────
 
     fun saveAnilistMal(anilistId: String?, malId: String?, progress: EpisodeProgress) {
-        anilistId?.let { saveByKey("al_$it",  progress) }
-        malId?.let     { saveByKey("mal_$it", progress) }
+        val key = resumeKey(anilistId, malId) ?: return
+        saveResume(key, progress)
+        saveEpisodeProgress(key, progress)
     }
 
-    fun loadAnilistMal(anilistId: String?, malId: String?): EpisodeProgress? =
-        anilistId?.let { loadByKey("al_$it") }
-            ?: malId?.let { loadByKey("mal_$it") }
+    fun loadAnilistMal(anilistId: String?, malId: String?): EpisodeProgress? {
+        val key = resumeKey(anilistId, malId) ?: return null
+        return loadResume(key)
+    }
 
     fun clearAnilistMal(anilistId: String?, malId: String?) {
-        anilistId?.let { clearByKey("al_$it") }
-        malId?.let     { clearByKey("mal_$it") }
+        val key = resumeKey(anilistId, malId) ?: return
+        clearResume(key)
     }
 
-    // ── Simkl ───────────────────────────────────────────────────────
+    fun markWatchedAnilistMal(anilistId: String?, malId: String?, episodeNumber: Int) {
+        val key = resumeKey(anilistId, malId) ?: return
+        markWatched(key, episodeNumber)
+        clearEpisodeProgress(key, episodeNumber.toFloat())
+    }
 
-    fun saveSimkl(simklId: String, progress: EpisodeProgress) = saveByKey("simkl_$simklId", progress)
-    fun loadSimkl(simklId: String): EpisodeProgress?          = loadByKey("simkl_$simklId")
-    fun clearSimkl(simklId: String)                           = clearByKey("simkl_$simklId")
+    fun getWatchedAnilistMal(anilistId: String?, malId: String?): Set<Int> {
+        val key = resumeKey(anilistId, malId) ?: return emptySet()
+        return getWatchedEpisodes(key)
+    }
+
+    fun loadEpisodeProgressAnilistMal(anilistId: String?, malId: String?, episodeNumber: Float): EpisodeProgress? {
+        val key = resumeKey(anilistId, malId) ?: return null
+        return loadEpisodeProgress(key, episodeNumber)
+    }
+
+    private fun resumeKey(anilistId: String?, malId: String?): String? =
+        anilistId?.let { "al_$it" } ?: malId?.let { "mal_$it" }
+
+    // ── Simkl ─────────────────────────────────────────────────────────────────
+
+    fun saveSimkl(simklId: String, progress: EpisodeProgress) {
+        saveResume("simkl_$simklId", progress)
+        saveEpisodeProgress("simkl_$simklId", progress)
+    }
+
+    fun loadSimkl(simklId: String): EpisodeProgress? = loadResume("simkl_$simklId")
+    fun clearSimkl(simklId: String)                  = clearResume("simkl_$simklId")
+
+    fun markWatchedSimkl(simklId: String, episodeNumber: Int) {
+        markWatched("simkl_$simklId", episodeNumber)
+        clearEpisodeProgress("simkl_$simklId", episodeNumber.toFloat())
+    }
+
+    fun getWatchedSimkl(simklId: String): Set<Int> = getWatchedEpisodes("simkl_$simklId")
+
+    fun loadEpisodeProgressSimkl(simklId: String, episodeNumber: Float): EpisodeProgress? =
+        loadEpisodeProgress("simkl_$simklId", episodeNumber)
 }

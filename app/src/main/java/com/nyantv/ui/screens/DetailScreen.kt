@@ -52,6 +52,7 @@ fun DetailScreen(
     vm:                 AppViewModel,
     modifier:           Modifier = Modifier,
     returnFocusReq:     FocusRequester,
+    playerReturnCount:  Int = 0,
     onBack:             () -> Unit,
     onNavigateToDetail: (String) -> Unit,
     onNavigateToPlayer: () -> Unit,
@@ -160,7 +161,7 @@ fun DetailScreen(
                 contentPadding      = PaddingValues(bottom = 0.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                // ── Banner + Back ─────────────────────────────────────────────
+                // ── Banner ────────────────────────────────────────────────────
                 item {
                     Box(modifier = Modifier.fillMaxWidth().height(200.dp)) {
                         AsyncImage(
@@ -194,49 +195,48 @@ fun DetailScreen(
                     }
                 }
 
+                // ── Tabs ────────────────────────────
                 item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(0.dp)
-                            .focusRequester(returnFocusReq)
-                            .focusable()
-                    )
-                }
-
-                // ── Tabs ──────────────────────────────────────────────────────
-                item {
-                    TabRow(
-                        selectedTabIndex = activeTab.ordinal,
-                        modifier         = Modifier
-                            .fillMaxWidth()
-                            .offset(y = (-20).dp)
-                            .onKeyEvent { keyEvent ->
-                                if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionUp) {
-                                    scope.launch {
-                                        listState.scrollToItem(0)
-                                        delay(5)
-                                        runCatching { backFocusReq.requestFocus() }
-                                    }
-                                    true
-                                } else false
-                            },
-                        containerColor   = MaterialTheme.colorScheme.surface,
-                        contentColor     = MaterialTheme.colorScheme.primary,
-                    ) {
-                        Tab(
-                            selected = activeTab == DetailTab.INFO,
-                            onClick  = { activeTab = DetailTab.INFO },
-                            icon     = { Icon(Icons.Default.Info, null, modifier = Modifier.size(18.dp)) },
-                            text     = { Text("Info") },
+                    Box {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(0.dp)
+                                .focusRequester(returnFocusReq)
+                                .focusable()
                         )
-                        Tab(
-                            selected = activeTab == DetailTab.PLAYER,
-                            onClick  = { activeTab = DetailTab.PLAYER },
-                            modifier = Modifier.focusRequester(playerTabFocusReq),
-                            icon     = { Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp)) },
-                            text     = { Text("Player") },
-                        )
+                        TabRow(
+                            selectedTabIndex = activeTab.ordinal,
+                            modifier         = Modifier
+                                .fillMaxWidth()
+                                .offset(y = (-20).dp)
+                                .onKeyEvent { keyEvent ->
+                                    if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionUp) {
+                                        scope.launch {
+                                            listState.scrollToItem(0)
+                                            delay(5)
+                                            runCatching { backFocusReq.requestFocus() }
+                                        }
+                                        true
+                                    } else false
+                                },
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            contentColor   = MaterialTheme.colorScheme.primary,
+                        ) {
+                            Tab(
+                                selected = activeTab == DetailTab.INFO,
+                                onClick  = { activeTab = DetailTab.INFO },
+                                icon     = { Icon(Icons.Default.Info, null, modifier = Modifier.size(18.dp)) },
+                                text     = { Text("Info") },
+                            )
+                            Tab(
+                                selected = activeTab == DetailTab.PLAYER,
+                                onClick  = { activeTab = DetailTab.PLAYER },
+                                modifier = Modifier.focusRequester(playerTabFocusReq),
+                                icon     = { Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp)) },
+                                text     = { Text("Player") },
+                            )
+                        }
                     }
                 }
 
@@ -252,6 +252,7 @@ fun DetailScreen(
                         PlayerTabScreen(
                             vm                  = playerVm,
                             watchedEpisodeCount = currentEntry?.episodeCount ?: 0,
+                            playerReturnCount   = playerReturnCount,
                             onEpisodeSelected   = { onNavigateToPlayer() },
                             onOverlayDismiss    = {
                                 scope.launch {
