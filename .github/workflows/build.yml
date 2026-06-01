@@ -67,7 +67,8 @@ jobs:
             -PMAL_CLIENT_ID="${{ secrets.MAL_CLIENT_ID }}" \
             -PMAL_CLIENT_SECRET="${{ secrets.MAL_CLIENT_SECRET }}" \
             -PSIMKL_CLIENT_ID="${{ secrets.SIMKL_CLIENT_ID }}" \
-            -PSIMKL_CLIENT_SECRET="${{ secrets.SIMKL_CLIENT_SECRET }}"
+            -PSIMKL_CLIENT_SECRET="${{ secrets.SIMKL_CLIENT_SECRET }}" \
+            -PTMDB_API_KEY="${{ secrets.TMDB_API_KEY }}"
 
       - name: Rename APK
         run: |
