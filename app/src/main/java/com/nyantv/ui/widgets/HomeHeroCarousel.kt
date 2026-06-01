@@ -267,7 +267,7 @@ private object CarouselLogoResolver {
         )
         endpoints.forEach { url ->
             getJson(url)?.let { jsonElement ->
-                extractLogoUrl(jsonElement)?.let { return it }
+                extractLogoUrl(jsonElement)?.let { return "https://wsrv.nl/?url=$it" }
             }
         }
         return null
@@ -279,11 +279,12 @@ private object CarouselLogoResolver {
         BuildConfig.TMDB_API_KEY.takeIf { it.isNotBlank() }?.let { apiKey ->
             val apiLogo = getJson("https://api.themoviedb.org/3/$type/$tmdbId/images?api_key=$apiKey&include_image_language=en,null")
                 ?.let { extractTmdbLogoPath(it) }
-                ?.let { "https://image.tmdb.org/t/p/original$it" }
+                ?.let { "https://wsrv.nl/?url=https://image.tmdb.org/t/p/original$it" }
             if (!apiLogo.isNullOrBlank()) return apiLogo
         }
         return getString("https://www.themoviedb.org/$type/$tmdbId/images/logos")
             ?.let { html -> tmdbRegex.find(html)?.value }
+            ?.let { "https://wsrv.nl/?url=$it" }
     }
 
     private fun extractTmdbLogoPath(element: JsonElement): String? {
