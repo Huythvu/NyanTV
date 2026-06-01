@@ -261,7 +261,7 @@ class AnilistService(context: Context) : MediaService {
           recent:   Page(page:1, perPage:10) { media(type:ANIME, sort:UPDATED_AT_DESC, status:RELEASING, isAdult:false, countryOfOrigin:"JP") { ...F } }
         }
         fragment F on Media {
-          id title { romaji english } coverImage { large } bannerImage averageScore episodes status
+          id idMal title { romaji english } coverImage { large } bannerImage averageScore episodes status format season seasonYear
         }
         """.trimIndent()
 
