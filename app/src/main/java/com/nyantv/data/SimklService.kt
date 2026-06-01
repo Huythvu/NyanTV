@@ -131,8 +131,9 @@ class SimklService(context: Context) : MediaService {
 
     private suspend fun fetchTrending(type: String): List<Media> = withContext(Dispatchers.IO) {
         runCatching {
-            val req  = Request.Builder()
-                .url("$SIMKL_API/$type/trending?extended=overview&client_id=${BuildConfig.SIMKL_CLIENT_ID}")
+            val simklType = if (type == "movies") "movies" else "tv"
+            val req = Request.Builder()
+                .url("https://data.simkl.in/discover/trending/$simklType/today_100.json?client_id=${BuildConfig.SIMKL_CLIENT_ID}")
                 .build()
             val resp = http.newCall(req).execute()
             if (!resp.isSuccessful) {
@@ -459,6 +460,8 @@ private fun JsonObject.toSimklMedia(isMovie: Boolean): Media? {
     val simklId = ids?.get("simkl_id")?.jsonPrimitive?.contentOrNull
         ?: ids?.get("simkl")?.jsonPrimitive?.contentOrNull
     if (simklId.isNullOrBlank()) return null
+    val tmdbId = ids?.get("tmdb_id")?.jsonPrimitive?.contentOrNull
+        ?: ids?.get("tmdb")?.jsonPrimitive?.contentOrNull
 
     val poster = this["poster"]?.jsonPrimitive?.contentOrNull
         ?.let { "${POSTER_BASE}${it}_m.jpg" }
@@ -480,7 +483,10 @@ private fun JsonObject.toSimklMedia(isMovie: Boolean): Media? {
         description  = this["overview"]?.jsonPrimitive?.contentOrNull,
         status       = this["status"]?.jsonPrimitive?.contentOrNull.normalizeStatus(),
         averageScore = averageScore,
+        format       = if (isMovie) "MOVIE" else "TV",
+        seasonYear   = this["year"]?.jsonPrimitive?.intOrNull,
         popularity   = popularity,
+        tmdbId       = tmdbId,
         serviceType  = ServiceType.SIMKL
     )
 }

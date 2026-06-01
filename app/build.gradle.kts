@@ -33,6 +33,7 @@ android {
         buildConfigField("String", "MAL_CLIENT_SECRET",     "\"${secret("MAL_CLIENT_SECRET")}\"")
         buildConfigField("String", "SIMKL_CLIENT_ID",       "\"${secret("SIMKL_CLIENT_ID")}\"")
         buildConfigField("String", "SIMKL_CLIENT_SECRET",   "\"${secret("SIMKL_CLIENT_SECRET")}\"")
+        buildConfigField("String", "TMDB_API_KEY",          "\"${secret("TMDB_API_KEY")}\"")
         buildConfigField("String", "REDIRECT_URI",          "\"nyantv://callback\"")
 
         val abiFilter = secret("ABI_FILTER").ifBlank { null }

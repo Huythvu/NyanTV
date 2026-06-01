@@ -159,7 +159,7 @@ class MalService(context: Context) : MediaService {
     // ── Homepage ───────────────────────────────────────────────────────────────
 
     override suspend fun fetchHomePage() = withContext(Dispatchers.IO) {
-        val fields = "fields=mean,status,media_type,num_episodes,main_picture"
+        val fields = "fields=mean,status,media_type,num_episodes,main_picture,start_season"
         _trending.value = fetchList("$MAL_API/anime/ranking?ranking_type=airing&limit=15&$fields")
         _popular.value  = fetchList("$MAL_API/anime/ranking?ranking_type=bypopularity&limit=15&$fields")
         _upcoming.value = fetchList("$MAL_API/anime/ranking?ranking_type=upcoming&limit=15&$fields")
@@ -311,6 +311,7 @@ class MalService(context: Context) : MediaService {
 private fun JsonObject.toMalMedia(): Media {
     val pic = this["main_picture"]?.jsonObject
     val malId = this["id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+    val startSeason = this["start_season"]?.jsonObject
     return Media(
         id           = malId,
         title        = this["title"]?.jsonPrimitive?.contentOrNull ?: "?",
@@ -319,6 +320,9 @@ private fun JsonObject.toMalMedia(): Media {
         averageScore = this["mean"]?.jsonPrimitive?.floatOrNull?.times(10)?.toInt(),
         episodes     = this["num_episodes"]?.jsonPrimitive?.intOrNull,
         status       = this["status"]?.jsonPrimitive?.contentOrNull.normalizeStatus(),
+        format       = this["media_type"]?.jsonPrimitive?.contentOrNull?.uppercase(),
+        season       = startSeason?.get("season")?.jsonPrimitive?.contentOrNull?.uppercase(),
+        seasonYear   = startSeason?.get("year")?.jsonPrimitive?.intOrNull,
         genres       = this["genres"]?.takeIf { it !is JsonNull }?.jsonArray
             ?.mapNotNull { it.jsonObject["name"]?.jsonPrimitive?.contentOrNull }
             ?: emptyList(),

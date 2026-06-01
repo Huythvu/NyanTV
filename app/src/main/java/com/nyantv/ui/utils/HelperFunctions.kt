@@ -78,14 +78,16 @@ fun Modifier.focusBorder(
     shape: Shape,
     gap: Dp = 1.dp,
     color: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-    inset: Boolean = false
+    inset: Boolean = false,
+    isFocused: Boolean? = null,
 ): Modifier {
-    var isFocused by remember { mutableStateOf(false) }
+    var internalFocus by remember { mutableStateOf(false) }
+    val focused = isFocused ?: internalFocus
     return this
-        .onFocusChanged { isFocused = it.isFocused }
+        .then(if (isFocused == null) Modifier.onFocusChanged { internalFocus = it.isFocused } else Modifier)
         .drawWithContent {
             drawContent()
-            if (isFocused) {
+            if (focused) {
                 val strokeWidth = 2f * density
                 if (inset) {
                     val half = strokeWidth / 2f

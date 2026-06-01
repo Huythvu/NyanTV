@@ -16,6 +16,7 @@ import com.nyantv.data.ServiceType
 import com.nyantv.ui.*
 import com.nyantv.ui.utils.NetworkStatusContent
 import com.nyantv.ui.utils.focusBorder
+import com.nyantv.ui.widgets.HomeHeroCarousel
 import com.nyantv.viewmodel.AppViewModel
 
 // ─── Anime browse screen ───────────────────────────────────────────────────────
@@ -54,9 +55,10 @@ fun AnimeScreen(vm: AppViewModel, navController: NavController, onDetailClick: (
 
             // ── Browse sections ───────────────────────────────────────────────
             if (trending.isNotEmpty()) {
-                BannerCard(
-                    media    = trending.getOrElse(1) { trending.first() },
-                    onClick  = { onDetailClick(trending.getOrElse(1) { trending.first() }.id) },
+                HomeHeroCarousel(
+                    items    = trending,
+                    onItemClick = { onDetailClick(it.id) },
+                    vm = vm,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }

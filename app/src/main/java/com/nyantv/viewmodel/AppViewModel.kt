@@ -13,6 +13,8 @@ import kotlinx.coroutines.delay
 import androidx.core.content.edit
 import com.nyantv.ui.theme.ActiveTheme
 import com.nyantv.ui.theme.CustomTheme
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -112,6 +114,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _trendingMovies = MutableStateFlow<List<Media>>(emptyList())
     private val _trendingShows  = MutableStateFlow<List<Media>>(emptyList())
 
+    private val _carouselLogos     = MutableStateFlow<Map<String, String?>>(emptyMap())
+    private val _carouselBackdrops = MutableStateFlow<Map<String, String?>>(emptyMap())
+    val carouselLogos:     StateFlow<Map<String, String?>> = _carouselLogos.asStateFlow()
+    val carouselBackdrops: StateFlow<Map<String, String?>> = _carouselBackdrops.asStateFlow()
+
     val isLoggedIn:      StateFlow<Boolean>            = _isLoggedIn.asStateFlow()
     val profile:         StateFlow<Profile?>           = _profile.asStateFlow()
     val animeList:       StateFlow<List<TrackedMedia>> = _animeList.asStateFlow()
@@ -147,15 +154,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
         val cached = loadProfileCache(type)
 
-        _isLoggedIn.value      = cached != null
-        _profile.value         = cached
-        _animeList.value       = emptyList()
-        _trending.value        = emptyList()
-        _popular.value         = emptyList()
-        _upcoming.value        = emptyList()
-        _recentlyUpdated.value = emptyList()
-        _trendingMovies.value  = emptyList()
-        _trendingShows.value   = emptyList()
+        _isLoggedIn.value        = cached != null
+        _profile.value           = cached
+        _animeList.value         = emptyList()
+        _trending.value          = emptyList()
+        _carouselLogos.value     = emptyMap()
+        _carouselBackdrops.value = emptyMap()
+        _popular.value           = emptyList()
+        _upcoming.value          = emptyList()
+        _recentlyUpdated.value   = emptyList()
+        _trendingMovies.value    = emptyList()
+        _trendingShows.value     = emptyList()
 
         _service     = buildService(type, getApplication())
         sideService  = buildSideService(type, getApplication())
@@ -183,7 +192,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         serviceJobs += viewModelScope.launch { _service.animeList.collect       { _animeList.value = it } }
         serviceJobs += viewModelScope.launch { _service.currentMedia.collect    { _currentMedia.value = it } }
-        serviceJobs += viewModelScope.launch { _service.trending.collect        { _trending.value = it } }
+        serviceJobs += viewModelScope.launch {
+            _service.trending.collect { items ->
+                _trending.value = items
+                launch { preloadCarouselAssets(items) }
+            }
+        }
         serviceJobs += viewModelScope.launch { _service.popular.collect         { _popular.value = it } }
         serviceJobs += viewModelScope.launch { _service.upcoming.collect        { _upcoming.value = it } }
         serviceJobs += viewModelScope.launch { _service.recentlyUpdated.collect { _recentlyUpdated.value = it } }
@@ -368,6 +382,53 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val name   = prefs.getString("cache_${type.name}_name",   null) ?: return null
         val avatar = prefs.getString("cache_${type.name}_avatar", null)
         return Profile(name = name, avatar = avatar)
+    }
+
+    private suspend fun preloadCarouselAssets(items: List<Media>) {
+        kotlinx.coroutines.coroutineScope {
+            items
+                .filter { !_carouselLogos.value.containsKey(it.id) }
+                .map { media ->
+                    async(kotlinx.coroutines.Dispatchers.IO) {
+                        media.id to Pair(
+                            com.nyantv.ui.widgets.CarouselLogoResolver.resolve(media),
+                            com.nyantv.ui.widgets.CarouselLogoResolver.resolveBackdrop(media),
+                        )
+                    }
+                }
+                .awaitAll()
+                .forEach { (id, pair) ->
+                    _carouselLogos.update     { it + (id to pair.first) }
+                    _carouselBackdrops.update { it + (id to pair.second) }
+                }
+        }
+    }
+
+    suspend fun resolveAnilistBanner(media: Media): String? {
+        val anilist = when {
+            _service    is AnilistService -> _service    as AnilistService
+            sideService is AnilistService -> sideService as AnilistService
+            else                          -> return null
+        }
+        return anilist.resolveAnilistBanner(media)
+    }
+
+    suspend fun prefetchAnilistBanners(items: List<Media>) {
+        val anilist = when {
+            _service    is AnilistService -> _service    as AnilistService
+            sideService is AnilistService -> sideService as AnilistService
+            else                          -> return
+        }
+        anilist.prefetchAnilistBanners(items)
+    }
+
+    fun getAnilistBanner(media: Media): String? {
+        val anilist = when {
+            _service    is AnilistService -> _service    as AnilistService
+            sideService is AnilistService -> sideService as AnilistService
+            else                          -> return null
+        }
+        return anilist.getAnilistBanner(media)
     }
 
 }
