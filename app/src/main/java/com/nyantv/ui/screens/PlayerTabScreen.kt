@@ -471,86 +471,98 @@ private fun EpisodeRow(
         meta?.rating?.takeIf { it.isNotBlank() }?.let { add("★ $it") }
         meta?.airDate?.takeIf { it.isNotBlank() }?.let { add(it) }
     }
-    Surface(
-        onClick  = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .alpha(if (isWatched) 0.45f else 1f)
-            .focusBorder(MaterialTheme.shapes.small, inset = true, color = MaterialTheme.colorScheme.primary),
-        shape    = MaterialTheme.shapes.small,
-        color    = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        Box {
-            Row(
-                modifier              = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment     = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+        var isFocused by remember { mutableStateOf(false) }
+        Surface(
+            onClick  = onClick,
+            modifier = modifier
+                .fillMaxWidth()
+                .alpha(if (isWatched) 0.45f else 1f)
+                .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
+                .focusBorder(MaterialTheme.shapes.small, inset = true, color = MaterialTheme.colorScheme.primary, isFocused = isFocused),
+            shape    = MaterialTheme.shapes.small,
+            color    = MaterialTheme.colorScheme.surfaceContainer,
+        ) {
+            Box {
                 Row(
-                    modifier              = Modifier.weight(1f),
-                    verticalAlignment     = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    meta?.image?.takeIf { it.isNotBlank() }?.let { image ->
-                        AsyncImage(
-                            model              = image,
-                            contentDescription = null,
-                            contentScale       = ContentScale.Crop,
-                            modifier           = Modifier.size(96.dp, 56.dp).clip(RoundedCornerShape(6.dp)),
-                        )
-                    }
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            title,
-                            style    = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        description?.let {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        meta?.image?.takeIf { it.isNotBlank() }?.let { image ->
+                            AsyncImage(
+                                model = image,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(96.dp, 56.dp)
+                                    .clip(RoundedCornerShape(6.dp)),
+                            )
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
-                                it,
-                                style    = MaterialTheme.typography.bodySmall,
-                                maxLines = 2,
+                                title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                color    = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                             )
-                        }
-                        if (infoParts.isNotEmpty()) {
-                            Text(
-                                infoParts.joinToString(" · "),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
-                            )
-                        }
-                        if (isFiller) {
-                            Text(
-                                "Filler Episode",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
-                            )
+                            description?.let {
+                                Text(
+                                    it,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                )
+                            }
+                            if (infoParts.isNotEmpty()) {
+                                Text(
+                                    infoParts.joinToString(" · "),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                                )
+                            }
+                            if (isFiller) {
+                                Text(
+                                    "Filler Episode",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                )
+                            }
                         }
                     }
+                    if (isLoading)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    else
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
                 }
-                if (isLoading)
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                else
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-            }
-            if (progressFraction != null && progressFraction > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .align(Alignment.BottomStart)
-                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(progressFraction)
-                        .height(3.dp)
-                        .align(Alignment.BottomStart)
-                        .background(MaterialTheme.colorScheme.primary)
-                )
+                if (progressFraction != null && progressFraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .align(Alignment.BottomStart)
+                            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progressFraction)
+                            .height(3.dp)
+                            .align(Alignment.BottomStart)
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
             }
         }
     }
