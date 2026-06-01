@@ -10,6 +10,7 @@ data class Media(
     val romajiTitle: String? = null,
     val poster: String? = null,
     val cover: String? = null,          // banner
+    val logo: String? = null,
     val description: String? = null,
     val averageScore: Int? = null,
     val episodes: Int? = null,
@@ -27,6 +28,7 @@ data class Media(
     val nextAiringEpisode: AiringEpisode? = null,
     val popularity: Int? = null,
     val imdbId: String? = null,
+    val tmdbId: String? = null,
 )
 
 data class AiringEpisode(val airingAt: Long, val episode: Int)
