@@ -257,42 +257,6 @@ fun SectionRow(
     }
 }
 
-// ─── Banner hero card ──────────────────────────────────────────────────────────
-
-@Composable
-fun BannerCard(
-    media: Media,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(200.dp)
-            .clickable(onClick = onClick)
-            .clip(RoundedCornerShape(16.dp))
-    ) {
-        AsyncImage(
-            model              = media.cover ?: media.poster,
-            contentDescription = null,
-            contentScale       = ContentScale.Crop,
-            modifier           = Modifier.fillMaxSize()
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))))
-        )
-        Column(
-            modifier            = Modifier.align(Alignment.BottomStart).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(media.title, style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 2)
-            ScoreBadge(media.averageScore)
-        }
-    }
-}
-
 // ─── Progress bar (ep progress) ───────────────────────────────────────────────
 
 @Composable

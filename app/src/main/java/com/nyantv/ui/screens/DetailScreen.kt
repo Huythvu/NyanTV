@@ -74,6 +74,7 @@ fun DetailScreen(
     val currentEntry by vm.currentMedia.collectAsStateWithLifecycle()
     val serviceType  by vm.serviceType.collectAsStateWithLifecycle()
     val serviceName  = serviceType.name.lowercase().replaceFirstChar { it.uppercase() }
+    var bannerUrl by remember { mutableStateOf<String?>(null) }
 
     val serviceKey = when (serviceType) {
         ServiceType.ANILIST, ServiceType.MAL -> "anilist_mal"
@@ -130,6 +131,7 @@ fun DetailScreen(
         if (serviceType == ServiceType.SIMKL) {
             m.imdbId?.let { playerVm.setImdbId(it) }
         }
+        bannerUrl = vm.resolveAnilistBanner(m)
     }
 
     val listState = rememberLazyListState()
@@ -174,7 +176,7 @@ fun DetailScreen(
                 item {
                     Box(modifier = Modifier.fillMaxWidth().height(200.dp)) {
                         AsyncImage(
-                            model              = m.cover ?: m.poster,
+                            model              = bannerUrl ?: m.cover ?: m.poster,
                             contentDescription = null,
                             contentScale       = ContentScale.Crop,
                             modifier           = Modifier.fillMaxSize(),

@@ -58,6 +58,7 @@ fun AnimeScreen(vm: AppViewModel, navController: NavController, onDetailClick: (
                 HomeHeroCarousel(
                     items    = trending,
                     onItemClick = { onDetailClick(it.id) },
+                    vm = vm,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }

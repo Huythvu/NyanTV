@@ -250,6 +250,60 @@ class AnilistService(context: Context) : MediaService {
         json.parseToJsonElement(resp.body.string()).jsonObject
     }
 
+    // Cover-provider
+
+    private val anilistBannerCache = mutableMapOf<String, String?>()
+
+    suspend fun prefetchAnilistBanners(items: List<Media>) = withContext(Dispatchers.IO) {
+        val malIds = items
+            .filter { it.serviceType == ServiceType.MAL }
+            .mapNotNull { it.idMal ?: it.id }
+            .filter { !anilistBannerCache.containsKey(it) }
+            .distinct()
+        if (malIds.isEmpty()) return@withContext
+
+        val query = """
+        query {
+          ${malIds.mapIndexed { i, id ->
+            "m$i: Media(idMal: $id, type: ANIME) { idMal bannerImage }"
+        }.joinToString("\n")}
+        }
+    """.trimIndent()
+
+        val body = """{"query":${json.encodeToString(query)}}"""
+        val request = Request.Builder()
+            .url("https://graphql.anilist.co")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        runCatching {
+            http.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext
+                val data = json.parseToJsonElement(response.body.string())
+                    .jsonObject["data"]?.jsonObject ?: return@withContext
+                data.values.forEach { entry ->
+                    val obj = entry as? JsonObject ?: return@forEach
+                    val malId = obj["idMal"]?.jsonPrimitive?.contentOrNull ?: return@forEach
+                    val banner = obj["bannerImage"]?.jsonPrimitive?.contentOrNull
+                    anilistBannerCache[malId] = banner
+                }
+            }
+        }.onFailure { android.util.Log.e("CarouselLogo", "AniList banner prefetch failed", it) }
+    }
+
+    fun getAnilistBanner(media: Media): String? {
+        if (media.serviceType != ServiceType.MAL) return null
+        return anilistBannerCache[media.idMal ?: media.id]
+    }
+
+    suspend fun resolveAnilistBanner(media: Media): String? {
+        if (media.serviceType != ServiceType.MAL) return null
+        val malId = media.idMal ?: media.id
+        if (anilistBannerCache.containsKey(malId)) return anilistBannerCache[malId]
+        prefetchAnilistBanners(listOf(media))
+        return anilistBannerCache[malId]
+    }
+
     // ── Queries ────────────────────────────────────────────────────────────────
 
     private companion object {

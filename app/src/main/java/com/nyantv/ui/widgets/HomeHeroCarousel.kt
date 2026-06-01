@@ -2,6 +2,7 @@ package com.nyantv.ui.widgets
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,9 +10,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,11 +27,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -36,10 +45,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.nyantv.BuildConfig
+import com.nyantv.data.AnilistService
 import com.nyantv.data.Media
 import com.nyantv.data.ServiceType
+import com.nyantv.ui.utils.focusBorder
+import com.nyantv.viewmodel.AppViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -54,28 +69,36 @@ import okhttp3.Request
 fun HomeHeroCarousel(
     items: List<Media>,
     onItemClick: (Media) -> Unit,
+    vm: AppViewModel,
     modifier: Modifier = Modifier
 ) {
     if (items.isEmpty()) return
 
     val pagerState = rememberPagerState(pageCount = { items.size })
     val logos = remember { mutableStateMapOf<String, String?>() }
+    val backdrops = remember { mutableStateMapOf<String, String?>() }
+    var isFocused by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(items) {
-        items.forEach { media ->
-            if (!logos.containsKey(media.id)) {
-                logos[media.id] = CarouselLogoResolver.resolve(media)
+        if (items.any { it.serviceType == ServiceType.MAL }) {
+            vm.prefetchAnilistBanners(items)
+        }
+        items
+            .filter { !logos.containsKey(it.id) }
+            .map { media ->
+                async {
+                    media.id to Pair(
+                        CarouselLogoResolver.resolve(media),
+                        CarouselLogoResolver.resolveBackdrop(media),
+                    )
+                }
             }
-        }
-    }
-
-    LaunchedEffect(items.size) {
-        if (items.size <= 1) return@LaunchedEffect
-        while (true) {
-            delay(4500L)
-            val next = (pagerState.currentPage + 1) % items.size
-            pagerState.animateScrollToPage(next)
-        }
+            .awaitAll()
+            .forEach { (id, pair) ->
+                logos[id]     = pair.first
+                backdrops[id] = pair.second
+            }
     }
 
     Box(
@@ -83,20 +106,32 @@ fun HomeHeroCarousel(
             .fillMaxWidth()
             .height(220.dp)
             .clip(RoundedCornerShape(16.dp))
+            .onFocusChanged { isFocused = it.isFocused || it.hasFocus }
+            .focusBorder(RoundedCornerShape(16.dp), inset = true, color = MaterialTheme.colorScheme.primary, isFocused = isFocused)
     ) {
         HorizontalPager(
-            state = pagerState,
+            state    = pagerState,
+            key      = { items[it].id },
             modifier = Modifier.fillMaxSize()
         ) { page ->
             val media = items[page]
             val logoUrl = logos[media.id]
+            val coverUrl = if (media.serviceType == ServiceType.MAL) {
+                vm.getAnilistBanner(media) ?: media.cover ?: media.poster
+            } else {
+                media.cover ?: media.poster
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable { onItemClick(media) }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication        = null,
+                        onClick           = { onItemClick(media) }
+                    )
             ) {
                 AsyncImage(
-                    model = media.cover ?: media.poster,
+                    model = backdrops[media.id] ?: coverUrl,
                     contentDescription = media.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -126,9 +161,11 @@ fun HomeHeroCarousel(
                             model = logoUrl,
                             contentDescription = media.title,
                             contentScale = ContentScale.Fit,
+                            alignment = Alignment.CenterStart,
                             modifier = Modifier
-                                .fillMaxWidth(0.7f)
-                                .height(48.dp)
+                                .heightIn(max = 55.dp)
+                                .widthIn(max = 280.dp)
+                                .wrapContentWidth(Alignment.Start)
                         )
                     } else {
                         Text(
@@ -148,7 +185,7 @@ fun HomeHeroCarousel(
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 10.dp),
+                .padding(end = 10.dp, top = 8.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -219,10 +256,13 @@ private fun CarouselStats(media: Media) {
     }
 }
 
-private fun normalizeLabel(value: String): String =
-    value.replace('_', ' ')
-        .lowercase()
-        .replaceFirstChar { it.uppercase() }
+private fun normalizeLabel(value: String): String {
+    val normalized = value.replace('_', ' ').trim()
+    return when (normalized.uppercase()) {
+        "TV" -> "TV"
+        else -> normalized.lowercase().replaceFirstChar { it.uppercase() }
+    }
+}
 
 private fun seasonLabel(media: Media): String? {
     val season = media.season?.let(::normalizeLabel)
@@ -235,7 +275,7 @@ private fun seasonLabel(media: Media): String? {
     }
 }
 
-private object CarouselLogoResolver {
+internal object CarouselLogoResolver {
     private val http = OkHttpClient()
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     private val cache = mutableMapOf<String, String?>()
@@ -274,45 +314,68 @@ private object CarouselLogoResolver {
     }
 
     private fun fromTmdb(tmdbId: String?, isMovie: Boolean): String? {
-        if (tmdbId.isNullOrBlank()) return null
-        val type = if (isMovie) "movie" else "tv"
-        BuildConfig.TMDB_API_KEY.takeIf { it.isNotBlank() }?.let { apiKey ->
-            val apiLogo = getJson("https://api.themoviedb.org/3/$type/$tmdbId/images?api_key=$apiKey&include_image_language=en,null")
-                ?.let { extractTmdbLogoPath(it) }
-                ?.let { "https://wsrv.nl/?url=https://image.tmdb.org/t/p/original$it" }
-            if (!apiLogo.isNullOrBlank()) return apiLogo
+        if (tmdbId.isNullOrBlank()) {
+            android.util.Log.w("CarouselLogo", "fromTmdb: tmdbId is null/blank")
+            return null
         }
-        return getString("https://www.themoviedb.org/$type/$tmdbId/images/logos")
-            ?.let { html -> tmdbRegex.find(html)?.value }
-            ?.let { "https://wsrv.nl/?url=$it" }
+        val apiKey = BuildConfig.TMDB_API_KEY.takeIf { it.isNotBlank() } ?: run {
+            android.util.Log.e("CarouselLogo", "fromTmdb: TMDB_API_KEY is missing")
+            return null
+        }
+        val type = if (isMovie) "movie" else "tv"
+        val url = "https://api.themoviedb.org/3/$type/$tmdbId/images?api_key=$apiKey&include_image_language=en,null"
+
+        val result = getJson(url)?.let { extractTmdbLogoPath(it) }
+            ?.let { "https://wsrv.nl/?url=https://image.tmdb.org/t/p/original$it" }
+
+        android.util.Log.d("CarouselLogo", "fromTmdb: tmdbId=$tmdbId type=$type → $result")
+        return result
     }
 
     private fun extractTmdbLogoPath(element: JsonElement): String? {
-        val logos = when (element) {
-            is JsonObject -> element["logos"]
-            else -> null
-        }
-        return (logos as? JsonArray)
-            ?.firstOrNull()
-            ?.let { it as? JsonObject }
+        val logos = (element as? JsonObject)?.get("logos") as? JsonArray ?: return null
+        val items = logos.filterIsInstance<JsonObject>()
+
+        return (items.firstOrNull { it.isEnglishLogo() && it.isPng() }
+            ?: items.firstOrNull { it.isEnglishLogo() }
+            ?: items.firstOrNull())
             ?.get("file_path")
             ?.let { it as? JsonPrimitive }
             ?.contentOrNull
     }
 
-    private fun extractLogoUrl(element: JsonElement): String? = when (element) {
-        is JsonObject -> {
-            val direct = listOf("clearlogo", "clearLogo", "logo", "logoImage", "image")
-                .firstNotNullOfOrNull { key ->
-                    element[key]?.let { candidate ->
-                        (candidate as? JsonPrimitive)?.contentOrNull?.takeIf { isImageUrl(it) }
-                    }
+    private fun JsonObject.isEnglishLogo() =
+        (this["iso_639_1"] as? JsonPrimitive)?.contentOrNull == "en"
+
+    private fun JsonObject.isPng() =
+        (this["file_path"] as? JsonPrimitive)?.contentOrNull?.endsWith(".png", ignoreCase = true) == true
+
+    private fun isLogoUrl(value: String): Boolean =
+        (value.startsWith("http://") || value.startsWith("https://")) &&
+                (value.contains(".png", ignoreCase = true) || value.contains(".svg", ignoreCase = true) ||
+                        value.contains(".webp", ignoreCase = true))
+
+    private fun extractLogoUrl(element: JsonElement): String? {
+        return when (element) {
+            is JsonObject -> {
+                val logoKeys = listOf("clearlogo", "clearLogo", "logo", "logoImage")
+                val direct = logoKeys.firstNotNullOfOrNull { key ->
+                    (element[key] as? JsonPrimitive)?.contentOrNull
+                        ?.takeIf { isLogoUrl(it) }
                 }
-            direct ?: element.values.firstNotNullOfOrNull { extractLogoUrl(it) }
+                if (direct != null) return direct
+
+                val imagesArray = element["images"] as? JsonArray
+                imagesArray?.filterIsInstance<JsonObject>()
+                    ?.firstOrNull { img ->
+                        (img["coverType"] as? JsonPrimitive)?.contentOrNull
+                            ?.equals("Clearlogo", ignoreCase = true) == true
+                    }
+                    ?.let { (it["url"] as? JsonPrimitive)?.contentOrNull?.takeIf { u -> isLogoUrl(u) } }
+            }
+            is JsonArray -> element.filterIsInstance<JsonObject>().firstNotNullOfOrNull { extractLogoUrl(it) }
+            else -> null
         }
-        is JsonArray -> element.firstNotNullOfOrNull { extractLogoUrl(it) }
-        is JsonPrimitive -> element.contentOrNull?.takeIf { isImageUrl(it) }
-        else -> null
     }
 
     private fun isImageUrl(value: String): Boolean =
@@ -336,4 +399,41 @@ private object CarouselLogoResolver {
                 response.body.string()
             }
         }.getOrNull()
+
+    private val backdropCache = mutableMapOf<String, String?>()
+
+    suspend fun resolveBackdrop(media: Media): String? = withContext(Dispatchers.IO) {
+        val cacheKey = "backdrop:${media.serviceType}:${media.id}:${media.tmdbId}"
+        if (backdropCache.containsKey(cacheKey)) return@withContext backdropCache[cacheKey]
+
+        val result = when (media.serviceType) {
+            ServiceType.SIMKL -> fromTmdbBackdrop(media.tmdbId, media.format == "MOVIE")
+            else -> null
+        }
+
+        backdropCache[cacheKey] = result
+        result
+    }
+
+    private fun fromTmdbBackdrop(tmdbId: String?, isMovie: Boolean): String? {
+        if (tmdbId.isNullOrBlank()) return null
+        val apiKey = BuildConfig.TMDB_API_KEY.takeIf { it.isNotBlank() } ?: return null
+        val type = if (isMovie) "movie" else "tv"
+        val url = "https://api.themoviedb.org/3/$type/$tmdbId/images?api_key=$apiKey&include_image_language=en,null"
+
+        return getJson(url)
+            ?.let { extractTmdbBackdropPath(it) }
+            ?.let { "https://image.tmdb.org/t/p/w1280$it" }
+    }
+
+    private fun extractTmdbBackdropPath(element: JsonElement): String? {
+        val backdrops = (element as? JsonObject)?.get("backdrops") as? JsonArray ?: return null
+        return backdrops.filterIsInstance<JsonObject>()
+            .maxByOrNull {
+                (it["vote_count"] as? JsonPrimitive)?.contentOrNull?.toIntOrNull() ?: 0
+            }
+            ?.get("file_path")
+            ?.let { it as? JsonPrimitive }
+            ?.contentOrNull
+    }
 }

@@ -131,8 +131,9 @@ class SimklService(context: Context) : MediaService {
 
     private suspend fun fetchTrending(type: String): List<Media> = withContext(Dispatchers.IO) {
         runCatching {
-            val req  = Request.Builder()
-                .url("$SIMKL_API/$type/trending?extended=overview&client_id=${BuildConfig.SIMKL_CLIENT_ID}")
+            val simklType = if (type == "movies") "movies" else "tv"
+            val req = Request.Builder()
+                .url("https://data.simkl.in/discover/trending/$simklType/today_100.json?client_id=${BuildConfig.SIMKL_CLIENT_ID}")
                 .build()
             val resp = http.newCall(req).execute()
             if (!resp.isSuccessful) {
