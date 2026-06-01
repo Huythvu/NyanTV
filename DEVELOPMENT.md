@@ -64,6 +64,7 @@ MAL_CLIENT_ID=your_mal_id
 MAL_CLIENT_SECRET=your_mal_secret
 SIMKL_CLIENT_ID=your_simkl_id
 SIMKL_CLIENT_SECRET=your_simkl_secret
+TMDB_API_KEY=your_tmdb_api_key
 CALLBACK_SCHEME=nyantv://callback
 ```
 
@@ -73,6 +74,7 @@ For UI development without API access, you can use `0` as placeholder values. Th
 - **AniList:** [Developer Portal](https://anilist.co/settings/developer) → Create Client → Redirect URL: `nyantv://callback`
 - **MyAnimeList:** [MAL API Registration](https://myanimelist.net/apiconfig)
 - **Simkl:** [Simkl Developer](https://simkl.com/settings/developer/)
+- **TMDB:** [TMDB API](https://developer.themoviedb.org/docs/getting-started)
 
 ### 4. Build and Run
 
