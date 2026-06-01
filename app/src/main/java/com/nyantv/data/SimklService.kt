@@ -459,6 +459,8 @@ private fun JsonObject.toSimklMedia(isMovie: Boolean): Media? {
     val simklId = ids?.get("simkl_id")?.jsonPrimitive?.contentOrNull
         ?: ids?.get("simkl")?.jsonPrimitive?.contentOrNull
     if (simklId.isNullOrBlank()) return null
+    val tmdbId = ids?.get("tmdb_id")?.jsonPrimitive?.contentOrNull
+        ?: ids?.get("tmdb")?.jsonPrimitive?.contentOrNull
 
     val poster = this["poster"]?.jsonPrimitive?.contentOrNull
         ?.let { "${POSTER_BASE}${it}_m.jpg" }
@@ -480,7 +482,10 @@ private fun JsonObject.toSimklMedia(isMovie: Boolean): Media? {
         description  = this["overview"]?.jsonPrimitive?.contentOrNull,
         status       = this["status"]?.jsonPrimitive?.contentOrNull.normalizeStatus(),
         averageScore = averageScore,
+        format       = if (isMovie) "MOVIE" else "TV",
+        seasonYear   = this["year"]?.jsonPrimitive?.intOrNull,
         popularity   = popularity,
+        tmdbId       = tmdbId,
         serviceType  = ServiceType.SIMKL
     )
 }
