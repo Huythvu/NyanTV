@@ -61,8 +61,15 @@ android {
             )
         }
         debug {
-            //applicationIdSuffix = ".debug"
+            applicationIdSuffix = ".debug"
             isDebuggable = true
+        }
+        create("benchmark") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".debug"
+            isDebuggable = false
+            isProfileable = true
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

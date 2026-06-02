@@ -145,13 +145,13 @@ class AnilistService(context: Context) : MediaService {
     override suspend fun fetchHomePage() = withContext(Dispatchers.IO) {
         val data = gql(HOME_QUERY)["data"]?.jsonObject ?: return@withContext
         _trending.value        = data["trending"]?.jsonObject?.get("media")
-            ?.jsonArray?.map { it.jsonObject.toMedia() } ?: emptyList()
+            ?.jsonArray?.map { it.jsonObject.toMedia() }?.distinctBy { it.id } ?: emptyList()
         _popular.value         = data["popular"]?.jsonObject?.get("media")
-            ?.jsonArray?.map { it.jsonObject.toMedia() } ?: emptyList()
+            ?.jsonArray?.map { it.jsonObject.toMedia() }?.distinctBy { it.id } ?: emptyList()
         _upcoming.value        = data["upcoming"]?.jsonObject?.get("media")
-            ?.jsonArray?.map { it.jsonObject.toMedia() } ?: emptyList()
+            ?.jsonArray?.map { it.jsonObject.toMedia() }?.distinctBy { it.id } ?: emptyList()
         _recentlyUpdated.value = data["recent"]?.jsonObject?.get("media")
-            ?.jsonArray?.map { it.jsonObject.toMedia() } ?: emptyList()
+            ?.jsonArray?.map { it.jsonObject.toMedia()}?.distinctBy { it.id } ?: emptyList()
     }
 
     // ── Details ────────────────────────────────────────────────────────────────
@@ -193,6 +193,7 @@ class AnilistService(context: Context) : MediaService {
         _animeList.value = lists
             .flatMap { it.jsonObject["entries"]?.jsonArray ?: emptyList() }
             .map { it.jsonObject.toTrackedMedia() }
+            .distinctBy { it.id }
     }
 
     override fun setCurrentMedia(id: String) {

@@ -250,7 +250,7 @@ fun SectionRow(
             contentPadding        = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(items, key = { it.id }) { media ->
+            items(items.distinctBy { it.id }, key = { it.id }) { media ->
                 MediaCard(media = media, onClick = { onItemClick(media) }, width = cardWidth, trackedMap = trackedMap)
             }
         }
