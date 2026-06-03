@@ -32,7 +32,7 @@ const val TEST_STREAM3 = "https://demo.unified-streaming.com/k8s/features/stable
 const val TEST_SUBS   = "https://www.fileexamples.com/files/sample_web_video_captions.vtt"
 
 @Composable
-fun ExperimentalScreen(navController: NavController) {
+fun ExperimentalScreen(navController: NavController, onOpenPlayer: () -> Unit) {
     val context = LocalContext.current
 
     Column(
@@ -89,7 +89,7 @@ fun ExperimentalScreen(navController: NavController) {
                             )
                             PlayerArgs.initialStreamIndex = 0
                             PlayerArgs.title              = "Test Stream"
-                            navController.navigate("player")
+                            onOpenPlayer()
                         },
                         modifier = Modifier.fillMaxWidth().focusBorder(CircleShape)
                     ) {

@@ -178,7 +178,7 @@ fun MainNavigation(
                 composable("settings/theme")        { ThemeScreen(vm, navController) }
                 composable("settings/logs")         { LogsScreen(navController) }
                 composable("settings/about")        { AboutScreen(navController) }
-                composable("settings/experimental") { ExperimentalScreen(navController) }
+                composable("settings/experimental") { ExperimentalScreen(navController, onOpenPlayer = { showPlayer = true }) }
                 composable("settings/player")       { PlayerSettingsScreen(navController) }
                 composable("settings/extensions")   { ExtensionsScreen(navController) }
             }

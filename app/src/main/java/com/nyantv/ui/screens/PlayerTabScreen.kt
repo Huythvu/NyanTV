@@ -297,7 +297,7 @@ fun PlayerTabScreen(
                     // ── Episodes ─────────────────────────────────────────
                     items(
                         items = slice.chunked(2),
-                        key   = { pair -> pair.first().episode_number },
+                        key = { pair -> pair.first().let { "${it.episode_number}_${it.url}" } },
                     ) { pair ->
                         Row(
                             modifier              = Modifier.fillMaxWidth(),
