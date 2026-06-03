@@ -144,7 +144,7 @@ fun ExtensionsScreen(
         if (installed.isNotEmpty()) {
             item { SectionHeader("Installed") }
             items(installed, key = { "installed_${it.pkgName}" }) { ext ->
-                val hasUpdate = remember(ext.pkgName, available) {
+                val hasUpdate = remember(ext.pkgName, ext.versionCode, available) {
                     viewModel.hasUpdate(ext)
                 }
                 InstalledExtensionItem(
