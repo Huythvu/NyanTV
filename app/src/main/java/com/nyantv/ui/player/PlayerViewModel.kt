@@ -265,6 +265,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
         if (streams.isNotEmpty()) {
             val track = streams[bestIdx]
+            currentStreamHeaders = track.headers
             loadUri(track.url, track.headers)
         }
         initialSubIdx?.let { loadSubtitleByIndex(it) }
@@ -497,6 +498,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         selectStream(streamIndex)
+        // currentStreamHeaders = streams[streamIndex].headers
         initialSubIdx?.let { loadSubtitleByIndex(it) } ?: run {
             subtitleEngine.clear()
             _currentCue.value = null
@@ -509,6 +511,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         if (index !in streams.indices) return
         _state.update { it.copy(selectedStreamIndex = index) }
         prefs.edit().putString(PREF_QUALITY, streams[index].name).apply()
+        currentStreamHeaders = streams[index].headers
         loadUri(streams[index].url, streams[index].headers)
     }
 
@@ -532,6 +535,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         maybeStartPending()
     }
     private var pendingHeaders: Map<String, String> = emptyMap()
+    private var currentStreamHeaders: Map<String, String> = emptyMap()
 
     private fun maybeStartPending() {
         val svc = service ?: return
@@ -592,7 +596,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val p = _subtitlePrefs.value
             lingvaTranslator = p.translateTo?.let { LingvaTranslator(baseUrl = p.lingvaBaseUrl, targetLang = it) }
-            runCatching { subtitleEngine.load(url, lingvaTranslator) }
+            runCatching { subtitleEngine.load(url, headers = currentStreamHeaders, translator = lingvaTranslator) }
                 .onFailure { Log.e(TAG, "subtitle load failed", it) }
         }
     }
