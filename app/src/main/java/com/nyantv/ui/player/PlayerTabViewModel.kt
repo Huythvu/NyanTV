@@ -116,6 +116,7 @@ class PlayerTabViewModel(
     private var searchJob:      Job? = null
     private var episodeMetaJob: Job? = null
     private var episodeMetaKey: String? = null
+    private var pendingTargetSourceId: Long? = null
 
     init {
         refreshWatchProgress()
@@ -126,7 +127,6 @@ class PlayerTabViewModel(
         }
 
         var initialised = false
-        var pendingTargetSourceId: Long? = null
 
         viewModelScope.launch {
             aniyomi.installedExtensions.collect { _ ->
@@ -150,7 +150,8 @@ class PlayerTabViewModel(
                     viewModelScope.launch {
                         cache.observeSelectedSourceId(serviceKey).collect { savedSourceId ->
                             pendingTargetSourceId = savedSourceId
-                            val resolved = newSources.firstOrNull { it.id == savedSourceId }
+                            val currentSources = buildSources()
+                            val resolved = currentSources.firstOrNull { it.id == savedSourceId }
                                 ?: _state.value.sources.firstOrNull()
                                 ?: return@collect
 
@@ -299,6 +300,7 @@ class PlayerTabViewModel(
 
     fun selectSource(source: SearchableSource) {
         if (source.id == _state.value.selectedSource?.id) return
+        pendingTargetSourceId = null
         _state.update {
             it.copy(
                 selectedSource = source,
