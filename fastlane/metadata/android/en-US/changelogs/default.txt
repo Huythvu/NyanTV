@@ -5,6 +5,7 @@
 -   libmpv support, you can switch between exoplayer and libmpv now
 
 ### 🔧 Bug Fixes & Improvements
+-   source picker not correctly switching sources
 -   better source fallback for some extensions
 -   subtitles not loading due to wrong headers
 -   slight adjustments to avoid app crashes
