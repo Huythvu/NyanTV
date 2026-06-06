@@ -126,6 +126,7 @@ class PlayerTabViewModel(
         }
 
         var initialised = false
+        var pendingTargetSourceId: Long? = null
 
         viewModelScope.launch {
             aniyomi.installedExtensions.collect { _ ->
@@ -148,30 +149,21 @@ class PlayerTabViewModel(
 
                     viewModelScope.launch {
                         cache.observeSelectedSourceId(serviceKey).collect { savedSourceId ->
-                            val resolved = resolveSource(savedSourceId, _state.value.sources.firstOrNull())
+                            pendingTargetSourceId = savedSourceId
+                            val resolved = newSources.firstOrNull { it.id == savedSourceId }
+                                ?: _state.value.sources.firstOrNull()
                                 ?: return@collect
 
-                            val currentId = _state.value.selectedSource?.id
-                            if (resolved.id == currentId) return@collect
+                            applySource(resolved)
 
-                            _state.update { it.copy(selectedSource = resolved) }
-
-                            val cached = cache.loadSelectedResult(resolved.id, mediaId)
-                            if (cached != null) {
-                                val anime = SAnime.create().apply {
-                                    url           = cached.url
-                                    title         = cached.title
-                                    thumbnail_url = cached.thumbnail
-                                }
-                                _state.update { it.copy(selectedAnime = anime) }
-                                loadEpisodes(resolved, anime)
+                            if (savedSourceId != null && resolved.id != savedSourceId) {
+                                pendingTargetSourceId = savedSourceId
                             } else {
-                                _state.update { it.copy(selectedAnime = null, episodeState = EpisodeState.Idle) }
-                                val q = _state.value.searchQuery
-                                if (q.isNotBlank()) autoSearch(resolved, q)
+                                pendingTargetSourceId = null
                             }
                         }
                     }
+
                 } else if (initialised) {
                     _state.update { s ->
                         s.copy(
@@ -179,6 +171,15 @@ class PlayerTabViewModel(
                             selectedSource = newSources.firstOrNull { it.id == currentSourceId }
                                 ?: s.selectedSource,
                         )
+                    }
+
+                    val targetId = pendingTargetSourceId
+                    if (targetId != null) {
+                        val late = newSources.firstOrNull { it.id == targetId }
+                        if (late != null && _state.value.selectedSource?.id != targetId) {
+                            pendingTargetSourceId = null
+                            applySource(late)
+                        }
                     }
                 }
             }
@@ -191,6 +192,26 @@ class PlayerTabViewModel(
         }
         if (malId != null) {
             loadEpisodeMetadata()
+        }
+    }
+
+    private fun applySource(source: SearchableSource) {
+        _state.update { it.copy(selectedSource = source) }
+        viewModelScope.launch {
+            val cached = cache.loadSelectedResult(source.id, mediaId)
+            if (cached != null) {
+                val anime = SAnime.create().apply {
+                    url           = cached.url
+                    title         = cached.title
+                    thumbnail_url = cached.thumbnail
+                }
+                _state.update { it.copy(selectedAnime = anime) }
+                loadEpisodes(source, anime)
+            } else {
+                _state.update { it.copy(selectedAnime = null, episodeState = EpisodeState.Idle) }
+                val q = _state.value.searchQuery
+                if (q.isNotBlank()) autoSearch(source, q)
+            }
         }
     }
 
@@ -300,16 +321,6 @@ class PlayerTabViewModel(
             }
             autoSearch(source, _state.value.searchQuery)
         }
-    }
-
-    private suspend fun resolveSource(savedId: Long?, fallback: SearchableSource?): SearchableSource? {
-        if (savedId == null) return fallback
-        repeat(5) {
-            val found = buildSources().firstOrNull { it.id == savedId }
-            if (found != null) return found
-            kotlinx.coroutines.delay(100L)
-        }
-        return fallback
     }
 
     fun setSearchQuery(query: String)    { _state.update { it.copy(searchQuery = query) } }
