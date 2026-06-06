@@ -28,6 +28,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -109,7 +110,7 @@ fun Modifier.focusBorder(
 }
 
 @Composable
-private fun SectionCardDialog(
+fun SectionCardDialog(
     title: String,
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
@@ -125,7 +126,8 @@ private fun SectionCardDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth(0.5f)
-                .wrapContentHeight(),
+                .wrapContentHeight()
+                .focusGroup(),
             shape  = MaterialTheme.shapes.extraLarge,
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)

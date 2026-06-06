@@ -3,8 +3,6 @@ package com.nyantv.ui.settings.sub_settings
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.Intent
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,8 +12,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,7 +22,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -37,6 +32,16 @@ import com.nyantv.ui.utils.focusBorder
 import com.nyantv.viewmodel.ExtensionViewModel
 import eu.kanade.tachiyomi.extension.anime.model.AnimeExtension
 import java.io.File
+
+import android.content.SharedPreferences
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Settings
+import com.nyantv.ui.utils.SectionCardDialog
+import eu.kanade.tachiyomi.animesource.ConfigurableAnimeSource
+import eu.kanade.tachiyomi.data.preference.SharedPreferencesDataStore
+import androidx.core.content.edit
 
 private val LANG_NAMES = mapOf(
     "all"   to "All",
@@ -61,6 +66,15 @@ private val LANG_NAMES = mapOf(
 
 private fun langDisplayName(code: String) =
     LANG_NAMES[code] ?: code.uppercase()
+
+private fun AnimeExtension.Installed.isConfigurable(): Boolean =
+    sources.any { it is ConfigurableAnimeSource }
+
+private fun AnimeExtension.Installed.getPrefs(context: Context): SharedPreferences? =
+    try {
+        val sourceId = sources.firstOrNull()?.id ?: return null
+        context.getSharedPreferences("source_$sourceId", Context.MODE_PRIVATE)
+    } catch (e: Exception) { null }
 
 fun Context.findActivity(): Activity? {
     var ctx = this
@@ -97,6 +111,7 @@ fun ExtensionsScreen(
     }
 
     var deleteTarget by remember { mutableStateOf<AnimeExtension.Installed?>(null) }
+    var settingsTarget by remember { mutableStateOf<AnimeExtension.Installed?>(null) }
 
     if (deleteTarget != null) {
         AlertDialog(
@@ -115,6 +130,26 @@ fun ExtensionsScreen(
                 TextButton(onClick = { deleteTarget = null }) { Text("No") }
             }
         )
+    }
+    if (settingsTarget != null) {
+        val ext = settingsTarget!!
+        val prefs: SharedPreferences? = remember(ext) { ext.getPrefs(context) }
+        val source: ConfigurableAnimeSource? = remember(ext) {
+            ext.sources.firstOrNull { it is ConfigurableAnimeSource } as? ConfigurableAnimeSource
+        }
+
+        SectionCardDialog(title = ext.name, onDismiss = { settingsTarget = null }) {
+            if (prefs == null || source == null) {
+                Text(
+                    text     = "No settings available.",
+                    style    = MaterialTheme.typography.bodySmall,
+                    color    = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(16.dp)
+                )
+            } else {
+                ExtensionSettingsContent(source = source, prefs = prefs, context = context)
+            }
+        }
     }
 
     val availableByLang = remember(available, installed) {
@@ -154,7 +189,8 @@ fun ExtensionsScreen(
                         available.firstOrNull { it.pkgName == ext.pkgName }
                             ?.let { viewModel.installExtension(it) }
                     },
-                    onDelete = { deleteTarget = ext }
+                    onDelete = { deleteTarget = ext },
+                    onSettings = if (ext.isConfigurable()) ({ settingsTarget = ext }) else null
                 )
             }
         }
@@ -209,6 +245,7 @@ private fun InstalledExtensionItem(
     hasUpdate: Boolean,
     onUpdate:  () -> Unit,
     onDelete:  () -> Unit,
+    onSettings: (() -> Unit)?,
 ) {
     Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium) {
         Row(
@@ -224,6 +261,21 @@ private fun InstalledExtensionItem(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
+            }
+            if (onSettings != null) {
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                    IconButton(
+                        onClick  = onSettings,
+                        modifier = Modifier.focusBorder(CircleShape, inset = true)
+                    ) {
+                        Icon(
+                            Icons.Filled.Settings,
+                            contentDescription = "Extension settings",
+                            modifier = Modifier.size(20.dp),
+                            tint     = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
             }
             if (hasUpdate) {
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
@@ -340,7 +392,9 @@ private fun RepoManagerSection(
                             modifier = Modifier.weight(1f),
                             maxLines = 2
                         )
-                        IconButton(onClick = { onDeleteRepo(url) }) {
+                        IconButton(onClick = { onDeleteRepo(url) },
+                                   modifier = Modifier.focusBorder(CircleShape, inset = true)
+                        ) {
                             Icon(
                                 Icons.Filled.Delete,
                                 contentDescription = "Remove repo",
@@ -375,6 +429,7 @@ private fun RepoManagerSection(
                             input = ""
                         }
                     },
+                    modifier = Modifier.focusBorder(CircleShape, inset = true),
                     enabled = input.isNotBlank()
                 ) {
                     Icon(
@@ -383,6 +438,218 @@ private fun RepoManagerSection(
                         tint = if (input.isNotBlank()) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExtensionSettingsContent(
+    source:  ConfigurableAnimeSource,
+    prefs:   SharedPreferences,
+    context: Context,
+) {
+    val prefItems = remember(source) {
+        try {
+            val prefManager = androidx.preference.PreferenceManager::class.java
+                .getDeclaredConstructor(Context::class.java)
+                .also { it.isAccessible = true }
+                .newInstance(context)
+
+            prefManager.preferenceDataStore = SharedPreferencesDataStore(prefs)
+            val screen = prefManager.createPreferenceScreen(context)
+            source.setupPreferenceScreen(screen)
+            collectPreferences(screen)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    if (prefItems.isEmpty()) {
+        Text(
+            text     = "No configurable settings found.",
+            style    = MaterialTheme.typography.bodySmall,
+            color    = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            modifier = Modifier.padding(16.dp)
+        )
+        return
+    }
+
+    val scrollState = rememberScrollState()
+    Column(
+        modifier = Modifier
+            .heightIn(max = 400.dp)
+            .verticalScroll(scrollState)
+    ) {
+        prefItems.forEachIndexed { index, pref ->
+            PreferenceItem(pref = pref, prefs = prefs)
+            if (index < prefItems.lastIndex) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+            }
+        }
+    }
+}
+
+private fun collectPreferences(
+    group: androidx.preference.PreferenceGroup
+): List<androidx.preference.Preference> {
+    val result = mutableListOf<androidx.preference.Preference>()
+    for (i in 0 until group.preferenceCount) {
+        val pref = group.getPreference(i)
+        if (pref is androidx.preference.PreferenceGroup) {
+            result += collectPreferences(pref)
+        } else {
+            result += pref
+        }
+    }
+    return result
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PreferenceItem(
+    pref:  androidx.preference.Preference,
+    prefs: SharedPreferences,
+) {
+    when (pref) {
+        is androidx.preference.CheckBoxPreference,
+        is androidx.preference.SwitchPreference,
+        is androidx.preference.SwitchPreferenceCompat -> {
+            val key     = pref.key ?: return
+            var checked by remember { mutableStateOf(prefs.getBoolean(key, false)) }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        checked = !checked
+                        prefs.edit { putBoolean(key, checked) }
+                    }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(pref.title?.toString() ?: key, style = MaterialTheme.typography.bodyMedium)
+                    if (!pref.summary.isNullOrBlank()) {
+                        Text(
+                            pref.summary.toString(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+                Switch(
+                    checked         = checked,
+                    onCheckedChange = { checked = it; prefs.edit { putBoolean(key, it) } },
+                    modifier        = Modifier.focusable()
+                )
+            }
+        }
+
+        is androidx.preference.EditTextPreference -> {
+            val key  = pref.key ?: return
+            var text by remember { mutableStateOf(prefs.getString(key, "") ?: "") }
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Text(
+                    pref.title?.toString() ?: key,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+                if (!pref.summary.isNullOrBlank()) {
+                    Text(
+                        pref.summary.toString(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                OutlinedTextField(
+                    value         = text,
+                    onValueChange = { text = it; prefs.edit { putString(key, it) } },
+                    singleLine    = true,
+                    modifier      = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        is androidx.preference.ListPreference -> {
+            val key          = pref.key ?: return
+            val entries      = pref.entries?.map { it.toString() } ?: emptyList()
+            val entryValues  = pref.entryValues?.map { it.toString() } ?: emptyList()
+            var selected     by remember { mutableStateOf(prefs.getString(key, "") ?: "") }
+            var expanded     by remember { mutableStateOf(false) }
+            val selectedLabel = entries.getOrNull(entryValues.indexOf(selected)) ?: selected
+
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Text(
+                    pref.title?.toString() ?: key,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                )
+                Spacer(Modifier.height(4.dp))
+                ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+                    OutlinedTextField(
+                        value         = selectedLabel,
+                        onValueChange = {},
+                        readOnly      = true,
+                        trailingIcon  = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                        modifier      = Modifier.fillMaxWidth().menuAnchor()
+                    )
+                    ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        entries.forEachIndexed { i, label ->
+                            DropdownMenuItem(
+                                text    = { Text(label) },
+                                onClick = {
+                                    selected = entryValues[i]
+                                    prefs.edit { putString(key, entryValues[i]) }
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        is androidx.preference.MultiSelectListPreference -> {
+            val key         = pref.key ?: return
+            val entries     = pref.entries?.map { it.toString() } ?: emptyList()
+            val entryValues = pref.entryValues?.map { it.toString() } ?: emptyList()
+            var selected    by remember { mutableStateOf(prefs.getStringSet(key, emptySet()) ?: emptySet()) }
+
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Text(
+                    pref.title?.toString() ?: key,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(4.dp))
+                entries.forEachIndexed { i, label ->
+                    val value   = entryValues[i]
+                    val checked = value in selected
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val newSet = if (checked) selected - value else selected + value
+                                selected = newSet
+                                prefs.edit { putStringSet(key, newSet) }
+                            }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked         = checked,
+                            onCheckedChange = {
+                                val newSet = if (checked) selected - value else selected + value
+                                selected = newSet
+                                prefs.edit { putStringSet(key, newSet) }
+                            },
+                            modifier = Modifier.focusable()
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
         }

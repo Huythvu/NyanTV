@@ -26,6 +26,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import androidx.core.content.edit
 
 // ── UI state ───────────────────────────────────────────────────────────────────
 
@@ -510,7 +511,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val streams = _state.value.streams
         if (index !in streams.indices) return
         _state.update { it.copy(selectedStreamIndex = index) }
-        prefs.edit().putString(PREF_QUALITY, streams[index].name).apply()
+        prefs.edit { putString(PREF_QUALITY, streams[index].name) }
         currentStreamHeaders = streams[index].headers
         loadUri(streams[index].url, streams[index].headers)
     }
