@@ -19,6 +19,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -682,13 +685,42 @@ private fun TrackPickerPanel(
     onSelect:      (Int?) -> Unit,
     onDismiss:     () -> Unit
 ) {
-    val closeFocus = remember { FocusRequester() }
+    val closeFocus    = remember { FocusRequester() }
     val trapRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { closeFocus.requestFocus() } }
 
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val maxPanelHeight = maxHeight * 0.60f
+        TrackPickerPanelContent(
+            title         = title,
+            tracks        = tracks,
+            selectedIndex = selectedIndex,
+            showNone      = showNone,
+            maxHeight     = maxPanelHeight,
+            closeFocus    = closeFocus,
+            trapRequester = trapRequester,
+            onSelect      = onSelect,
+            onDismiss     = onDismiss,
+        )
+    }
+}
+
+@Composable
+private fun TrackPickerPanelContent(
+    title:         String,
+    tracks:        List<String>,
+    selectedIndex: Int?,
+    showNone:      Boolean,
+    maxHeight:     Dp,
+    closeFocus:    FocusRequester,
+    trapRequester: FocusRequester,
+    onSelect:      (Int?) -> Unit,
+    onDismiss:     () -> Unit,
+) {
     Surface(
-        modifier       = Modifier
+        modifier = Modifier
             .fillMaxWidth()
+            .heightIn(max = maxHeight)
             .focusRequester(trapRequester)
             .focusProperties {
                 onExit = { cancelFocusChange() }
@@ -723,20 +755,26 @@ private fun TrackPickerPanel(
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
-            if (showNone) {
-                TrackPickerRow(
-                    name       = "Off",
-                    isSelected = selectedIndex == null,
-                    onSelect   = { onSelect(null) }
-                )
-            }
-
-            tracks.forEachIndexed { idx, name ->
-                TrackPickerRow(
-                    name       = name,
-                    isSelected = selectedIndex == idx,
-                    onSelect   = { onSelect(idx) }
-                )
+            LazyColumn(
+                modifier            = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                if (showNone) {
+                    item {
+                        TrackPickerRow(
+                            name       = "Off",
+                            isSelected = selectedIndex == null,
+                            onSelect   = { onSelect(null) }
+                        )
+                    }
+                }
+                itemsIndexed(tracks) { idx, name ->
+                    TrackPickerRow(
+                        name       = name,
+                        isSelected = selectedIndex == idx,
+                        onSelect   = { onSelect(idx) }
+                    )
+                }
             }
         }
     }
@@ -1259,8 +1297,6 @@ private fun <T> SettingsDropdownRow(
         }
     }
 }
-
-// ── Hilfsfunktionen ────────────────────────────────────────────────────────────
 
 private fun formatMs(ms: Long): String {
     if (ms <= 0) return "0:00"
