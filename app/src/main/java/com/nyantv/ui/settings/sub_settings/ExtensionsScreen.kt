@@ -392,15 +392,18 @@ private fun RepoManagerSection(
                             modifier = Modifier.weight(1f),
                             maxLines = 2
                         )
-                        IconButton(onClick = { onDeleteRepo(url) },
-                                   modifier = Modifier.focusBorder(CircleShape, inset = true)
-                        ) {
-                            Icon(
-                                Icons.Filled.Delete,
-                                contentDescription = "Remove repo",
-                                tint     = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(18.dp)
-                            )
+                        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                            IconButton(
+                                onClick  = { onDeleteRepo(url) },
+                                modifier = Modifier.focusBorder(CircleShape, inset = true)
+                            ) {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = "Remove repo",
+                                    tint     = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
@@ -422,22 +425,24 @@ private fun RepoManagerSection(
                     modifier      = Modifier.weight(1f),
                     textStyle     = MaterialTheme.typography.bodySmall,
                 )
-                IconButton(
-                    onClick = {
-                        if (input.isNotBlank()) {
-                            onAddRepo(input.trim())
-                            input = ""
-                        }
-                    },
-                    modifier = Modifier.focusBorder(CircleShape, inset = true),
-                    enabled = input.isNotBlank()
-                ) {
-                    Icon(
-                        Icons.Filled.Add,
-                        contentDescription = "Add repo",
-                        tint = if (input.isNotBlank()) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                    )
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                    IconButton(
+                        onClick  = {
+                            if (input.isNotBlank()) {
+                                onAddRepo(input.trim())
+                                input = ""
+                            }
+                        },
+                        modifier = Modifier.focusBorder(CircleShape, inset = true),
+                        enabled  = input.isNotBlank()
+                    ) {
+                        Icon(
+                            Icons.Filled.Add,
+                            contentDescription = "Add repo",
+                            tint = if (input.isNotBlank()) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                        )
+                    }
                 }
             }
         }
