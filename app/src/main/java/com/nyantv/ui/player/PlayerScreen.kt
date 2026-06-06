@@ -408,11 +408,18 @@ fun PlayerScreen(
                 delay(50)
                 runCatching { skipBtnFocusRequester.requestFocus() }
                 delay(10_000L)
+
+                if (!controlsVisible) runCatching { mainFocusRequester.requestFocus() }
                 skipBtnOverrideVisible = false
+                if (controlsVisible) {
+                    delay(50)
+                    runCatching { bigSkipBtnFocusRequester.requestFocus() }
+                }
             } else {
+                if (!controlsVisible) runCatching { mainFocusRequester.requestFocus() }
                 skipBtnOverrideVisible = false
                 delay(50)
-                runCatching { bigSkipBtnFocusRequester.requestFocus() }
+                if (controlsVisible) runCatching { bigSkipBtnFocusRequester.requestFocus() }
             }
         }
 
