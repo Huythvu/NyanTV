@@ -1,14 +1,26 @@
+### 🌟 Features
+-   individual extension settings
+-   watch next widget for android home launcher
+-   resume card in episodes list  track multiple watch states for each anime
+-   libmpv support, you can switch between exoplayer and libmpv now
+
 ### 🔧 Bug Fixes & Improvements
--   proguard stuff again
--   proguard keeps fucking up
--   preserve type references and data models for extension system
--   keep kotlin stdlib and lifecycle classes for extensions
--   disable r8 full mode and add proguard rules for aniyomi extensions
--   add rules to prevent r8 from crashing the app at launch
--   adjust apk renaming step for build
+-   better source fallback for some extensions
+-   subtitles not loading due to wrong headers
+-   slight adjustments to avoid app crashes
+-   update button not disappearing after successfully updating an extension
+-   anilist custom lists causing app crash
+-   wrong images and api endpoints  other adjustments
+-   quitting the player will now correctly lead back to the episodes list, not the info tab
+-   hls streams endless buffering
+
+### 🎨 Style Changes
+-   focus border adjustment in episode list fallback
+-   2 episodes each row instead of 1 and fix bottom padding
 
 ### 🧹 Chores & Documentation
--   add missing proguard-rules.pro file
--   track gradle-wrapper.jar for ci builds
+-   add tmdb api key field to build.yml
+-   add contributors
+-   update sdk info in development.md
 
  
