@@ -52,21 +52,15 @@
 -keep interface okio.** { *; }
 -keepclassmembers class okio.** { *; }
 
+-keep class androidx.preference.** { *; }
+-keep interface androidx.preference.** { *; }
+-keepclassmembers class androidx.preference.** { *; }
+
 # Networking & JSON Data
 -keep class kotlinx.serialization.** { *; }
 -keep class kotlinx.coroutines.** { *; }
 -keep class org.jsoup.** { *; }
 -keep class androidx.datastore.** { *; }
-
-# CRITICAL: Keep TypeReference and generic type info
--keep class com.google.gson.reflect.TypeToken { *; }
--keep class * extends com.google.gson.reflect.TypeToken
--keepattributes Signature,Exceptions
-
-# Keep Gson serialization/deserialization
--keepclassmembers,allowobfuscation class * {
-    @com.google.gson.annotations.SerializedName <fields>;
-}
 
 # Prevent R8 from stripping type arguments from LiveData
 -keepclassmembers class * extends androidx.lifecycle.LiveData {

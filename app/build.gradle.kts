@@ -67,9 +67,14 @@ android {
         create("benchmark") {
             initWith(getByName("release"))
             applicationIdSuffix = ".debug"
+            isMinifyEnabled = true
             isDebuggable = false
             isProfileable = true
             signingConfig = signingConfigs.getByName("debug")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
@@ -131,7 +136,10 @@ dependencies {
     implementation("androidx.media3:media3-datasource-okhttp:${media3}")
     implementation("androidx.media3:media3-extractor:${media3}")
     // Libmpv fallback for hls
-    implementation("dev.jdtech.mpv:libmpv:1.0.0")
+    implementation("dev.jdtech.mpv:libmpv:1.0.0") {
+        exclude(group = "dev.jdtech.mpv", module = "libmpv-x86")
+        exclude(group = "dev.jdtech.mpv", module = "libmpv-x86_64")
+    }
 
     // Aniyomi
     implementation("org.jsoup:jsoup:1.18.3")
