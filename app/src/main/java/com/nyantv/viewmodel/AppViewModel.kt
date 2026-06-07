@@ -136,12 +136,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val trendingShows:  StateFlow<List<Media>> = _trendingShows.asStateFlow()
 
     init {
-        bindService()
         viewModelScope.launch {
             awaitAll(
                 async { _service.autoLogin() },
                 async { sideService?.autoLogin() }
             )
+            bindService()
             loadHome()
         }
     }

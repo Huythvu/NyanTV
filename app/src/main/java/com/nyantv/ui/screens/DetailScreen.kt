@@ -46,6 +46,8 @@ import kotlinx.coroutines.launch
 
 private enum class DetailTab { INFO, PLAYER }
 
+private val HTML_TAG_REGEX = Regex("<[^>]*>")
+
 @Composable
 fun DetailScreen(
     id:                 String,
@@ -74,7 +76,7 @@ fun DetailScreen(
     val currentEntry by vm.currentMedia.collectAsStateWithLifecycle()
     val serviceType  by vm.serviceType.collectAsStateWithLifecycle()
     val serviceName  = serviceType.name.lowercase().replaceFirstChar { it.uppercase() }
-    var bannerUrl by remember { mutableStateOf<String?>(null) }
+    val bannerUrl = media?.let { vm.getAnilistBanner(it) }
 
     val serviceKey = when (serviceType) {
         ServiceType.ANILIST, ServiceType.MAL -> "anilist_mal"
@@ -123,7 +125,6 @@ fun DetailScreen(
     LaunchedEffect(Unit)  { runCatching { containerFocusReq.requestFocus() } }
     LaunchedEffect(media) {
         val m = media ?: return@LaunchedEffect
-        delay(150)
         runCatching { backFocusReq.requestFocus() }
         playerVm.updateMediaTitle(m.title)
         playerVm.setMediaImages(m.cover, m.poster)
@@ -131,7 +132,6 @@ fun DetailScreen(
         if (serviceType == ServiceType.SIMKL) {
             m.imdbId?.let { playerVm.setImdbId(it) }
         }
-        bannerUrl = vm.resolveAnilistBanner(m)
     }
 
     val listState = rememberLazyListState()
@@ -167,10 +167,9 @@ fun DetailScreen(
             val m = media ?: return@NetworkStatusContent
 
             LazyColumn(
-                state               = listState,
-                modifier            = Modifier.fillMaxSize(),
-                contentPadding      = PaddingValues(bottom = 0.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
+                state                 = listState,
+                modifier              = Modifier.fillMaxSize(),
+                contentPadding        = PaddingValues(bottom = 0.dp),
             ) {
                 // ── Banner ────────────────────────────────────────────────────
                 item {
@@ -212,7 +211,6 @@ fun DetailScreen(
                         selectedTabIndex = activeTab.ordinal,
                         modifier         = Modifier
                             .fillMaxWidth()
-                            .offset(y = (-20).dp)
                             .focusRequester(returnFocusReq)
                             .onKeyEvent { keyEvent ->
                                 if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionUp) {
@@ -297,6 +295,11 @@ private fun LazyListScope.infoItems(
     onShowEdit:         () -> Unit,
     onNavigateToDetail: (String) -> Unit,
 ) {
+    val directPrequel  = media.relations.firstOrNull { it.relationType == "PREQUEL" }
+    val directSequel   = media.relations.firstOrNull { it.relationType == "SEQUEL" }
+    val neighborIds    = listOfNotNull(directPrequel?.id, directSequel?.id).toSet()
+    val otherRelations = media.relations.filter { it.id !in neighborIds }
+
     item {
         Row(
             modifier              = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -343,7 +346,7 @@ private fun LazyListScope.infoItems(
     if (loggedIn) {
         item {
             Column(
-                modifier            = Modifier.padding(horizontal = 16.dp),
+                modifier            = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
@@ -368,85 +371,80 @@ private fun LazyListScope.infoItems(
         }
     }
 
-    if (media.genres.isNotEmpty()) {
-        item {
-            Row(
-                modifier              = Modifier
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                media.genres.forEach { genre ->
-                    SuggestionChip(
-                        onClick = {},
-                        label   = { Text(genre, style = MaterialTheme.typography.labelSmall) }
-                    )
-                }
-            }
-        }
-    }
-
-    media.description?.let { desc ->
-        item {
-            Text(
-                text     = desc.replace(Regex("<[^>]*>"), ""),
-                style    = MaterialTheme.typography.bodyMedium,
-                color    = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-        }
-    }
-
-    val directPrequel = media.relations.firstOrNull { it.relationType == "PREQUEL" }
-    val directSequel  = media.relations.firstOrNull { it.relationType == "SEQUEL" }
-    val neighborIds   = listOfNotNull(directPrequel?.id, directSequel?.id).toSet()
-
-    if (neighborIds.isNotEmpty()) {
-        item {
-            Row(
-                modifier              = Modifier.padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment     = Alignment.Top,
-            ) {
-                directPrequel?.let { prequel ->
-                    Column(
-                        modifier            = Modifier.width(120.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Prequel",
-                            style      = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color      = MaterialTheme.colorScheme.onBackground
+    item {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            if (media.genres.isNotEmpty()) {
+                Row(
+                    modifier              = Modifier
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    media.genres.forEach { genre ->
+                        SuggestionChip(
+                            onClick = {},
+                            label   = { Text(genre, style = MaterialTheme.typography.labelSmall) }
                         )
-                        MediaCard(media = prequel, onClick = { onNavigateToDetail(prequel.id) })
                     }
                 }
-                directSequel?.let { sequel ->
-                    Column(
-                        modifier            = Modifier.width(120.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Sequel",
-                            style      = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color      = MaterialTheme.colorScheme.onBackground
-                        )
-                        MediaCard(media = sequel, onClick = { onNavigateToDetail(sequel.id) })
+            }
+
+            media.description?.let { desc ->
+                val cleanDesc = remember(desc) { desc.replace(HTML_TAG_REGEX, "") }
+                Text(
+                    text     = cleanDesc,
+                    style    = MaterialTheme.typography.bodyMedium,
+                    color    = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+
+            if (neighborIds.isNotEmpty()) {
+                Row(
+                    modifier              = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment     = Alignment.Top,
+                ) {
+                    directPrequel?.let { prequel ->
+                        Column(
+                            modifier            = Modifier.width(120.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                "Prequel",
+                                style      = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color      = MaterialTheme.colorScheme.onBackground
+                            )
+                            MediaCard(media = prequel, onClick = { onNavigateToDetail(prequel.id) })
+                        }
+                    }
+                    directSequel?.let { sequel ->
+                        Column(
+                            modifier            = Modifier.width(120.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                "Sequel",
+                                style      = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color      = MaterialTheme.colorScheme.onBackground
+                            )
+                            MediaCard(media = sequel, onClick = { onNavigateToDetail(sequel.id) })
+                        }
                     }
                 }
             }
         }
     }
 
-    val otherRelations = media.relations.filter { it.id !in neighborIds }
     if (otherRelations.isNotEmpty()) {
         item {
             SectionRow(
-                title      = "Relations",
-                items      = otherRelations,
-                onItemClick = { onNavigateToDetail(it.id) }
+                title       = "Relations",
+                items       = otherRelations,
+                onItemClick = { onNavigateToDetail(it.id) },
+                modifier    = Modifier.padding(vertical = 8.dp)
             )
         }
     }
@@ -456,7 +454,8 @@ private fun LazyListScope.infoItems(
             SectionRow(
                 title       = "Recommended",
                 items       = media.recommendations,
-                onItemClick = { onNavigateToDetail(it.id) }
+                onItemClick = { onNavigateToDetail(it.id) },
+                modifier    = Modifier.padding(vertical = 8.dp)
             )
         }
     }
