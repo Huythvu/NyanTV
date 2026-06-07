@@ -310,6 +310,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _service.updateEntry(id, status, progress, score)
 
+            _animeList.update { list ->
+                val updated = list.firstOrNull { it.id == id } ?: return@update list
+                listOf(updated) + list.filter { it.id != id }
+            }
+
             if (_syncMalWithAnilist.value) {
                 val sm = syncManager ?: return@launch
                 when (_serviceType.value) {
