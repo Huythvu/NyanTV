@@ -123,8 +123,8 @@ class SimklService(context: Context) : MediaService {
         coroutineScope {
             val movies = async { fetchTrending("movies") }
             val shows  = async { fetchTrending("tv") }
-            _trendingMovies.value = movies.await()
-            _trendingShows.value  = shows.await()
+            _trendingMovies.value = movies.await().take(15)
+            _trendingShows.value  = shows.await().take(15)
             val combined = (_trendingMovies.value + _trendingShows.value)
                 .sortedByDescending { it.popularity }
             _trending.value = combined.take(15)

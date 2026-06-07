@@ -314,10 +314,10 @@ class AnilistService(context: Context) : MediaService {
     private companion object {
         val HOME_QUERY = """
         query {
-          trending: Page(page:1, perPage:10) { media(type:ANIME, sort:TRENDING_DESC) { ...F } }
-          popular:  Page(page:1, perPage:10) { media(type:ANIME, sort:POPULARITY_DESC) { ...F } }
-          upcoming: Page(page:1, perPage:10) { media(type:ANIME, status:NOT_YET_RELEASED, sort:POPULARITY_DESC) { ...F } }
-          recent:   Page(page:1, perPage:10) { media(type:ANIME, sort:UPDATED_AT_DESC, status:RELEASING, isAdult:false, countryOfOrigin:"JP") { ...F } }
+          trending: Page(page:1, perPage:15) { media(type:ANIME, sort:TRENDING_DESC) { ...F } }
+          popular:  Page(page:1, perPage:15) { media(type:ANIME, sort:POPULARITY_DESC) { ...F } }
+          upcoming: Page(page:1, perPage:15) { media(type:ANIME, status:NOT_YET_RELEASED, sort:POPULARITY_DESC) { ...F } }
+          recent:   Page(page:1, perPage:15) { media(type:ANIME, sort:UPDATED_AT_DESC, status:RELEASING, isAdult:false, countryOfOrigin:"JP") { ...F } }
         }
         fragment F on Media {
           id idMal title { romaji english } coverImage { large } bannerImage averageScore episodes status format season seasonYear
