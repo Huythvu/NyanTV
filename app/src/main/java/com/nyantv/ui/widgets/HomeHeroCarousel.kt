@@ -28,7 +28,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,18 +42,16 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.nyantv.BuildConfig
-import com.nyantv.data.AnilistService
 import com.nyantv.data.Media
 import com.nyantv.data.ServiceType
 import com.nyantv.ui.utils.focusBorder
 import com.nyantv.viewmodel.AppViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -75,8 +72,8 @@ fun HomeHeroCarousel(
     if (items.isEmpty()) return
 
     val pagerState = rememberPagerState(pageCount = { items.size })
-    val logos = remember { mutableStateMapOf<String, String?>() }
-    val backdrops = remember { mutableStateMapOf<String, String?>() }
+    val logos     by vm.carouselLogos.collectAsStateWithLifecycle()
+    val backdrops by vm.carouselBackdrops.collectAsStateWithLifecycle()
     var isFocused by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -84,21 +81,6 @@ fun HomeHeroCarousel(
         if (items.any { it.serviceType == ServiceType.MAL }) {
             vm.prefetchAnilistBanners(items)
         }
-        items
-            .filter { !logos.containsKey(it.id) }
-            .map { media ->
-                async {
-                    media.id to Pair(
-                        CarouselLogoResolver.resolve(media),
-                        CarouselLogoResolver.resolveBackdrop(media),
-                    )
-                }
-            }
-            .awaitAll()
-            .forEach { (id, pair) ->
-                logos[id]     = pair.first
-                backdrops[id] = pair.second
-            }
     }
 
     Box(
@@ -290,7 +272,11 @@ internal object CarouselLogoResolver {
                 ?: fromAniZip("anilistId", media.id)
             ServiceType.MAL -> {
                 val malId = media.idMal ?: media.id
-                fromAniZip("mal_id", malId) ?: fromAniZip("malId", malId)
+                coroutineScope {
+                    val a = async { fromAniZip("mal_id", malId) }
+                    val b = async { fromAniZip("malId", malId) }
+                    a.await() ?: b.await()
+                }
             }
             ServiceType.SIMKL -> fromTmdb(media.tmdbId, media.format == "MOVIE")
         }
