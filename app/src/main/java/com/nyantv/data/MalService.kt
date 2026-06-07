@@ -16,6 +16,9 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import androidx.core.net.toUri
 import androidx.core.content.edit
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 private const val MAL_API  = "https://api.myanimelist.net/v2"
 private const val MAL_AUTH = "https://myanimelist.net/v1/oauth2"
@@ -131,11 +134,10 @@ class MalService(context: Context) : MediaService {
         if (accessToken == null) return
         withContext(Dispatchers.IO) {
             runCatching {
-                // validate token with a cheap call
-                val resp = get("$MAL_API/users/@me")
-                if (resp == null) refreshAccessToken()
-                fetchUserProfile()
-                refreshUserLists()
+                coroutineScope {
+                    launch { fetchUserProfile() }
+                    launch { refreshUserLists() }
+                }
             }.onFailure {
                 android.util.Log.e("MalService", "autoLogin failed", it)
             }
@@ -238,23 +240,27 @@ class MalService(context: Context) : MediaService {
 
     // ── HTTP helpers ───────────────────────────────────────────────────────────
 
-    private suspend fun get(url: String): JsonObject? = withContext(Dispatchers.IO) {
-        val req = Request.Builder().url(url)
-            .apply {
-                if (accessToken != null) {
-                    header("Authorization", "Bearer $accessToken")
-                } else {
-                    header("X-MAL-CLIENT-ID", BuildConfig.MAL_CLIENT_ID)
-                }
+
+    private suspend fun get(url: String, retryOnUnauth: Boolean = true): JsonObject? =
+        withContext(Dispatchers.IO) {
+            val resp = http.newCall(
+                Request.Builder().url(url)
+                    .apply {
+                        if (accessToken != null) header("Authorization", "Bearer $accessToken")
+                        else header("X-MAL-CLIENT-ID", BuildConfig.MAL_CLIENT_ID)
+                    }.build()
+            ).execute()
+
+            if (resp.code == 401 && retryOnUnauth) {
+                refreshAccessToken()
+                return@withContext get(url, retryOnUnauth = false)
             }
-            .build()
-        val resp = http.newCall(req).execute()
-        if (!resp.isSuccessful) {
-            android.util.Log.e("MalService", "GET $url failed: ${resp.code}")
-            return@withContext null
+            if (!resp.isSuccessful) {
+                android.util.Log.e("MalService", "GET $url failed: ${resp.code}")
+                return@withContext null
+            }
+            runCatching { json.parseToJsonElement(resp.body.string()).jsonObject }.getOrNull()
         }
-        runCatching { json.parseToJsonElement(resp.body.string()).jsonObject }.getOrNull()
-    }
 
     private suspend fun postForm(url: String, body: String): JsonObject? = withContext(Dispatchers.IO) {
         val req = Request.Builder().url(url)

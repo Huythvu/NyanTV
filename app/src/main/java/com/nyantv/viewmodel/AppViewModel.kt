@@ -13,8 +13,11 @@ import kotlinx.coroutines.delay
 import androidx.core.content.edit
 import com.nyantv.ui.theme.ActiveTheme
 import com.nyantv.ui.theme.CustomTheme
+import com.nyantv.ui.widgets.CarouselLogoResolver
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -135,8 +138,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     init {
         bindService()
         viewModelScope.launch {
-            _service.autoLogin()
-            sideService?.autoLogin()
+            awaitAll(
+                async { _service.autoLogin() },
+                async { sideService?.autoLogin() }
+            )
             loadHome()
         }
     }
@@ -385,15 +390,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private suspend fun preloadCarouselAssets(items: List<Media>) {
-        kotlinx.coroutines.coroutineScope {
+        coroutineScope {
             items
                 .filter { !_carouselLogos.value.containsKey(it.id) }
                 .map { media ->
-                    async(kotlinx.coroutines.Dispatchers.IO) {
-                        media.id to Pair(
-                            com.nyantv.ui.widgets.CarouselLogoResolver.resolve(media),
-                            com.nyantv.ui.widgets.CarouselLogoResolver.resolveBackdrop(media),
-                        )
+                    async(Dispatchers.IO) {
+                        val logo     = async { CarouselLogoResolver.resolve(media) }
+                        val backdrop = async { CarouselLogoResolver.resolveBackdrop(media) }
+                        media.id to Pair(logo.await(), backdrop.await())
                     }
                 }
                 .awaitAll()

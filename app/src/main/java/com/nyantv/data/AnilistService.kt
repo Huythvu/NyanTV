@@ -15,6 +15,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 import androidx.core.net.toUri
 import androidx.core.content.edit
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 private const val GQL_URL = "https://graphql.anilist.co"
 private const val PREFS    = "anilist_prefs"
@@ -107,8 +109,10 @@ class AnilistService(context: Context) : MediaService {
             _isLoggedIn.value = true
             withContext(Dispatchers.IO) {
                 runCatching {
-                    fetchUserProfile()
-                    refreshUserLists()
+                    coroutineScope {
+                        launch { fetchUserProfile() }
+                        launch { refreshUserLists() }
+                    }
                 }.onFailure {
                     android.util.Log.e("AnilistService", "autoLogin failed", it)
                 }

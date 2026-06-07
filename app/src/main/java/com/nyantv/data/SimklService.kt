@@ -16,6 +16,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import kotlinx.coroutines.launch
 
 private const val SIMKL_API  = "https://api.simkl.com"
 private const val SIMKL_PREFS = "simkl_prefs"
@@ -93,8 +94,10 @@ class SimklService(context: Context) : MediaService {
         if (token == null) return
         withContext(Dispatchers.IO) {
             runCatching {
-                fetchUserProfile()
-                refreshUserLists()
+                coroutineScope {
+                    launch { fetchUserProfile() }
+                    launch { refreshUserLists() }
+                }
             }.onFailure {
                 android.util.Log.e("SimklService", "autoLogin failed", it)
             }
