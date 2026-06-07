@@ -76,7 +76,7 @@ fun DetailScreen(
     val currentEntry by vm.currentMedia.collectAsStateWithLifecycle()
     val serviceType  by vm.serviceType.collectAsStateWithLifecycle()
     val serviceName  = serviceType.name.lowercase().replaceFirstChar { it.uppercase() }
-    val bannerUrl = media?.let { vm.getAnilistBanner(it) }
+    var bannerUrl by remember { mutableStateOf<String?>(null) }
 
     val serviceKey = when (serviceType) {
         ServiceType.ANILIST, ServiceType.MAL -> "anilist_mal"
@@ -132,6 +132,7 @@ fun DetailScreen(
         if (serviceType == ServiceType.SIMKL) {
             m.imdbId?.let { playerVm.setImdbId(it) }
         }
+        bannerUrl = vm.resolveAnilistBanner(m)
     }
 
     val listState = rememberLazyListState()
@@ -147,6 +148,7 @@ fun DetailScreen(
     val primary         = MaterialTheme.colorScheme.primary
     val backIndication  = remember(primary) { FocusIndication(primary, cornerRadiusDp = 8.dp) }
     val backInteraction = remember { MutableInteractionSource() }
+    var lastDpadEvent by remember { mutableLongStateOf(0L) }
 
     Box(
         modifier = modifier
@@ -156,8 +158,15 @@ fun DetailScreen(
             .background(MaterialTheme.colorScheme.background)
             .onKeyEvent { keyEvent ->
                 if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp && !showEdit) {
-                    onBack(); true
-                } else false
+                    onBack(); return@onKeyEvent true
+                }
+                if (keyEvent.type == KeyEventType.KeyDown &&
+                    (keyEvent.key == Key.DirectionUp || keyEvent.key == Key.DirectionDown)) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastDpadEvent < 175L) return@onKeyEvent true
+                    lastDpadEvent = now
+                }
+                false
             }
     ) {
         BackHandler(enabled = !showEdit) { onBack() }
