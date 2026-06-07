@@ -1,27 +1,14 @@
-### 🌟 Features
--   individual extension settings
--   watch next widget for android home launcher
--   resume card in episodes list  track multiple watch states for each anime
--   libmpv support, you can switch between exoplayer and libmpv now
-
 ### 🔧 Bug Fixes & Improvements
--   source picker not correctly switching sources
--   better source fallback for some extensions
--   subtitles not loading due to wrong headers
--   slight adjustments to avoid app crashes
--   update button not disappearing after successfully updating an extension
--   anilist custom lists causing app crash
--   wrong images and api endpoints  other adjustments
--   quitting the player will now correctly lead back to the episodes list, not the info tab
--   hls streams endless buffering
+-   resolve detail screen scroll jank and login race condition
+-   correct continue watching order after updating entry
+-   fix: reuse playerviewmodel across player sessions to prevent oom
+-   duplicate subtitles  restricted subtitles
+-   cramped up stream and subs picker
+-   focus loss in player screen when skipping oped
+-   extension settings causing app crash
 
-### 🎨 Style Changes
--   focus border adjustment in episode list fallback
--   2 episodes each row instead of 1 and fix bottom padding
-
-### 🧹 Chores & Documentation
--   add tmdb api key field to build.yml
--   add contributors
--   update sdk info in development.md
+### 🚀 Performance Improvements
+-   parallelize carousel asset preloading and deduplicate logo resolution
+-   parallelize auth initialization and remove redundant mal network calls
 
  
