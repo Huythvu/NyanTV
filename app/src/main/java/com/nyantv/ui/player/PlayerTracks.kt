@@ -12,8 +12,43 @@ data class StreamTrack(
     val headers: Map<String, String> = emptyMap(),
 )
 
-/** A single external subtitle track (e.g. "English (OpenSubtitles)"). */
-data class SubtitleTrack(val name: String, val url: String)
+/**
+ * A single subtitle track grouped by language name.
+ *
+ * Multiple [urls] exist when the same language is offered by different CDN
+ * origins. The ViewModel picks the best URL at
+ * load time by matching the origin domain of the currently active stream,
+ * so switching CDN automatically picks a subtitle URL that won't be Cloudflare-blocked.
+ */
+data class SubtitleTrack(
+    val name: String,
+    val urls: List<SubtitleUrl>,
+) {
+    /** One concrete subtitle URL together with the CDN domain it came from. */
+    data class SubtitleUrl(
+        val url: String,
+        val streamDomain: String,
+    )
+
+    /**
+     * Picks the best URL for [currentStreamUrl].
+     * Preference order:
+     *  1. Same domain as the current stream
+     *  2. First available URL as fallback
+     */
+    fun bestUrlFor(currentStreamUrl: String): String? {
+        val domain = extractDomain(currentStreamUrl)
+        return urls.firstOrNull { it.streamDomain == domain }?.url
+            ?: urls.firstOrNull()?.url
+    }
+}
+
+/** Extracts the registrable host from a URL string. */
+fun extractDomain(url: String): String = runCatching {
+    val host = java.net.URI(url).host ?: return@runCatching ""
+    val parts = host.split(".")
+    if (parts.size >= 2) parts.takeLast(2).joinToString(".") else host
+}.getOrDefault("")
 
 /**
  * Temporary argument holder for the player screen.

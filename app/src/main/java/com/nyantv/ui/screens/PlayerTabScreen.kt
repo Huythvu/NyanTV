@@ -42,6 +42,7 @@ import com.nyantv.player.*
 import com.nyantv.ui.player.PlayerArgs
 import com.nyantv.ui.player.StreamTrack
 import com.nyantv.ui.player.SubtitleTrack
+import com.nyantv.ui.player.extractDomain
 import com.nyantv.ui.utils.displayName
 import com.nyantv.ui.utils.focusBorder
 import com.nyantv.ui.utils.resolveEpisodeMeta
@@ -344,17 +345,36 @@ fun PlayerTabScreen(
                                     PlayerArgs.streams = videos.map { v ->
                                         StreamTrack(
                                             name    = v.quality.ifBlank { "Stream" },
-                                            url     = v.url ?: v.videoUrl,
+                                            url     = v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl,
                                             headers = v.headers?.toMultimap()
                                                 ?.mapValues { it.value.firstOrNull() ?: "" }
                                                 ?: emptyMap(),
                                         )
                                     }
                                     PlayerArgs.skipTimes          = state.skipTimes
-                                    PlayerArgs.subtitleTracks     = videos
-                                        .flatMap { v -> v.subtitleTracks }
-                                        .distinctBy { it.url }
-                                        .map { track -> SubtitleTrack(track.lang, track.url) }
+                                    PlayerArgs.subtitleTracks = videos
+                                        .flatMap { v ->
+                                            val streamDomain = extractDomain(
+                                                v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl
+                                            )
+                                            v.subtitleTracks.map { track ->
+                                                Triple(
+                                                    first  = track.lang,
+                                                    second = track.url,
+                                                    third  = streamDomain,
+                                                )
+                                            }
+                                        }
+                                        .groupBy { (lang, _, _) -> lang }
+                                        .map { (lang, entries) ->
+                                            SubtitleTrack(
+                                                name = lang,
+                                                urls = entries
+                                                    .map { (_, url, domain) -> SubtitleTrack.SubtitleUrl(url = url, streamDomain = domain) }
+                                                    .distinctBy { it.url },
+                                            )
+                                        }
+
                                     PlayerArgs.initialStreamIndex  = index
                                     PlayerArgs.episodes            = allEpisodes
                                     PlayerArgs.currentEpisodeIndex = allEpisodes.indexOfFirst { it == state.selectedEpisode }

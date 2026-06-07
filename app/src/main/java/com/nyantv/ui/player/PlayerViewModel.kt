@@ -465,16 +465,30 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         val streams = videos.map { v ->
             StreamTrack(
                 name    = v.quality.ifBlank { "Stream" },
-                url     = v.url ?: v.videoUrl,
+                url     = v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl,
                 headers = v.headers?.toMultimap()
                     ?.mapValues { it.value.firstOrNull() ?: "" }
                     ?: emptyMap(),
             )
         }
         val subs = videos
-            .flatMap { it.subtitleTracks }
-            .distinctBy { it.url }
-            .map { SubtitleTrack(it.lang, it.url) }
+            .flatMap { v ->
+                val streamDomain = extractDomain(
+                    v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl
+                )
+                v.subtitleTracks.map { track ->
+                    Triple(track.lang, track.url, streamDomain)
+                }
+            }
+            .groupBy { (lang, _, _) -> lang }
+            .map { (lang, entries) ->
+                SubtitleTrack(
+                    name = lang,
+                    urls = entries
+                        .map { (_, url, domain) -> SubtitleTrack.SubtitleUrl(url = url, streamDomain = domain) }
+                        .distinctBy { it.url },
+                )
+            }
 
         currentEpisodeIndex      = newIndex
         hasTrackedCurrentEpisode = false
@@ -499,12 +513,12 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         selectStream(streamIndex)
-        // currentStreamHeaders = streams[streamIndex].headers
         initialSubIdx?.let { loadSubtitleByIndex(it) } ?: run {
             subtitleEngine.clear()
             _currentCue.value = null
         }
     }
+
 
     /** Switch stream at runtime (e.g. from the in-player picker). Saves quality preference. */
     fun selectStream(index: Int) {
@@ -514,7 +528,13 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit { putString(PREF_QUALITY, streams[index].name) }
         currentStreamHeaders = streams[index].headers
         loadUri(streams[index].url, streams[index].headers)
+
+        // Subtitle für die neue Stream-Domain neu laden
+        _state.value.selectedSubtitleIndex?.let { subIdx ->
+            loadSubtitleByIndex(subIdx)
+        }
     }
+
 
     /** Switch subtitle track, or pass null to disable subtitles. */
     fun selectSubtitleTrack(index: Int?) {
@@ -593,14 +613,24 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     // ── Subtitle management ────────────────────────────────────────────────────
 
     private fun loadSubtitleByIndex(index: Int) {
-        val url = _state.value.subtitleTracks.getOrNull(index)?.url ?: return
+        val track = _state.value.subtitleTracks.getOrNull(index) ?: return
+
+        val currentStreamUrl = _state.value.streams
+            .getOrNull(_state.value.selectedStreamIndex)?.url ?: ""
+        val url = track.bestUrlFor(currentStreamUrl) ?: return
+
         viewModelScope.launch {
             val p = _subtitlePrefs.value
-            lingvaTranslator = p.translateTo?.let { LingvaTranslator(baseUrl = p.lingvaBaseUrl, targetLang = it) }
-            runCatching { subtitleEngine.load(url, headers = currentStreamHeaders, translator = lingvaTranslator) }
-                .onFailure { Log.e(TAG, "subtitle load failed", it) }
+            lingvaTranslator = p.translateTo?.let {
+                LingvaTranslator(baseUrl = p.lingvaBaseUrl, targetLang = it)
+            }
+            runCatching {
+                subtitleEngine.load(url, headers = currentStreamHeaders, translator = lingvaTranslator)
+            }.onFailure { Log.e(TAG, "subtitle load failed", it) }
         }
     }
+
+
 
     fun updateSubtitlePrefs(update: (SubtitlePrefs) -> SubtitlePrefs) {
         val new = update(_subtitlePrefs.value)

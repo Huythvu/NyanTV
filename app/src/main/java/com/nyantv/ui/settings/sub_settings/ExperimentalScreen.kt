@@ -85,7 +85,10 @@ fun ExperimentalScreen(navController: NavController, onOpenPlayer: () -> Unit) {
                                 StreamTrack("SD 480p DUB",  TEST_STREAM3),
                             )
                             PlayerArgs.subtitleTracks = listOf(
-                                SubtitleTrack("English", TEST_SUBS),
+                                SubtitleTrack(
+                                    name = "English",
+                                    urls = listOf(SubtitleTrack.SubtitleUrl(url = TEST_SUBS, streamDomain = "")),
+                                )
                             )
                             PlayerArgs.initialStreamIndex = 0
                             PlayerArgs.title              = "Test Stream"

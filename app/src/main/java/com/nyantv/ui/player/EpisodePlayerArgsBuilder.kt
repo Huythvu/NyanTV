@@ -2,6 +2,7 @@ package com.nyantv.player
 
 import com.nyantv.ui.player.StreamTrack
 import com.nyantv.ui.player.SubtitleTrack
+import com.nyantv.ui.player.extractDomain
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
@@ -57,12 +58,19 @@ object EpisodePlayerArgsBuilder {
             )
         }
 
-        val subtitles = videos.firstOrNull()?.subtitleTracks.orEmpty().map { sub ->
-            SubtitleTrack(
-                name = sub.lang,
-                url  = sub.url,
-            )
+        val subtitles = videos.flatMap { v ->
+            val streamDomain = extractDomain(v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl)
+            v.subtitleTracks.map { sub -> Triple(sub.lang, sub.url, streamDomain) }
         }
+            .groupBy { (lang, _, _) -> lang }
+            .map { (lang, entries) ->
+                SubtitleTrack(
+                    name = lang,
+                    urls = entries
+                        .map { (_, url, domain) -> SubtitleTrack.SubtitleUrl(url = url, streamDomain = domain) }
+                        .distinctBy { it.url },
+                )
+            }
 
         // Title: prefer episode name + number, fall back to anime title + number
         val epNum = episode.episode_number.let {
