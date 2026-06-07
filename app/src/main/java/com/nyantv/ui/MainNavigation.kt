@@ -27,6 +27,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.common.util.UnstableApi
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
@@ -73,6 +74,7 @@ private val navItems = listOf(Screen.Home, Screen.Anime, Screen.Library, Screen.
 
 // ─── Root composable ───────────────────────────────────────────────────────────
 
+@androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun MainNavigation(
@@ -123,6 +125,8 @@ fun MainNavigation(
         focusManager.clearFocus(force = true)
         detailHistory.add(id)
     }
+
+    val playerVm: PlayerViewModel = viewModel()
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -217,7 +221,6 @@ fun MainNavigation(
 
         // ── PlayerScreen Overlay ───────────────────────────────────────────
         if (showPlayer) {
-            val playerVm: PlayerViewModel = viewModel()
             PlayerScreen(
                 vm     = playerVm,
                 appVm  = vm,
