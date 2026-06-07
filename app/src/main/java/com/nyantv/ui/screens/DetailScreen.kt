@@ -208,46 +208,36 @@ fun DetailScreen(
 
                 // ── Tabs ────────────────────────────
                 item {
-                    Box {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(0.dp)
-                                .focusRequester(returnFocusReq)
-                                .focusable()
+                    TabRow(
+                        selectedTabIndex = activeTab.ordinal,
+                        modifier         = Modifier
+                            .fillMaxWidth()
+                            .offset(y = (-20).dp)
+                            .focusRequester(returnFocusReq)
+                            .onKeyEvent { keyEvent ->
+                                if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionUp) {
+                                    scope.launch {
+                                        runCatching { backFocusReq.requestFocus() }
+                                    }
+                                    true
+                                } else false
+                            },
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor   = MaterialTheme.colorScheme.primary,
+                    ) {
+                        Tab(
+                            selected = activeTab == DetailTab.INFO,
+                            onClick  = { activeTab = DetailTab.INFO },
+                            icon     = { Icon(Icons.Default.Info, null, modifier = Modifier.size(18.dp)) },
+                            text     = { Text("Info") },
                         )
-                        TabRow(
-                            selectedTabIndex = activeTab.ordinal,
-                            modifier         = Modifier
-                                .fillMaxWidth()
-                                .offset(y = (-20).dp)
-                                .onKeyEvent { keyEvent ->
-                                    if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionUp) {
-                                        scope.launch {
-                                            listState.scrollToItem(0)
-                                            delay(5)
-                                            runCatching { backFocusReq.requestFocus() }
-                                        }
-                                        true
-                                    } else false
-                                },
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            contentColor   = MaterialTheme.colorScheme.primary,
-                        ) {
-                            Tab(
-                                selected = activeTab == DetailTab.INFO,
-                                onClick  = { activeTab = DetailTab.INFO },
-                                icon     = { Icon(Icons.Default.Info, null, modifier = Modifier.size(18.dp)) },
-                                text     = { Text("Info") },
-                            )
-                            Tab(
-                                selected = activeTab == DetailTab.PLAYER,
-                                onClick  = { activeTab = DetailTab.PLAYER },
-                                modifier = Modifier.focusRequester(playerTabFocusReq),
-                                icon     = { Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp)) },
-                                text     = { Text("Player") },
-                            )
-                        }
+                        Tab(
+                            selected = activeTab == DetailTab.PLAYER,
+                            onClick  = { activeTab = DetailTab.PLAYER },
+                            modifier = Modifier.focusRequester(playerTabFocusReq),
+                            icon     = { Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp)) },
+                            text     = { Text("Player") },
+                        )
                     }
                 }
 
@@ -362,7 +352,7 @@ private fun LazyListScope.infoItems(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusBorder(MaterialTheme.shapes.medium),
-                        shape    = MaterialTheme.shapes.medium,
+                        shape = MaterialTheme.shapes.medium,
                     ) {
                         Text(
                             currentEntry?.watchingStatus?.let {
