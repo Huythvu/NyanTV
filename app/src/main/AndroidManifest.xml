@@ -18,7 +18,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:banner="@mipmap/tv_banner"
         android:supportsRtl="true"
-        android:theme="@style/SplashTheme">
+        android:theme="@style/SplashTheme"
+        android:networkSecurityConfig="@xml/network_security_config">
         <profileable android:shell="true" />
 
     <activity
