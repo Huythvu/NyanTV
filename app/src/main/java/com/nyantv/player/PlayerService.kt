@@ -67,13 +67,14 @@ class PlayerService : Service() {
 
         override fun load(uri: String, startPositionMs: Long) {
             post {
-                if (isHls(uri) && useMpv()) {
-                    usingMpv = true
+                val toMpv = isHls(uri) && useMpv()
+                prepareEngine(toMpv)
+
+                if (toMpv) {
                     ensureMpv()
                     currentSurface?.let { mpv?.attachSurface(it) }
                     mpv?.load(uri = uri, startPositionMs = startPositionMs)
                 } else {
-                    usingMpv = false
                     val mediaItem = MediaItem.Builder()
                         .setUri(uri)
                         .setClippingConfiguration(
@@ -97,7 +98,10 @@ class PlayerService : Service() {
                     }
                 }.getOrDefault(emptyMap())
 
-                if (isHls(uri) && useMpv()) {
+                val toMpv = isHls(uri) && useMpv()
+                prepareEngine(toMpv)
+
+                if (toMpv) {
                     usingMpv = true
                     ensureMpv()
                     currentSurface?.let { mpv?.attachSurface(it) }
@@ -166,7 +170,15 @@ class PlayerService : Service() {
 
         override fun clearSurface() = post {
             currentSurface = null
-            if (usingMpv) mpv?.detachSurface() else player.clearVideoSurface()
+            if (usingMpv) {
+                mpv?.detachSurface()
+                mpv?.stop()
+                mpv?.release()
+                mpv = null
+                usingMpv = false
+            } else {
+                player.clearVideoSurface()
+            }
         }
 
         override fun registerCallback(cb: IPlayerCallback?) {
@@ -324,5 +336,19 @@ class PlayerService : Service() {
     private fun post(block: () -> Unit) {
         if (Looper.myLooper() == playerThread.looper) block()
         else playerHandler.post(block)
+    }
+
+    private fun prepareEngine(targetUsesMpv: Boolean) {
+        if (usingMpv == targetUsesMpv) return
+        if (usingMpv) {
+            mpv?.stop()
+            mpv?.detachSurface()
+            mpv?.release()
+            mpv = null
+        } else {
+            player.stop()
+            player.clearMediaItems()
+        }
+        usingMpv = targetUsesMpv
     }
 }

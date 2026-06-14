@@ -40,29 +40,20 @@ class SubtitleEngine {
         headers: Map<String, String> = emptyMap(),
         translator: LingvaTranslator? = null
     ) {
+        cues = emptyList()
+
         val raw = withContext(Dispatchers.IO) {
             val requestBuilder = Request.Builder().url(url)
-            headers.forEach { (name, value) ->
-                requestBuilder.header(name, value)
-            }
-            val request = requestBuilder.build()
-            val response = okHttpClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                throw IOException("HTTP ${response.code}: ${response.message}")
-            }
+            headers.forEach { (name, value) -> requestBuilder.header(name, value) }
+            val response = okHttpClient.newCall(requestBuilder.build()).execute()
+            if (!response.isSuccessful) throw IOException("HTTP ${response.code}: ${response.message}")
             response.body?.string() ?: throw IOException("Empty response")
         }
 
         val parsed = parse(raw.trim())
         cues = if (translator != null) {
-            parsed.map { cue ->
-                val translated = runCatching { translator.translate(cue.text) }
-                    .getOrDefault(cue.text)
-                cue.copy(text = translated)
-            }
-        } else {
-            parsed
-        }
+            parsed.map { cue -> cue.copy(text = runCatching { translator.translate(cue.text) }.getOrDefault(cue.text)) }
+        } else parsed
     }
 
     /** Returns the subtitle text active at [positionMs], or null if none. */
