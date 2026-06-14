@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.network
 
 import android.content.Context
+import eu.kanade.tachiyomi.network.interceptor.CloudflareInterceptor
 import eu.kanade.tachiyomi.network.interceptor.IgnoreGzipInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UncaughtExceptionInterceptor
 import eu.kanade.tachiyomi.network.interceptor.UserAgentInterceptor
@@ -10,12 +11,12 @@ import okhttp3.brotli.BrotliInterceptor
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-class NetworkHelper(context: Context) {
+class NetworkHelper(private val context: Context) {
 
     val cookieJar = AndroidCookieJar()
 
     val client: OkHttpClient = run {
-        val builder = OkHttpClient.Builder()
+        val baseClient = OkHttpClient.Builder()
             .cookieJar(cookieJar)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -30,7 +31,13 @@ class NetworkHelper(context: Context) {
             .addInterceptor(UserAgentInterceptor(::defaultUserAgentProvider))
             .addNetworkInterceptor(IgnoreGzipInterceptor())
             .addNetworkInterceptor(BrotliInterceptor)
-        builder.build()
+            .build()
+
+        baseClient.newBuilder()
+            .addInterceptor(
+                CloudflareInterceptor(context, cookieJar, ::defaultUserAgentProvider),
+            )
+            .build()
     }
 
     @Deprecated("The regular client handles Cloudflare by default")
@@ -44,15 +51,11 @@ class NetworkHelper(context: Context) {
         @Volatile
         private var instance: NetworkHelper? = null
 
-        fun getInstance(context: Context): NetworkHelper {
-            return instance ?: synchronized(this) {
-                instance ?: NetworkHelper(context.applicationContext).also { instance = it }
-            }
+        fun setInstance(helper: NetworkHelper) {
+            instance = helper
         }
 
-        fun requireInstance(): NetworkHelper {
-            return instance
-                ?: error("NetworkHelper not initialized. Call getInstance(context) first.")
-        }
+        fun requireInstance(): NetworkHelper =
+            instance ?: error("NetworkHelper not initialized. Call setInstance() first.")
     }
 }

@@ -7,6 +7,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import eu.kanade.tachiyomi.extension.anime.AnimeExtensionManager
 import eu.kanade.tachiyomi.network.NetworkHelper
+import keiyoushi.utils.initializeApplicationContext
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.InjektModule
 import uy.kohesive.injekt.api.InjektRegistrar
@@ -17,10 +18,16 @@ class NyanTVApp : Application() {
     lateinit var extensionManager: AnimeExtensionManager
         private set
 
+    lateinit var networkHelper: NetworkHelper
+        private set
+
     override fun onCreate() {
         super.onCreate()
+        initializeApplicationContext(this)
+        networkHelper = NetworkHelper(this)
+        NetworkHelper.setInstance(networkHelper)
         extensionManager = AnimeExtensionManager(this)
-        NetworkHelper.getInstance(this)
+
         Injekt.importModule(object : InjektModule {
             override fun InjektRegistrar.registerInjectables() {
                 addSingleton<Application>(this@NyanTVApp)
