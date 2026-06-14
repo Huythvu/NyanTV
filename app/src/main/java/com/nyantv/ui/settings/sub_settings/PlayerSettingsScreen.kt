@@ -38,9 +38,10 @@ fun PlayerSettingsScreen(navController: NavController) {
     var translateTo   by remember { mutableStateOf<String?>(prefs.getString("sub_translate", null)) }
     var bigSkipSec by remember { mutableIntStateOf(prefs.getInt("big_skip_sec", 75)) }
     var watchedThreshold by remember { mutableIntStateOf(prefs.getInt("watched_threshold", 80)) }
+    var advancedGrouping by remember { mutableStateOf(prefs.getBoolean("subtitle_advanced_grouping", false)) }
 
     // Auto-save whenever any value changes
-    LaunchedEffect(qualityMode, subEnabled, fontSize, bold, translateTo, bigSkipSec, watchedThreshold, playerEngine) {
+    LaunchedEffect(qualityMode, subEnabled, fontSize, bold, translateTo, bigSkipSec, watchedThreshold, playerEngine, advancedGrouping) {
         prefs.edit {
             putString("quality_mode",      qualityMode)
             putBoolean("sub_enabled",      subEnabled)
@@ -50,6 +51,7 @@ fun PlayerSettingsScreen(navController: NavController) {
             putInt("big_skip_sec",         bigSkipSec)
             putInt("watched_threshold",    watchedThreshold)
             putString("player_engine", playerEngine)
+            putBoolean("subtitle_advanced_grouping", advancedGrouping)
         }
     }
 
@@ -303,6 +305,21 @@ fun PlayerSettingsScreen(navController: NavController) {
                 subtitle = "Make subtitle text bold",
                 checked  = bold,
                 onToggle = { bold = it }
+            )
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+
+            var advancedGrouping by remember {
+                mutableStateOf(prefs.getBoolean("subtitle_advanced_grouping", false))
+            }
+            SettingsToggleRow(
+                label    = "Advanced subtitle grouping",
+                subtitle = "Separate subtitle files by content (e.g. signs vs full dialogue) when available",
+                checked  = advancedGrouping,
+                onToggle = {
+                    advancedGrouping = it
+                    prefs.edit { putBoolean("subtitle_advanced_grouping", it) }
+                }
             )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
