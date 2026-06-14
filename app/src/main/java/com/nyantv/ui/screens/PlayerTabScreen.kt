@@ -1,5 +1,7 @@
 package com.nyantv.ui.screens
 
+import android.content.Context
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -30,6 +32,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
@@ -43,6 +46,7 @@ import com.nyantv.ui.player.PlayerArgs
 import com.nyantv.ui.player.StreamTrack
 import com.nyantv.ui.player.SubtitleTrack
 import com.nyantv.ui.player.extractDomain
+import com.nyantv.ui.player.extractUrlPath
 import com.nyantv.ui.utils.displayName
 import com.nyantv.ui.utils.focusBorder
 import com.nyantv.ui.utils.resolveEpisodeMeta
@@ -59,6 +63,7 @@ fun PlayerTabScreen(
     onOverlayDismiss:    () -> Unit         = {},
     modifier:            Modifier           = Modifier,
 ) {
+    val context = LocalContext.current
     val state            by vm.state.collectAsStateWithLifecycle()
     val fillerEpisodes   by vm.fillerEpisodes.collectAsStateWithLifecycle()
     val resumeProgress   by vm.resumeProgress.collectAsStateWithLifecycle()
@@ -352,28 +357,55 @@ fun PlayerTabScreen(
                                         )
                                     }
                                     PlayerArgs.skipTimes          = state.skipTimes
-                                    PlayerArgs.subtitleTracks = videos
-                                        .flatMap { v ->
-                                            val streamDomain = extractDomain(
-                                                v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl
-                                            )
-                                            v.subtitleTracks.map { track ->
-                                                Triple(
-                                                    first  = track.lang,
-                                                    second = track.url,
-                                                    third  = streamDomain,
+                                    val prefs = context.getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE)
+                                    val useAdvanced = prefs.getBoolean("subtitle_advanced_grouping", false)
+
+                                    PlayerArgs.subtitleTracks = if (!useAdvanced) {
+                                        videos
+                                            .flatMap { v ->
+                                                val streamDomain = extractDomain(
+                                                    v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl
+                                                )
+                                                v.subtitleTracks.map { track ->
+                                                    Triple(track.lang, track.url, streamDomain)
+                                                }
+                                            }
+                                            .groupBy { (lang, _, _) -> lang }
+                                            .map { (lang, entries) ->
+                                                SubtitleTrack(
+                                                    name = lang,
+                                                    urls = entries
+                                                        .map { (_, url, domain) -> SubtitleTrack.SubtitleUrl(url = url, streamDomain = domain) }
+                                                        .distinctBy { it.url }
                                                 )
                                             }
-                                        }
-                                        .groupBy { (lang, _, _) -> lang }
-                                        .map { (lang, entries) ->
-                                            SubtitleTrack(
-                                                name = lang,
-                                                urls = entries
-                                                    .map { (_, url, domain) -> SubtitleTrack.SubtitleUrl(url = url, streamDomain = domain) }
-                                                    .distinctBy { it.url },
-                                            )
-                                        }
+                                    } else {
+                                        videos
+                                            .flatMap { v ->
+                                                val streamDomain = extractDomain(
+                                                    v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl
+                                                )
+                                                v.subtitleTracks.map { track ->
+                                                    Triple(track.lang, track.url, streamDomain)
+                                                }
+                                            }
+                                            .groupBy { (lang, url, _) ->
+                                                "$lang|${extractUrlPath(url)}"
+                                            }
+                                            .map { (key, entries) ->
+                                                val (lang, path) = key.split("|", limit = 2)
+                                                val slug = path.substringAfterLast('/')
+                                                    .substringBefore('?')
+                                                    .substringBeforeLast('.')
+                                                val displayName = if (slug.isNotBlank() && slug != lang) "$lang ($slug)" else lang
+                                                SubtitleTrack(
+                                                    name = displayName,
+                                                    urls = entries
+                                                        .map { (_, url, domain) -> SubtitleTrack.SubtitleUrl(url = url, streamDomain = domain) }
+                                                        .distinctBy { it.url }
+                                                )
+                                            }
+                                    }
 
                                     PlayerArgs.initialStreamIndex  = index
                                     PlayerArgs.episodes            = allEpisodes

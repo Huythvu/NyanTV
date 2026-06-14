@@ -50,6 +50,11 @@ fun extractDomain(url: String): String = runCatching {
     if (parts.size >= 2) parts.takeLast(2).joinToString(".") else host
 }.getOrDefault("")
 
+fun extractUrlPath(url: String): String = runCatching {
+    val path = java.net.URI(url).rawPath ?: java.net.URI(url).path
+    if (path.isNullOrBlank()) url else path
+}.getOrDefault(url)
+
 /**
  * Temporary argument holder for the player screen.
  *

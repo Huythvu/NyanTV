@@ -269,7 +269,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             currentStreamHeaders = track.headers
             loadUri(track.url, track.headers)
         }
-        initialSubIdx?.let { loadSubtitleByIndex(it) }
+
+        initialSubIdx?.let { loadSubtitleByIndex(it) } ?: run {
+            subtitleEngine.clear()
+            _currentCue.value = null
+        }
 
         episodes                 = snapshot.episodes
         currentEpisodeIndex      = snapshot.currentEpisodeIndex
