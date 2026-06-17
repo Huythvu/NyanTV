@@ -44,9 +44,7 @@ internal object ExtensionLoader {
     private const val XX_METADATA_HAS_CHANGELOG = ".hasChangelog"
 
     const val ANIME_LIB_VERSION_MIN = 12
-    const val ANIME_LIB_VERSION_MAX = 15
-    const val MANGA_LIB_VERSION_MIN = 1.2
-    const val MANGA_LIB_VERSION_MAX = 1.5
+    const val ANIME_LIB_VERSION_MAX = 16
     val PACKAGE_FLAGS = PackageManager.GET_CONFIGURATIONS or
             PackageManager.GET_META_DATA or
             @Suppress("DEPRECATION") PackageManager.GET_SIGNATURES or

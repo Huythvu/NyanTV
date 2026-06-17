@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.animesource.online
 
 import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
+import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.SAnime
@@ -146,7 +147,23 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getVideoList(episode: SEpisode): List<Video> {
-        return fetchVideoList(episode).awaitSingle()
+        return try {
+            getHosterList(episode).flatMap { hoster -> getVideoList(hoster) }
+        } catch (e: IllegalStateException) {
+            fetchVideoList(episode).awaitSingle()
+        }
+    }
+
+    private fun supportsHosterList(): Boolean {
+        return try {
+            this::class.java.getMethod(
+                "getHosterList",
+                SEpisode::class.java,
+                kotlin.coroutines.Continuation::class.java,
+            ).declaringClass != AnimeSource::class.java
+        } catch (e: NoSuchMethodException) {
+            false
+        }
     }
 
     @Deprecated("Use the non-RxJava API instead", replaceWith = ReplaceWith("getVideoList"))
