@@ -1,9 +1,13 @@
 package com.nyantv.ui.player
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Color as AndroidColor
 import android.util.Log
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.*
@@ -35,6 +39,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -77,6 +82,15 @@ private fun EpisodeSkipTimes.toDisplaySegments(): List<DisplaySegment> = buildLi
     add(ed,      "Ending",  segmentColorEnding)
     add(mixedEd, "Ending",  segmentColorEnding)
     add(recap,   "Recap",   segmentColorRecap)
+}
+
+private fun Context.findActivity(): Activity? {
+    var ctx = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }
 
 // ── Entry point ────────────────────────────────────────────────────────────────
@@ -224,6 +238,19 @@ fun PlayerScreen(
         if (state.isPlaying && pausedBySettings) {
             pausedBySettings = false
             showControls()
+        }
+    }
+
+    val view = LocalView.current
+    DisposableEffect(state.isPlaying) {
+        val activity = view.context.findActivity()
+        if (state.isPlaying) {
+            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 

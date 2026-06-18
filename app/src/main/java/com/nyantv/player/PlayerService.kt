@@ -21,6 +21,23 @@ import androidx.media3.common.C
 @UnstableApi
 class PlayerService : Service() {
 
+    // ── WakeLock ───────────────────────────────────────────────────────────
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(
+            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ON_AFTER_RELEASE,
+            "NyanTV:PlaybackWakeLock"
+        ).apply { setReferenceCounted(false) }
+        wakeLock?.acquire(6 * 60 * 60 * 1000L)
+    }
+
+    private fun releaseWakeLock() {
+        if (wakeLock?.isHeld == true) wakeLock?.release()
+    }
+
     companion object { private const val TAG = "NyanTV:PlayerService" }
 
     // ── Threads & handlers ─────────────────────────────────────────────────────
@@ -146,10 +163,18 @@ class PlayerService : Service() {
             }
         }
 
-        override fun play()  = post { if (usingMpv) mpv?.play()  else player.play() }
-        override fun pause() = post { if (usingMpv) mpv?.pause() else player.pause() }
+        override fun play() = post {
+            acquireWakeLock()
+            if (usingMpv) mpv?.play() else player.play()
+        }
+
+        override fun pause() = post {
+            releaseWakeLock()
+            if (usingMpv) mpv?.pause() else player.pause()
+        }
 
         override fun stop() = post {
+            releaseWakeLock()
             if (usingMpv) mpv?.stop()
             else { player.stop(); player.clearMediaItems() }
         }
@@ -244,6 +269,7 @@ class PlayerService : Service() {
 
         mpv?.release()
         mpv = null
+        releaseWakeLock()
 
         playerHandler.post {
             player.removeListener(playerListener)
