@@ -58,7 +58,10 @@ class PlayerService : Service() {
     private var positionTick: Runnable? = null
 
     // ── Helpers ────────────────────────────────────────────────────────────────
-    private fun isHls(uri: String) = uri.contains(".m3u8", ignoreCase = true)
+    @Volatile private var lastKnownPositionMs: Long = 0L
+    @Volatile private var lastKnownDurationMs: Long = 0L
+    @Volatile private var lastKnownBufferedMs: Long = 0L
+    @Volatile private var lastKnownIsPlaying: Boolean = false
 
     private fun ensureMpv() {
         if (mpv != null) return
@@ -66,11 +69,21 @@ class PlayerService : Service() {
             m.initialize()
             m.listener = object : MpvPlayerWrapper.Listener {
                 override fun onStateChanged(state: Int)                  = broadcast { it.onStateChanged(state) }
-                override fun onPositionChanged(posMs: Long, durMs: Long) = broadcast { it.onPositionChanged(posMs, durMs) }
-                override fun onBufferedChanged(bufferedMs: Long)          = broadcast { it.onBufferedChanged(bufferedMs) }
+                override fun onPositionChanged(posMs: Long, durMs: Long) {
+                    lastKnownPositionMs = posMs
+                    lastKnownDurationMs = durMs
+                    broadcast { it.onPositionChanged(posMs, durMs) }
+                }
+                override fun onBufferedChanged(bufferedMs: Long) {
+                    lastKnownBufferedMs = bufferedMs
+                    broadcast { it.onBufferedChanged(bufferedMs) }
+                }
                 override fun onVideoSizeChanged(w: Int, h: Int)          = broadcast { it.onVideoSizeChanged(w, h) }
                 override fun onError(message: String)                    = broadcast { it.onError(message) }
-                override fun onPlayWhenReadyChanged(play: Boolean)       = broadcast { it.onPlayWhenReadyChanged(play) }
+                override fun onPlayWhenReadyChanged(play: Boolean) {
+                    lastKnownIsPlaying = play
+                    broadcast { it.onPlayWhenReadyChanged(play) }
+                }
             }
         }
     }
@@ -84,7 +97,7 @@ class PlayerService : Service() {
 
         override fun load(uri: String, startPositionMs: Long) {
             post {
-                val toMpv = isHls(uri) && useMpv()
+                val toMpv = useMpv()
                 prepareEngine(toMpv)
 
                 if (toMpv) {
@@ -115,7 +128,7 @@ class PlayerService : Service() {
                     }
                 }.getOrDefault(emptyMap())
 
-                val toMpv = isHls(uri) && useMpv()
+                val toMpv = useMpv()
                 prepareEngine(toMpv)
 
                 if (toMpv) {
@@ -226,11 +239,11 @@ class PlayerService : Service() {
             }.getOrThrow()
         }
 
-        override fun getPosition()         = runOnPlayerThread { if (usingMpv) mpv?.getCurrentPosition() ?: 0L else player.currentPosition }
-        override fun getDuration()         = runOnPlayerThread { if (usingMpv) mpv?.getDuration()         ?: 0L else player.duration }
-        override fun getBufferedPosition() = runOnPlayerThread { if (usingMpv) mpv?.getBufferedPosition() ?: 0L else player.bufferedPosition }
+        override fun getPosition()         = if (usingMpv) lastKnownPositionMs else runOnPlayerThread { player.currentPosition }
+        override fun getDuration()         = if (usingMpv) lastKnownDurationMs else runOnPlayerThread { player.duration }
+        override fun getBufferedPosition() = if (usingMpv) lastKnownBufferedMs else runOnPlayerThread { player.bufferedPosition }
         override fun getState()            = runOnPlayerThread { if (usingMpv) 3                               else player.playbackState }
-        override fun getPlayWhenReady()    = runOnPlayerThread { if (usingMpv) mpv?.isPlaying() ?: false       else player.playWhenReady }
+        override fun getPlayWhenReady()    = if (usingMpv) lastKnownIsPlaying else runOnPlayerThread { player.playWhenReady }
     }
 
     // ── Lifecycle ──────────────────────────────────────────────────────────────

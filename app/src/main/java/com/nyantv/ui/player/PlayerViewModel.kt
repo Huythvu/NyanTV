@@ -553,7 +553,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Readiness gate ─────────────────────────────────────────────────────────
 
+    private var usingMpv = false
     private fun loadUri(uri: String, headers: Map<String, String> = emptyMap()) {
+        usingMpv = prefs.getString("player_engine", "exoplayer") == "libmpv"
         Log.d(TAG, "loadUri: $uri")
         pendingUri = uri
         pendingHeaders = headers
@@ -608,6 +610,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refreshPosition() {
+        if (usingMpv) return
+        if (_state.value.isPlaying) return
         val s = service ?: return
         runCatching {
             _state.update { it.copy(positionMs = s.position, durationMs = s.duration, bufferedMs = s.bufferedPosition) }
