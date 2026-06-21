@@ -171,14 +171,14 @@ fun PlayerTabScreen(
                             )
                         }
                     }
-                    state.searchState is SearchState.Error || state.searchState is SearchState.Idle -> {
+                    else -> {
                         Row(
                             modifier              = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment     = Alignment.CenterVertically,
                         ) {
                             Text(
-                                "No result found",
+                                (state.searchState as? SearchState.Error)?.message ?: "No result found",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -188,7 +188,6 @@ fun PlayerTabScreen(
                             ) { Text("Search") }
                         }
                     }
-                    else -> {}
                 }
             }
 
