@@ -15,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -186,6 +188,7 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
         val malTrending      by vm.malShowTrending.collectAsStateWithLifecycle()
         val malPopular       by vm.malShowPopular.collectAsStateWithLifecycle()
         val malSeasonal      by vm.malShowSeasonal.collectAsStateWithLifecycle()
+        val malOrder         by vm.malHomeOrder.collectAsStateWithLifecycle()
         val simklContMovies  by vm.simklShowContMovies.collectAsStateWithLifecycle()
         val simklPlanMovies  by vm.simklShowPlanMovies.collectAsStateWithLifecycle()
         val simklContSeries  by vm.simklShowContSeries.collectAsStateWithLifecycle()
@@ -207,15 +210,43 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
         SectionCard(
             title = "Manage MyAnimeList Homescreen",
             dialogContent = {
-                HomescreenToggleRow("Continue Watching", malContinue) { vm.setMalShowContinue(it) }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-                HomescreenToggleRow("Planned Anime", malPlanned) { vm.setMalShowPlanned(it) }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-                HomescreenToggleRow("Trending Now", malTrending) { vm.setMalShowTrending(it) }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-                HomescreenToggleRow("Popular Anime", malPopular) { vm.setMalShowPopular(it) }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-                HomescreenToggleRow("Seasonal Anime", malSeasonal) { vm.setMalShowSeasonal(it) }
+                // Rows are shown in the order they appear on the home screen; the arrows reorder them.
+                malOrder.forEachIndexed { index, key ->
+                    if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                    val label = when (key) {
+                        "continue" -> "Continue Watching"
+                        "planned"  -> "Planned Anime"
+                        "trending" -> "Trending Now"
+                        "popular"  -> "Popular Anime"
+                        "seasonal" -> "Seasonal Anime"
+                        else       -> key
+                    }
+                    val checked = when (key) {
+                        "continue" -> malContinue
+                        "planned"  -> malPlanned
+                        "trending" -> malTrending
+                        "popular"  -> malPopular
+                        "seasonal" -> malSeasonal
+                        else       -> true
+                    }
+                    HomescreenManageRow(
+                        label    = label,
+                        checked  = checked,
+                        onToggle = { v ->
+                            when (key) {
+                                "continue" -> vm.setMalShowContinue(v)
+                                "planned"  -> vm.setMalShowPlanned(v)
+                                "trending" -> vm.setMalShowTrending(v)
+                                "popular"  -> vm.setMalShowPopular(v)
+                                "seasonal" -> vm.setMalShowSeasonal(v)
+                            }
+                        },
+                        onUp     = { vm.moveMalSection(key, up = true) },
+                        onDown   = { vm.moveMalSection(key, up = false) },
+                        canUp    = index > 0,
+                        canDown  = index < malOrder.size - 1,
+                    )
+                }
             }
         ) {}
 
@@ -231,6 +262,58 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                 HomescreenToggleRow("Planned (Series)", simklPlanSeries) { vm.setSimklShowPlanSeries(it) }
             }
         ) {}
+    }
+}
+
+@Composable
+private fun HomescreenManageRow(
+    label:    String,
+    checked:  Boolean,
+    onToggle: (Boolean) -> Unit,
+    onUp:     () -> Unit,
+    onDown:   () -> Unit,
+    canUp:    Boolean,
+    canDown:  Boolean,
+) {
+    Row(
+        modifier              = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment     = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        ReorderArrow(Icons.Filled.KeyboardArrowUp,   "Move up",   onUp,   canUp)
+        ReorderArrow(Icons.Filled.KeyboardArrowDown, "Move down", onDown, canDown)
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+            Switch(
+                checked         = checked,
+                onCheckedChange = onToggle,
+                modifier        = Modifier.focusBorder(RoundedCornerShape(50))
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReorderArrow(icon: ImageVector, description: String, onClick: () -> Unit, enabled: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .focusBorder(CircleShape)
+            .then(
+                if (enabled) Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication        = null,
+                    onClick           = onClick,
+                ) else Modifier
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            icon,
+            contentDescription = description,
+            modifier           = Modifier.size(20.dp),
+            tint               = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.25f)
+        )
     }
 }
 

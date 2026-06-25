@@ -98,6 +98,7 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     val malTrending     by vm.malShowTrending.collectAsStateWithLifecycle()
     val malPopular      by vm.malShowPopular.collectAsStateWithLifecycle()
     val malSeasonal     by vm.malShowSeasonal.collectAsStateWithLifecycle()
+    val malOrder        by vm.malHomeOrder.collectAsStateWithLifecycle()
     val simklContMovies by vm.simklShowContMovies.collectAsStateWithLifecycle()
     val simklPlanMovies by vm.simklShowPlanMovies.collectAsStateWithLifecycle()
     val simklContSeries by vm.simklShowContSeries.collectAsStateWithLifecycle()
@@ -134,27 +135,32 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
         ServiceType.MAL -> {
             val watching = animeList.filter { it.watchingStatus == "CURRENT" }
             val planned  = animeList.filter { it.watchingStatus == "PLANNING" }
-            if (malContinue && watching.isNotEmpty()) {
-                SectionRow(title = "Continue Watching", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
-            }
-            if (malPlanned && planned.isNotEmpty()) {
-                SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
-            }
-            if (malTrending) SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
-            if (malPopular)  SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
-            if (malSeasonal) {
-                SectionRow(
-                    title       = "Seasonal Anime",
-                    items       = seasonal,
-                    onItemClick = { navigate(it.id) },
-                    header      = {
-                        SeasonSwitcherHeader(
-                            label  = seasonLabel.ifBlank { "Seasonal Anime" },
-                            onPrev = { vm.seasonShift(-1) },
-                            onNext = { vm.seasonShift(1) },
+            // Render rows in the user-configured order (Settings → Manage MyAnimeList Homescreen).
+            malOrder.forEach { key ->
+                when (key) {
+                    "continue" -> if (malContinue && watching.isNotEmpty()) {
+                        SectionRow(title = "Continue Watching", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
+                    }
+                    "planned"  -> if (malPlanned && planned.isNotEmpty()) {
+                        SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
+                    }
+                    "trending" -> if (malTrending) SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
+                    "popular"  -> if (malPopular)  SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
+                    "seasonal" -> if (malSeasonal) {
+                        SectionRow(
+                            title       = "Seasonal Anime",
+                            items       = seasonal,
+                            onItemClick = { navigate(it.id) },
+                            header      = {
+                                SeasonSwitcherHeader(
+                                    label  = seasonLabel.ifBlank { "Seasonal Anime" },
+                                    onPrev = { vm.seasonShift(-1) },
+                                    onNext = { vm.seasonShift(1) },
+                                )
+                            },
                         )
-                    },
-                )
+                    }
+                }
             }
         }
 

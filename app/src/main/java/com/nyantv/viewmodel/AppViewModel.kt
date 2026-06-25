@@ -304,6 +304,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setMalShowPopular(v: Boolean)      { _malShowPopular.value      = v; prefs.edit { putBoolean("mal_show_popular",      v) } }
     fun setMalShowSeasonal(v: Boolean)     { _malShowSeasonal.value     = v; prefs.edit { putBoolean("mal_show_seasonal",     v) } }
 
+    // Order of the MAL home rows, top to bottom. Saved keys are sanitised against the known set
+    // and any missing keys are appended, so adding new sections later stays forward-compatible.
+    private val defaultMalHomeOrder = listOf("continue", "planned", "trending", "popular", "seasonal")
+    private val _malHomeOrder = MutableStateFlow(
+        prefs.getString("mal_home_order", null)
+            ?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }
+            ?.let { saved -> saved.filter { it in defaultMalHomeOrder } + defaultMalHomeOrder.filter { it !in saved } }
+            ?.takeIf { it.isNotEmpty() }
+            ?: defaultMalHomeOrder
+    )
+    val malHomeOrder: StateFlow<List<String>> = _malHomeOrder.asStateFlow()
+
+    fun moveMalSection(key: String, up: Boolean) {
+        val list = _malHomeOrder.value.toMutableList()
+        val i = list.indexOf(key)
+        if (i < 0) return
+        val j = if (up) i - 1 else i + 1
+        if (j !in list.indices) return
+        val tmp = list[i]; list[i] = list[j]; list[j] = tmp
+        _malHomeOrder.value = list
+        prefs.edit { putString("mal_home_order", list.joinToString(",")) }
+    }
+
     // ── MAL title language ───────────────────────────────────────────────────────
     private val _malEnglishTitles = MutableStateFlow(prefs.getBoolean("mal_english_titles", false))
     val malEnglishTitles: StateFlow<Boolean> = _malEnglishTitles.asStateFlow()
