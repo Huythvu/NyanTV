@@ -23,9 +23,6 @@ class AniyomiExtensions(private val context: Context) {
     val installedExtensions: StateFlow<List<AnimeExtension.Installed>>
         get() = extensionManager.installedExtensionsFlow
 
-    val untrustedExtensions: StateFlow<List<AnimeExtension.Untrusted>>
-        get() = extensionManager.untrustedExtensionsFlow
-
     // Install via the PackageInstaller session API using the extension's download URL.
     // The session API works on Android TV, unlike the legacy ACTION_VIEW + package-archive
     // intent which depends on an installer activity that TV builds often don't ship.
@@ -83,7 +80,7 @@ class AniyomiExtensions(private val context: Context) {
                 Log.d(TAG, "Repo $indexUrl -> HTTP ${response.code}, body=${bodyText.length} chars")
                 if (!response.isSuccessful) {
                     Log.w(TAG, "Repo $indexUrl returned unsuccessful HTTP ${response.code}")
-                    return@runCatching emptyList<AnimeExtension.Available>()
+                    return@runCatching emptyList()
                 }
                 val entries = json.decodeFromString<List<ExtensionIndexEntry>>(bodyText)
                 Log.d(TAG, "Repo $indexUrl parsed ${entries.size} entries")
