@@ -128,6 +128,10 @@ class PlayerService : Service() {
                     }
                 }.getOrDefault(emptyMap())
 
+                Log.d("NyanExt", "Player load: uri=$uri | engine=${if (useMpv()) "mpv" else "exo"} | " +
+                    "headerKeys=${headers.keys} | hasReferer=${headers.keys.any { it.equals("Referer", true) }} | " +
+                    "hasUA=${headers.keys.any { it.equals("User-Agent", true) }}")
+
                 val toMpv = useMpv()
                 prepareEngine(toMpv)
 
@@ -312,8 +316,19 @@ class PlayerService : Service() {
 
         override fun onPlayerError(error: PlaybackException) {
             if (usingMpv) return
-            Log.e(TAG, "onPlayerError: ${error.errorCode} — ${error.localizedMessage}", error)
-            broadcast { it.onError(error.localizedMessage ?: "Playback error") }
+            // Unwrap the cause chain — the useful info (HTTP status, format problem) lives
+            // below the top-level "Source error".
+            val sb = StringBuilder()
+            var cause: Throwable? = error
+            while (cause != null) {
+                sb.append("\n    -> ${cause.javaClass.name}: ${cause.message}")
+                if (cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
+                    sb.append(" [HTTP ${cause.responseCode} for ${cause.dataSpec.uri}]")
+                }
+                cause = cause.cause
+            }
+            Log.e(TAG, "onPlayerError: code=${error.errorCodeName} (${error.errorCode})$sb", error)
+            broadcast { it.onError(error.errorCodeName) }
         }
 
         override fun onVideoSizeChanged(videoSize: VideoSize) {
