@@ -17,6 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -194,6 +196,12 @@ fun MainNavigation(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        // Render the whole detail overlay into a single opaque offscreen
+                        // layer. Without this, content from the browse screen underneath
+                        // bleeds/ghosts through the empty bands of the overlay on some TV
+                        // GPUs (a hardware-layer compositing artifact, not a layout bug).
+                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                        .background(MaterialTheme.colorScheme.background)
                         .focusGroup()
                         .then(
                             if (!showPlayer)
