@@ -67,9 +67,20 @@
     <init>(...);
 }
 
+# libmpv (JNI fallback player): native method names must survive obfuscation
+-keep class dev.jdtech.mpv.** { *; }
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+# RxJava 1 — used by some Aniyomi sources
+-keep class rx.** { *; }
+-dontwarn rx.**
+
 # Suppress Warnings that block compilation
 -dontwarn okhttp3.**
 -dontwarn okio.**
 -dontwarn javax.annotation.**
 -dontwarn kotlinx.serialization.**
 -dontwarn androidx.datastore.**
+-dontwarn dev.jdtech.mpv.**
