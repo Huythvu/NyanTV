@@ -15,7 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -29,7 +28,6 @@ import com.nyantv.viewmodel.AppViewModel
 
 @Composable
 fun AccountsScreen(vm: AppViewModel, navController: NavController) {
-    val context  = LocalContext.current
     val loggedIn by vm.isLoggedIn.collectAsStateWithLifecycle()
     val profile  by vm.profile.collectAsStateWithLifecycle()
     val service  by vm.serviceType.collectAsStateWithLifecycle()
@@ -76,7 +74,7 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                     Icon(Icons.Filled.Person, null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                     Text("Not logged in", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-                        Button(onClick = { vm.login(context) }, modifier = Modifier.focusBorder(CircleShape)) {
+                        Button(onClick = { vm.login() }, modifier = Modifier.focusBorder(CircleShape)) {
                             Text("Login")
                         }
                     }

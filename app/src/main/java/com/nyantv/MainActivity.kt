@@ -5,12 +5,16 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nyantv.ui.MainNavigation
+import com.nyantv.ui.auth.OAuthWebViewOverlay
 import com.nyantv.ui.theme.NyanTVTheme
 import com.nyantv.viewmodel.AppViewModel
 
@@ -28,12 +32,20 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val activeTheme by vm.activeTheme.collectAsStateWithLifecycle()
+            val authUrl by vm.authUrl.collectAsStateWithLifecycle()
             NyanTVTheme(activeTheme = activeTheme) {
-                MainNavigation(
-                    vm                  = vm,
-                    deepLink            = pendingWatchLink,
-                    onDeepLinkConsumed  = { pendingWatchLink = null },
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    MainNavigation(
+                        vm                  = vm,
+                        deepLink            = pendingWatchLink,
+                        onDeepLinkConsumed  = { pendingWatchLink = null },
+                    )
+                    OAuthWebViewOverlay(
+                        authUrl   = authUrl,
+                        onCode    = { code -> vm.handleAuthCallback(code); vm.onAuthHandled() },
+                        onDismiss = { vm.onAuthHandled() },
+                    )
+                }
             }
         }
     }

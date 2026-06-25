@@ -1,7 +1,6 @@
 package com.nyantv.data
 
 import android.content.Context
-import androidx.browser.customtabs.CustomTabsIntent
 import java.security.SecureRandom
 import android.util.Base64
 import com.nyantv.BuildConfig
@@ -14,7 +13,6 @@ import kotlinx.serialization.json.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
-import androidx.core.net.toUri
 import androidx.core.content.edit
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -55,7 +53,7 @@ class MalService(context: Context) : MediaService {
 
     // ── Auth ───────────────────────────────────────────────────────────────────
 
-    override suspend fun login(context: Context) {
+    override fun authUrl(): String {
         val clientId = BuildConfig.MAL_CLIENT_ID
 
         val bytes = ByteArray(96).also { SecureRandom().nextBytes(it) }
@@ -63,13 +61,11 @@ class MalService(context: Context) : MediaService {
 
         prefs.edit { putString("code_verifier", verifier) }
 
-        val url = "$MAL_AUTH/authorize" +
+        return "$MAL_AUTH/authorize" +
                 "?response_type=code" +
                 "&client_id=$clientId" +
                 "&code_challenge=$verifier" +
                 "&code_challenge_method=plain"
-
-        CustomTabsIntent.Builder().build().launchUrl(context, url.toUri())
     }
 
     suspend fun handleAuthCallback(code: String) = withContext(Dispatchers.IO) {

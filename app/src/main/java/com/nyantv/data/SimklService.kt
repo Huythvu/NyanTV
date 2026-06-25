@@ -1,7 +1,6 @@
 package com.nyantv.data
 
 import android.content.Context
-import androidx.browser.customtabs.CustomTabsIntent
 import com.nyantv.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -15,7 +14,6 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import androidx.core.content.edit
-import androidx.core.net.toUri
 import kotlinx.coroutines.launch
 
 private const val SIMKL_API  = "https://api.simkl.com"
@@ -56,11 +54,10 @@ class SimklService(context: Context) : MediaService {
 
     // ── Auth ───────────────────────────────────────────────────────────────────
 
-    override suspend fun login(context: Context) {
+    override fun authUrl(): String {
         val clientId = BuildConfig.SIMKL_CLIENT_ID
         val redirect = BuildConfig.REDIRECT_URI
-        val url = "https://simkl.com/oauth/authorize?response_type=code&client_id=$clientId&redirect_uri=$redirect"
-        CustomTabsIntent.Builder().build().launchUrl(context, url.toUri())
+        return "https://simkl.com/oauth/authorize?response_type=code&client_id=$clientId&redirect_uri=$redirect"
     }
 
     suspend fun handleAuthCallback(code: String) = withContext(Dispatchers.IO) {

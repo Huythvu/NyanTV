@@ -37,7 +37,9 @@ interface MediaService {
     suspend fun search(query: String): List<Media>
 
     // Auth
-    suspend fun login(context: Context)
+    /** Builds the OAuth authorize URL (and persists any PKCE verifier). Shown in an in-app
+     *  WebView so login works on devices without a browser / Custom Tabs (e.g. Android TV). */
+    fun authUrl(): String
     suspend fun logout()
     suspend fun autoLogin()
 

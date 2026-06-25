@@ -302,7 +302,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun fetchDetails(id: String): Media =
         runCatching { _service.fetchDetails(id) }.getOrElse { Media(id = id, title = "?") }
 
-    fun login(context: Context) = viewModelScope.launch { _service.login(context) }
+    // OAuth authorize URL to display in the in-app WebView (null = no login in progress).
+    private val _authUrl = MutableStateFlow<String?>(null)
+    val authUrl: StateFlow<String?> = _authUrl
+
+    fun login() { _authUrl.value = _service.authUrl() }
+
+    /** Called by the auth WebView once the login flow ends (success or cancel). */
+    fun onAuthHandled() { _authUrl.value = null }
 
     fun logout() = viewModelScope.launch { _service.logout() }
 

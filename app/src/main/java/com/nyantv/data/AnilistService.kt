@@ -1,7 +1,6 @@
 package com.nyantv.data
 
 import android.content.Context
-import androidx.browser.customtabs.CustomTabsIntent
 import com.nyantv.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,7 +12,6 @@ import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
-import androidx.core.net.toUri
 import androidx.core.content.edit
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -61,14 +59,12 @@ class AnilistService(context: Context) : MediaService {
 
     // ── Auth ───────────────────────────────────────────────────────────────────
 
-    override suspend fun login(context: Context) {
+    override fun authUrl(): String {
         val clientId = BuildConfig.ANILIST_CLIENT_ID
         val redirect = BuildConfig.REDIRECT_URI
-        val url = "https://anilist.co/api/v2/oauth/authorize" +
+        // Token arrives via the nyantv://callback redirect, caught by the in-app WebView.
+        return "https://anilist.co/api/v2/oauth/authorize" +
                   "?client_id=$clientId&redirect_uri=$redirect&response_type=code"
-        CustomTabsIntent.Builder().build()
-            .launchUrl(context, url.toUri())
-        // Token arrives via deep-link; call handleAuthCallback(code) from Activity
     }
 
     /** Call from MainActivity when deep-link nyantv://callback?code=... arrives */
