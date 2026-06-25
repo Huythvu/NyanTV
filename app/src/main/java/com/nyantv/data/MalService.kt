@@ -172,10 +172,9 @@ class MalService(context: Context) : MediaService {
         _trending.value = fetchList("$MAL_API/anime/ranking?ranking_type=airing&limit=15&$fields")
         _popular.value  = fetchList("$MAL_API/anime/ranking?ranking_type=bypopularity&limit=15&$fields")
         _upcoming.value = fetchList("$MAL_API/anime/ranking?ranking_type=upcoming&limit=15&$fields")
-        if (selSeasonName.isBlank()) {
-            val (y, s) = currentSeason()
-            selSeasonYear = y; selSeasonName = s
-        }
+        // Reset the Seasonal row to the current season on every home (re)load.
+        val (y, s) = currentSeason()
+        selSeasonYear = y; selSeasonName = s
         loadSeason()
     }
 
@@ -210,19 +209,33 @@ class MalService(context: Context) : MediaService {
         all.filter { it.season.equals(season, ignoreCase = true) && it.seasonYear == year }.take(20)
     }
 
-    /** Moves the selected season by [delta] (negative = older), clamped to the current season. */
+    /**
+     * Moves the selected season by [delta] (negative = older). Allows up to 4 seasons past the
+     * current one, but only actually advances into a future season if it has entries — so the
+     * user can't wander into empty, not-yet-scheduled seasons.
+     */
     suspend fun shiftSeason(delta: Int) {
         var idx  = seasonOrder.indexOf(selSeasonName).coerceAtLeast(0) + delta
         var year = selSeasonYear
         while (idx > 3) { idx -= 4; year += 1 }
         while (idx < 0) { idx += 4; year -= 1 }
+
+        // Compare seasons on an absolute chronological index (year*4 + seasonIndex).
         val (cy, cs) = currentSeason()
-        val cIdx = seasonOrder.indexOf(cs)
-        if (year > cy || (year == cy && idx > cIdx)) { year = cy; idx = cIdx }  // don't go past now
-        if (year < 1960) { year = 1960; idx = 0 }
+        val curAbs = cy * 4 + seasonOrder.indexOf(cs)
+        val target = (year * 4 + idx).coerceIn(1960 * 4, curAbs + 4)  // at most 4 seasons ahead
+        year = target / 4
+        idx  = target % 4
+        val season = seasonOrder[idx]
+
+        val list = fetchSeasonalFor(year, season)
+        // Don't advance into a future season that has no premieres yet; stay where we are.
+        if (target > curAbs && list.isEmpty()) return
+
         selSeasonYear = year
-        selSeasonName = seasonOrder[idx]
-        loadSeason()
+        selSeasonName = season
+        _seasonLabel.value = seasonLabelOf(year, season)
+        _seasonal.value = list
     }
 
     private suspend fun fetchList(url: String): List<Media> = withContext(Dispatchers.IO) {
