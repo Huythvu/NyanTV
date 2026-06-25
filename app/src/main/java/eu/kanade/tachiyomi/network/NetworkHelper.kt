@@ -45,8 +45,36 @@ class NetworkHelper(private val context: Context) {
     val cloudflareClient: OkHttpClient = client
 
     companion object {
-        fun defaultUserAgentProvider() =
-            "Mozilla/5.0 (Linux; Android 13; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36"
+        /**
+         * User-Agent derived from the device's actual WebView (set once at startup via
+         * [setDeviceUserAgent]). Using the real engine's UA keeps the UA consistent with the
+         * browser that solves Cloudflare challenges — claiming a newer Chrome than the
+         * installed WebView is itself a fingerprint mismatch that Cloudflare penalizes.
+         */
+        @Volatile
+        private var deviceUserAgent: String? = null
+
+        /**
+         * Fallback UA used until the real WebView UA is known (or if WebView is unavailable).
+         * A current mobile Chrome string.
+         */
+        private const val FALLBACK_USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36"
+
+        fun defaultUserAgentProvider(): String =
+            deviceUserAgent?.takeIf { it.isNotBlank() } ?: FALLBACK_USER_AGENT
+
+        /**
+         * Stores a sanitized copy of the device WebView's User-Agent. The raw WebView UA
+         * contains a "; wv" token and a "Version/x.x" token that flag it as a WebView; we
+         * strip those so it reads as a normal Chrome browser.
+         */
+        fun setDeviceUserAgent(rawWebViewUserAgent: String?) {
+            deviceUserAgent = rawWebViewUserAgent
+                ?.replace("; wv", "")
+                ?.replace(Regex("""Version/[\d.]+ """), "")
+                ?.takeIf { it.isNotBlank() }
+        }
 
         @Volatile
         private var instance: NetworkHelper? = null

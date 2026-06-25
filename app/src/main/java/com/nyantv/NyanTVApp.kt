@@ -24,6 +24,19 @@ class NyanTVApp : Application() {
     override fun onCreate() {
         super.onCreate()
         initializeApplicationContext(this)
+
+        // Derive the network User-Agent from the device's real WebView so it matches the
+        // engine that solves Cloudflare challenges. Falls back to a default if WebView is
+        // unavailable (e.g. some TV boxes).
+        try {
+            val webViewUa = android.webkit.WebSettings.getDefaultUserAgent(this)
+            NetworkHelper.setDeviceUserAgent(webViewUa)
+            android.util.Log.d("NyanExt", "Device WebView UA: $webViewUa")
+            android.util.Log.d("NyanExt", "Using network UA: ${NetworkHelper.defaultUserAgentProvider()}")
+        } catch (e: Throwable) {
+            android.util.Log.e("NyanExt", "Could not read WebView UA; using fallback", e)
+        }
+
         networkHelper = NetworkHelper(this)
         NetworkHelper.setInstance(networkHelper)
         extensionManager = AnimeExtensionManager(this)
