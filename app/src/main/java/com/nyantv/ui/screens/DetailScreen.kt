@@ -138,6 +138,17 @@ fun DetailScreen(
     val listState = rememberLazyListState()
     LaunchedEffect(id)       { listState.scrollToItem(0) }
     LaunchedEffect(showEdit) { if (!showEdit) listState.animateScrollToItem(0) }
+    // Returning from the player: bring the OUTER detail list back to the top so the tab row and
+    // player-tab targets are attached again (focusing an episode scrolls this list down and
+    // recycles them), then put focus on the Player tab so the D-pad always has a home. The inner
+    // PlayerTabScreen then refines focus onto the resume / Change card.
+    LaunchedEffect(playerReturnCount) {
+        if (playerReturnCount > 0) {
+            listState.scrollToItem(0)
+            delay(120)
+            runCatching { playerTabFocusReq.requestFocus() }
+        }
+    }
     LaunchedEffect(autoOpenPlayerTab) {
         if (!autoOpenPlayerTab) return@LaunchedEffect
         delay(800)
