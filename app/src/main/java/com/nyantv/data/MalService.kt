@@ -29,6 +29,9 @@ class MalService(context: Context) : MediaService {
     private val http  = OkHttpClient()
     private val json  = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     private val prefs = context.getSharedPreferences(MAL_PREFS, Context.MODE_PRIVATE)
+    // App-wide prefs, written by the settings UI; read here so fetched titles honour the choice.
+    private val appPrefs = context.getSharedPreferences("nyantv_prefs", Context.MODE_PRIVATE)
+    private fun preferEnglishTitles() = appPrefs.getBoolean("mal_english_titles", false)
 
     private var accessToken:  String? = prefs.getString("access_token",  null)
     private var refreshToken: String? = prefs.getString("refresh_token", null)
@@ -41,6 +44,7 @@ class MalService(context: Context) : MediaService {
     private val _popular         = MutableStateFlow<List<Media>>(emptyList())
     private val _upcoming        = MutableStateFlow<List<Media>>(emptyList())
     private val _recentlyUpdated = MutableStateFlow<List<Media>>(emptyList())
+    private val _seasonal        = MutableStateFlow<List<Media>>(emptyList())
 
     override val isLoggedIn:      StateFlow<Boolean>            = _isLoggedIn.asStateFlow()
     override val profile:         StateFlow<Profile?>           = _profile.asStateFlow()
@@ -50,6 +54,8 @@ class MalService(context: Context) : MediaService {
     override val popular:         StateFlow<List<Media>>        = _popular.asStateFlow()
     override val upcoming:        StateFlow<List<Media>>        = _upcoming.asStateFlow()
     override val recentlyUpdated: StateFlow<List<Media>>        = _recentlyUpdated.asStateFlow()
+    /** MAL-specific extra row: current-season anime. */
+    val seasonal:                 StateFlow<List<Media>>        = _seasonal.asStateFlow()
 
     // ── Auth ───────────────────────────────────────────────────────────────────
 
@@ -157,50 +163,72 @@ class MalService(context: Context) : MediaService {
     // ── Homepage ───────────────────────────────────────────────────────────────
 
     override suspend fun fetchHomePage() = withContext(Dispatchers.IO) {
-        val fields = "fields=mean,status,media_type,num_episodes,main_picture,start_season"
+        val fields = "fields=mean,status,media_type,num_episodes,main_picture,start_season,alternative_titles"
         _trending.value = fetchList("$MAL_API/anime/ranking?ranking_type=airing&limit=15&$fields")
         _popular.value  = fetchList("$MAL_API/anime/ranking?ranking_type=bypopularity&limit=15&$fields")
         _upcoming.value = fetchList("$MAL_API/anime/ranking?ranking_type=upcoming&limit=15&$fields")
+        _seasonal.value = fetchSeasonal(fields)
+    }
+
+    /** Current anime season as (year, "winter"|"spring"|"summer"|"fall"). */
+    private fun currentSeason(): Pair<Int, String> {
+        val cal = java.util.Calendar.getInstance()
+        val season = when (cal.get(java.util.Calendar.MONTH)) {  // Calendar.MONTH is 0-based
+            in 0..2 -> "winter"
+            in 3..5 -> "spring"
+            in 6..8 -> "summer"
+            else    -> "fall"
+        }
+        return cal.get(java.util.Calendar.YEAR) to season
+    }
+
+    private suspend fun fetchSeasonal(fields: String): List<Media> {
+        val (year, season) = currentSeason()
+        return fetchList("$MAL_API/anime/season/$year/$season?sort=anime_num_list_users&limit=15&$fields")
     }
 
     private suspend fun fetchList(url: String): List<Media> = withContext(Dispatchers.IO) {
         val data = get(url) ?: return@withContext emptyList()
-        data["data"]?.jsonArray?.map { it.jsonObject["node"]!!.jsonObject.toMalMedia() } ?: emptyList()
+        val english = preferEnglishTitles()
+        data["data"]?.jsonArray?.map { it.jsonObject["node"]!!.jsonObject.toMalMedia(english) } ?: emptyList()
     }
 
     // ── Details ────────────────────────────────────────────────────────────────
 
     override suspend fun fetchDetails(id: String): Media = withContext(Dispatchers.IO) {
-        val fields = "fields=mean,status,media_type,synopsis,genres,num_episodes,start_date,rank,popularity,main_picture,recommendations"
+        val fields = "fields=mean,status,media_type,synopsis,genres,num_episodes,start_date,rank,popularity,main_picture,recommendations,alternative_titles"
         runCatching {
             val data = get("$MAL_API/anime/$id?$fields") ?: return@withContext Media(id = id, title = "?")
+            val english = preferEnglishTitles()
             val recommendations = data["recommendations"]?.jsonArray?.mapNotNull { rec ->
                 val node = rec.jsonObject["node"]?.jsonObject ?: return@mapNotNull null
-                node.toMalMedia()
+                node.toMalMedia(english)
             } ?: emptyList()
-            data.toMalMedia().copy(recommendations = recommendations)
+            data.toMalMedia(english).copy(recommendations = recommendations)
         }.getOrElse { Media(id = id, title = "?") }
     }
 
     // ── Search ─────────────────────────────────────────────────────────────────
 
     override suspend fun search(query: String): List<Media> = withContext(Dispatchers.IO) {
-        val fields = "fields=mean,status,num_episodes,main_picture"
+        val fields = "fields=mean,status,num_episodes,main_picture,alternative_titles"
         val data = get("$MAL_API/anime?q=$query&limit=30&$fields") ?: return@withContext emptyList()
-        data["data"]?.jsonArray?.map { it.jsonObject["node"]!!.jsonObject.toMalMedia() } ?: emptyList()
+        val english = preferEnglishTitles()
+        data["data"]?.jsonArray?.map { it.jsonObject["node"]!!.jsonObject.toMalMedia(english) } ?: emptyList()
     }
 
     // ── User list ──────────────────────────────────────────────────────────────
 
     override suspend fun refreshUserLists() = withContext(Dispatchers.IO) {
-        val fields = "fields=num_episodes,mean,list_status"
+        val fields = "fields=num_episodes,mean,list_status,alternative_titles"
         val data = get("$MAL_API/users/@me/animelist?$fields&limit=1000&sort=list_updated_at") ?: return@withContext
+        val english = preferEnglishTitles()
         _animeList.value = data["data"]?.jsonArray?.map { entry ->
             val node   = entry.jsonObject["node"]!!.jsonObject
             val status = entry.jsonObject["list_status"]!!.jsonObject
             TrackedMedia(
                 id             = node["id"]?.jsonPrimitive?.contentOrNull ?: "",
-                title          = node["title"]?.jsonPrimitive?.contentOrNull ?: "?",
+                title          = node.pickTitle(english),
                 poster         = node["main_picture"]?.jsonObject?.get("large")?.jsonPrimitive?.contentOrNull,
                 watchingStatus = malStatusToAL(status["status"]?.jsonPrimitive?.contentOrNull),
                 episodeCount   = status["num_episodes_watched"]?.jsonPrimitive?.intOrNull,
@@ -310,13 +338,21 @@ class MalService(context: Context) : MediaService {
 
 // ── MAL JSON → Media ───────────────────────────────────────────────────────────
 
-private fun JsonObject.toMalMedia(): Media {
+/** Picks the English alternative title when [preferEnglish] and one is present, else the default. */
+private fun JsonObject.pickTitle(preferEnglish: Boolean): String {
+    val main = this["title"]?.jsonPrimitive?.contentOrNull ?: "?"
+    if (!preferEnglish) return main
+    val en = this["alternative_titles"]?.jsonObject?.get("en")?.jsonPrimitive?.contentOrNull
+    return en?.takeIf { it.isNotBlank() } ?: main
+}
+
+private fun JsonObject.toMalMedia(preferEnglish: Boolean = false): Media {
     val pic = this["main_picture"]?.jsonObject
     val malId = this["id"]?.jsonPrimitive?.contentOrNull.orEmpty()
     val startSeason = this["start_season"]?.jsonObject
     return Media(
         id           = malId,
-        title        = this["title"]?.jsonPrimitive?.contentOrNull ?: "?",
+        title        = pickTitle(preferEnglish),
         poster       = pic?.get("large")?.jsonPrimitive?.contentOrNull,
         description  = this["synopsis"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.contentOrNull,
         averageScore = this["mean"]?.jsonPrimitive?.floatOrNull?.times(10)?.toInt(),

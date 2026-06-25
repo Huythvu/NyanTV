@@ -19,10 +19,17 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     val trendingMovies  by vm.trendingMovies.collectAsStateWithLifecycle()
     val trendingShows   by vm.trendingShows.collectAsStateWithLifecycle()
 
+    val seasonal        by vm.seasonal.collectAsStateWithLifecycle()
+
     val anilistContinue by vm.anilistShowContinue.collectAsStateWithLifecycle()
     val anilistPlanned  by vm.anilistShowPlanned.collectAsStateWithLifecycle()
+    val anilistTrending by vm.anilistShowTrending.collectAsStateWithLifecycle()
+    val anilistPopular  by vm.anilistShowPopular.collectAsStateWithLifecycle()
     val malContinue     by vm.malShowContinue.collectAsStateWithLifecycle()
     val malPlanned      by vm.malShowPlanned.collectAsStateWithLifecycle()
+    val malTrending     by vm.malShowTrending.collectAsStateWithLifecycle()
+    val malPopular      by vm.malShowPopular.collectAsStateWithLifecycle()
+    val malSeasonal     by vm.malShowSeasonal.collectAsStateWithLifecycle()
     val simklContMovies by vm.simklShowContMovies.collectAsStateWithLifecycle()
     val simklPlanMovies by vm.simklShowPlanMovies.collectAsStateWithLifecycle()
     val simklContSeries by vm.simklShowContSeries.collectAsStateWithLifecycle()
@@ -52,8 +59,8 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
             if (anilistPlanned && planned.isNotEmpty()) {
                 SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
             }
-            SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
-            SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
+            if (anilistTrending) SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
+            if (anilistPopular)  SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
         }
 
         ServiceType.MAL -> {
@@ -65,8 +72,11 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
             if (malPlanned && planned.isNotEmpty()) {
                 SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
             }
-            SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
-            SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
+            if (malTrending) SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
+            if (malPopular)  SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
+            if (malSeasonal && seasonal.isNotEmpty()) {
+                SectionRow(title = "Seasonal Anime", items = seasonal, onItemClick = { navigate(it.id) })
+            }
         }
 
         ServiceType.SIMKL -> {

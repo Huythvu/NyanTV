@@ -153,11 +153,39 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
             }
         }
 
+        // ── MyAnimeList Titles ──────────────────────────────────────────────────────────
+        val malEnglishTitles by vm.malEnglishTitles.collectAsStateWithLifecycle()
+
+        SectionCard(title = "MyAnimeList Titles") {
+            Row(
+                modifier              = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("English titles", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    Text("Show English titles instead of Romaji where available", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                    Switch(
+                        checked = malEnglishTitles,
+                        onCheckedChange = { vm.setMalEnglishTitles(it) },
+                        modifier = Modifier.focusBorder(RoundedCornerShape(50))
+                    )
+                }
+            }
+        }
+
         // ── Manage Homescreen Lists ────────────────────────────────────────────────────
         val anilistContinue  by vm.anilistShowContinue.collectAsStateWithLifecycle()
         val anilistPlanned   by vm.anilistShowPlanned.collectAsStateWithLifecycle()
+        val anilistTrending  by vm.anilistShowTrending.collectAsStateWithLifecycle()
+        val anilistPopular   by vm.anilistShowPopular.collectAsStateWithLifecycle()
         val malContinue      by vm.malShowContinue.collectAsStateWithLifecycle()
         val malPlanned       by vm.malShowPlanned.collectAsStateWithLifecycle()
+        val malTrending      by vm.malShowTrending.collectAsStateWithLifecycle()
+        val malPopular       by vm.malShowPopular.collectAsStateWithLifecycle()
+        val malSeasonal      by vm.malShowSeasonal.collectAsStateWithLifecycle()
         val simklContMovies  by vm.simklShowContMovies.collectAsStateWithLifecycle()
         val simklPlanMovies  by vm.simklShowPlanMovies.collectAsStateWithLifecycle()
         val simklContSeries  by vm.simklShowContSeries.collectAsStateWithLifecycle()
@@ -169,6 +197,10 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                 HomescreenToggleRow("Continue Watching", anilistContinue) { vm.setAnilistShowContinue(it) }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
                 HomescreenToggleRow("Planned Anime", anilistPlanned) { vm.setAnilistShowPlanned(it) }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                HomescreenToggleRow("Trending Now", anilistTrending) { vm.setAnilistShowTrending(it) }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                HomescreenToggleRow("Popular Anime", anilistPopular) { vm.setAnilistShowPopular(it) }
             }
         ) {}
 
@@ -178,6 +210,12 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                 HomescreenToggleRow("Continue Watching", malContinue) { vm.setMalShowContinue(it) }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
                 HomescreenToggleRow("Planned Anime", malPlanned) { vm.setMalShowPlanned(it) }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                HomescreenToggleRow("Trending Now", malTrending) { vm.setMalShowTrending(it) }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                HomescreenToggleRow("Popular Anime", malPopular) { vm.setMalShowPopular(it) }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                HomescreenToggleRow("Seasonal Anime", malSeasonal) { vm.setMalShowSeasonal(it) }
             }
         ) {}
 

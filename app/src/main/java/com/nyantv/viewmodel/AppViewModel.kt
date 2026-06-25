@@ -116,6 +116,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _trendingMovies = MutableStateFlow<List<Media>>(emptyList())
     private val _trendingShows  = MutableStateFlow<List<Media>>(emptyList())
+    private val _seasonal       = MutableStateFlow<List<Media>>(emptyList())
 
     private val _carouselLogos     = MutableStateFlow<Map<String, String?>>(emptyMap())
     private val _carouselBackdrops = MutableStateFlow<Map<String, String?>>(emptyMap())
@@ -134,6 +135,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val networkState:    StateFlow<NetworkState>       = _networkState.asStateFlow()
     val trendingMovies: StateFlow<List<Media>> = _trendingMovies.asStateFlow()
     val trendingShows:  StateFlow<List<Media>> = _trendingShows.asStateFlow()
+    val seasonal:       StateFlow<List<Media>> = _seasonal.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -170,6 +172,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _recentlyUpdated.value   = emptyList()
         _trendingMovies.value    = emptyList()
         _trendingShows.value     = emptyList()
+        _seasonal.value          = emptyList()
 
         _service     = buildService(type, getApplication())
         sideService  = buildSideService(type, getApplication())
@@ -213,6 +216,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             _trendingMovies.value = emptyList()
             _trendingShows.value  = emptyList()
+        }
+        val mal = _service as? MalService
+        if (mal != null) {
+            serviceJobs += viewModelScope.launch { mal.seasonal.collect { _seasonal.value = it } }
+        } else {
+            _seasonal.value = emptyList()
         }
     }
 
@@ -265,6 +274,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setSimklShowPlanMovies(v: Boolean) { _simklShowPlanMovies.value = v; prefs.edit { putBoolean("simkl_plan_movies",     v) } }
     fun setSimklShowContSeries(v: Boolean) { _simklShowContSeries.value = v; prefs.edit { putBoolean("simkl_cont_series",     v) } }
     fun setSimklShowPlanSeries(v: Boolean) { _simklShowPlanSeries.value = v; prefs.edit { putBoolean("simkl_plan_series",     v) } }
+
+    // Discovery rows (Trending / Popular / Seasonal). Default on to preserve existing behaviour.
+    private val _anilistShowTrending = MutableStateFlow(prefs.getBoolean("anilist_show_trending", true))
+    private val _anilistShowPopular  = MutableStateFlow(prefs.getBoolean("anilist_show_popular",  true))
+    private val _malShowTrending     = MutableStateFlow(prefs.getBoolean("mal_show_trending",     true))
+    private val _malShowPopular      = MutableStateFlow(prefs.getBoolean("mal_show_popular",      true))
+    private val _malShowSeasonal     = MutableStateFlow(prefs.getBoolean("mal_show_seasonal",     true))
+
+    val anilistShowTrending: StateFlow<Boolean> = _anilistShowTrending.asStateFlow()
+    val anilistShowPopular:  StateFlow<Boolean> = _anilistShowPopular.asStateFlow()
+    val malShowTrending:     StateFlow<Boolean> = _malShowTrending.asStateFlow()
+    val malShowPopular:      StateFlow<Boolean> = _malShowPopular.asStateFlow()
+    val malShowSeasonal:     StateFlow<Boolean> = _malShowSeasonal.asStateFlow()
+
+    fun setAnilistShowTrending(v: Boolean) { _anilistShowTrending.value = v; prefs.edit { putBoolean("anilist_show_trending", v) } }
+    fun setAnilistShowPopular(v: Boolean)  { _anilistShowPopular.value  = v; prefs.edit { putBoolean("anilist_show_popular",  v) } }
+    fun setMalShowTrending(v: Boolean)     { _malShowTrending.value     = v; prefs.edit { putBoolean("mal_show_trending",     v) } }
+    fun setMalShowPopular(v: Boolean)      { _malShowPopular.value      = v; prefs.edit { putBoolean("mal_show_popular",      v) } }
+    fun setMalShowSeasonal(v: Boolean)     { _malShowSeasonal.value     = v; prefs.edit { putBoolean("mal_show_seasonal",     v) } }
+
+    // ── MAL title language ───────────────────────────────────────────────────────
+    private val _malEnglishTitles = MutableStateFlow(prefs.getBoolean("mal_english_titles", false))
+    val malEnglishTitles: StateFlow<Boolean> = _malEnglishTitles.asStateFlow()
+
+    fun setMalEnglishTitles(v: Boolean) {
+        _malEnglishTitles.value = v
+        prefs.edit { putBoolean("mal_english_titles", v) }
+        // Titles are baked into Media at fetch time, so re-fetch home rows and the user's lists.
+        loadHome()
+        viewModelScope.launch { runCatching { _service.refreshUserLists() } }
+    }
 
     // ── Actions ────────────────────────────────────────────────────────────────
 
