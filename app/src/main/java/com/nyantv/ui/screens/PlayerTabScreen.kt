@@ -106,8 +106,14 @@ fun PlayerTabScreen(
     LaunchedEffect(playerReturnCount) {
         if (playerReturnCount > 0) {
             vm.refreshWatchProgress()
+            // The list was scrolled down to the episode we just played, so the resume card (and
+            // tab row) may be off-screen/recycled — leaving focus on nothing. Snap back to the top
+            // so the targets are attached, then focus the resume card, falling back to the Change
+            // button (always present once episodes load) so D-pad control is never lost.
+            listState.scrollToItem(0)
             delay(150)
-            runCatching { resumeCardFocusReq.requestFocus() }
+            val focused = runCatching { resumeCardFocusReq.requestFocus() }.isSuccess
+            if (!focused) runCatching { changeFocusReq.requestFocus() }
         }
     }
     LaunchedEffect(Unit) { vm.refreshWatchProgress() }
