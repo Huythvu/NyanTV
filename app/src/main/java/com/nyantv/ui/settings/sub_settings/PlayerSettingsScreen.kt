@@ -39,9 +39,10 @@ fun PlayerSettingsScreen(navController: NavController) {
     var bigSkipSec by remember { mutableIntStateOf(prefs.getInt("big_skip_sec", 75)) }
     var watchedThreshold by remember { mutableIntStateOf(prefs.getInt("watched_threshold", 80)) }
     var advancedGrouping by remember { mutableStateOf(prefs.getBoolean("subtitle_advanced_grouping", false)) }
+    var autoSelectServer by remember { mutableStateOf(prefs.getBoolean("auto_select_server", false)) }
 
     // Auto-save whenever any value changes
-    LaunchedEffect(qualityMode, subEnabled, fontSize, bold, translateTo, bigSkipSec, watchedThreshold, playerEngine, advancedGrouping) {
+    LaunchedEffect(qualityMode, subEnabled, fontSize, bold, translateTo, bigSkipSec, watchedThreshold, playerEngine, advancedGrouping, autoSelectServer) {
         prefs.edit {
             putString("quality_mode",      qualityMode)
             putBoolean("sub_enabled",      subEnabled)
@@ -52,6 +53,7 @@ fun PlayerSettingsScreen(navController: NavController) {
             putInt("watched_threshold",    watchedThreshold)
             putString("player_engine", playerEngine)
             putBoolean("subtitle_advanced_grouping", advancedGrouping)
+            putBoolean("auto_select_server", autoSelectServer)
         }
     }
 
@@ -175,6 +177,15 @@ fun PlayerSettingsScreen(navController: NavController) {
                     }
                 }
             }
+        }
+
+        SectionCard(title = "Playback") {
+            SettingsToggleRow(
+                label    = "Auto-select server",
+                subtitle = "Skip the stream picker and play the first 1080p stream (or the first available)",
+                checked  = autoSelectServer,
+                onToggle = { autoSelectServer = it }
+            )
         }
 
         SectionCard(title = "Auto-Tracking") {

@@ -64,6 +64,10 @@ fun PlayerTabScreen(
     modifier:            Modifier           = Modifier,
 ) {
     val context = LocalContext.current
+    val autoSelectServer = remember {
+        context.getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE)
+            .getBoolean("auto_select_server", false)
+    }
     val state            by vm.state.collectAsStateWithLifecycle()
     val fillerEpisodes   by vm.fillerEpisodes.collectAsStateWithLifecycle()
     val resumeProgress   by vm.resumeProgress.collectAsStateWithLifecycle()
@@ -337,108 +341,122 @@ fun PlayerTabScreen(
         // ── Stream dialog ─────────────────────────────────────────────────
         if (state.streamState is StreamState.Ready) {
             val videos = (state.streamState as StreamState.Ready).videos
-            AlertDialog(
-                onDismissRequest = { vm.clearStreams() },
-                title = { Text(state.selectedEpisode?.name ?: "Choose stream") },
-                text = {
-                    Column {
-                        videos.forEachIndexed { index, video ->
-                            TextButton(
-                                onClick = {
-                                    val allEpisodes = (state.episodeState as? EpisodeState.Success)?.episodes ?: emptyList()
-                                    PlayerArgs.streams = videos.map { v ->
-                                        StreamTrack(
-                                            name    = v.quality.ifBlank { "Stream" },
-                                            url     = v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl,
-                                            headers = v.headers?.toMultimap()
-                                                ?.mapValues { it.value.firstOrNull() ?: "" }
-                                                ?: emptyMap(),
-                                        )
-                                    }
-                                    PlayerArgs.skipTimes          = state.skipTimes
-                                    val prefs = context.getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE)
-                                    val useAdvanced = prefs.getBoolean("subtitle_advanced_grouping", false)
 
-                                    PlayerArgs.subtitleTracks = if (!useAdvanced) {
-                                        videos
-                                            .flatMap { v ->
-                                                val streamDomain = extractDomain(
-                                                    v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl
-                                                )
-                                                v.subtitleTracks.map { track ->
-                                                    Triple(track.lang, track.url, streamDomain)
-                                                }
-                                            }
-                                            .groupBy { (lang, _, _) -> lang }
-                                            .map { (lang, entries) ->
-                                                SubtitleTrack(
-                                                    name = lang,
-                                                    urls = entries
-                                                        .map { (_, url, domain) -> SubtitleTrack.SubtitleUrl(url = url, streamDomain = domain) }
-                                                        .distinctBy { it.url }
-                                                )
-                                            }
-                                    } else {
-                                        videos
-                                            .flatMap { v ->
-                                                val streamDomain = extractDomain(
-                                                    v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl
-                                                )
-                                                v.subtitleTracks.map { track ->
-                                                    Triple(track.lang, track.url, streamDomain)
-                                                }
-                                            }
-                                            .groupBy { (lang, url, _) ->
-                                                "$lang|${extractUrlPath(url)}"
-                                            }
-                                            .map { (key, entries) ->
-                                                val (lang, path) = key.split("|", limit = 2)
-                                                val slug = path.substringAfterLast('/')
-                                                    .substringBefore('?')
-                                                    .substringBeforeLast('.')
-                                                val displayName = if (slug.isNotBlank() && slug != lang) "$lang ($slug)" else lang
-                                                SubtitleTrack(
-                                                    name = displayName,
-                                                    urls = entries
-                                                        .map { (_, url, domain) -> SubtitleTrack.SubtitleUrl(url = url, streamDomain = domain) }
-                                                        .distinctBy { it.url }
-                                                )
-                                            }
-                                    }
+            // Builds the player args for the chosen stream and launches the player.
+            // Shared by the manual picker dialog and the auto-select-server path.
+            fun launchStream(index: Int) {
+                val allEpisodes = (state.episodeState as? EpisodeState.Success)?.episodes ?: emptyList()
+                PlayerArgs.streams = videos.map { v ->
+                    StreamTrack(
+                        name    = v.quality.ifBlank { "Stream" },
+                        url     = v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl,
+                        headers = v.headers?.toMultimap()
+                            ?.mapValues { it.value.firstOrNull() ?: "" }
+                            ?: emptyMap(),
+                    )
+                }
+                PlayerArgs.skipTimes          = state.skipTimes
+                val prefs = context.getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE)
+                val useAdvanced = prefs.getBoolean("subtitle_advanced_grouping", false)
 
-                                    PlayerArgs.initialStreamIndex  = index
-                                    PlayerArgs.episodes            = allEpisodes
-                                    PlayerArgs.currentEpisodeIndex = allEpisodes.indexOfFirst { it == state.selectedEpisode }
-                                    PlayerArgs.onLoadEpisodeVideos = { episode -> vm.getVideosForEpisode(episode) }
-                                    PlayerArgs.fillerEpisodes      = fillerEpisodes
-                                    PlayerArgs.mediaId             = vm.mediaId
-                                    PlayerArgs.serviceKey          = vm.serviceKey
-                                    PlayerArgs.anilistId           = vm.anilistId
-                                    PlayerArgs.malId               = vm.currentMalId
-                                    PlayerArgs.resumePositionMs    = vm.episodeProgressFor(
-                                        state.selectedEpisode?.episode_number ?: 0f
-                                    )
-                                        ?.takeIf { it.positionMs > 0L && it.positionMs < it.durationMs - 10_000L }
-                                        ?.positionMs
-                                        ?: 0L
-                                    PlayerArgs.episodeMeta         = state.episodeMeta
-                                    PlayerArgs.title               = state.selectedEpisode?.displayName(state.episodeMeta) ?: ""
-                                    PlayerArgs.seriesTitle         = vm.mediaTitle
-                                    PlayerArgs.mediaCoverUrl  = state.episodeMeta
-                                        .resolveEpisodeMeta(state.selectedEpisode?.episode_number ?: 0f)
-                                        ?.image?.takeIf { it.isNotBlank() } ?: ""
-                                    PlayerArgs.mediaBannerUrl = vm.mediaBannerUrl
-                                    PlayerArgs.mediaPosterUrl = vm.mediaPosterUrl
-                                    vm.clearStreams()
-                                    onEpisodeSelected()
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) { Text(video.quality.ifBlank { "Stream ${index + 1}" }) }
+                PlayerArgs.subtitleTracks = if (!useAdvanced) {
+                    videos
+                        .flatMap { v ->
+                            val streamDomain = extractDomain(
+                                v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl
+                            )
+                            v.subtitleTracks.map { track ->
+                                Triple(track.lang, track.url, streamDomain)
+                            }
                         }
-                    }
-                },
-                confirmButton = {},
-            )
+                        .groupBy { (lang, _, _) -> lang }
+                        .map { (lang, entries) ->
+                            SubtitleTrack(
+                                name = lang,
+                                urls = entries
+                                    .map { (_, url, domain) -> SubtitleTrack.SubtitleUrl(url = url, streamDomain = domain) }
+                                    .distinctBy { it.url }
+                            )
+                        }
+                } else {
+                    videos
+                        .flatMap { v ->
+                            val streamDomain = extractDomain(
+                                v.videoUrl.takeIf { it.isNotBlank() && it != "null" } ?: v.videoPageUrl
+                            )
+                            v.subtitleTracks.map { track ->
+                                Triple(track.lang, track.url, streamDomain)
+                            }
+                        }
+                        .groupBy { (lang, url, _) ->
+                            "$lang|${extractUrlPath(url)}"
+                        }
+                        .map { (key, entries) ->
+                            val (lang, path) = key.split("|", limit = 2)
+                            val slug = path.substringAfterLast('/')
+                                .substringBefore('?')
+                                .substringBeforeLast('.')
+                            val displayName = if (slug.isNotBlank() && slug != lang) "$lang ($slug)" else lang
+                            SubtitleTrack(
+                                name = displayName,
+                                urls = entries
+                                    .map { (_, url, domain) -> SubtitleTrack.SubtitleUrl(url = url, streamDomain = domain) }
+                                    .distinctBy { it.url }
+                            )
+                        }
+                }
+
+                PlayerArgs.initialStreamIndex  = index
+                PlayerArgs.episodes            = allEpisodes
+                PlayerArgs.currentEpisodeIndex = allEpisodes.indexOfFirst { it == state.selectedEpisode }
+                PlayerArgs.onLoadEpisodeVideos = { episode -> vm.getVideosForEpisode(episode) }
+                PlayerArgs.fillerEpisodes      = fillerEpisodes
+                PlayerArgs.mediaId             = vm.mediaId
+                PlayerArgs.serviceKey          = vm.serviceKey
+                PlayerArgs.anilistId           = vm.anilistId
+                PlayerArgs.malId               = vm.currentMalId
+                PlayerArgs.resumePositionMs    = vm.episodeProgressFor(
+                    state.selectedEpisode?.episode_number ?: 0f
+                )
+                    ?.takeIf { it.positionMs > 0L && it.positionMs < it.durationMs - 10_000L }
+                    ?.positionMs
+                    ?: 0L
+                PlayerArgs.episodeMeta         = state.episodeMeta
+                PlayerArgs.title               = state.selectedEpisode?.displayName(state.episodeMeta) ?: ""
+                PlayerArgs.seriesTitle         = vm.mediaTitle
+                PlayerArgs.mediaCoverUrl  = state.episodeMeta
+                    .resolveEpisodeMeta(state.selectedEpisode?.episode_number ?: 0f)
+                    ?.image?.takeIf { it.isNotBlank() } ?: ""
+                PlayerArgs.mediaBannerUrl = vm.mediaBannerUrl
+                PlayerArgs.mediaPosterUrl = vm.mediaPosterUrl
+                vm.clearStreams()
+                onEpisodeSelected()
+            }
+
+            if (autoSelectServer) {
+                // Skip the picker: prefer the first 1080p stream, else the first stream.
+                LaunchedEffect(videos) {
+                    val idx = videos.indexOfFirst { it.quality.contains("1080", ignoreCase = true) }
+                        .takeIf { it >= 0 } ?: 0
+                    launchStream(idx)
+                }
+            } else {
+                AlertDialog(
+                    onDismissRequest = { vm.clearStreams() },
+                    title = { Text(state.selectedEpisode?.name ?: "Choose stream") },
+                    text = {
+                        Column {
+                            videos.forEachIndexed { index, video ->
+                                TextButton(
+                                    onClick  = { launchStream(index) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text(video.quality.ifBlank { "Stream ${index + 1}" }) }
+                            }
+                        }
+                    },
+                    confirmButton = {},
+                )
+            }
         }
 
         if (showResultPicker) {
