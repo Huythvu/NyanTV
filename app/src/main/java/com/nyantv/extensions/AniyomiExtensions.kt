@@ -165,6 +165,3 @@ class AniyomiExtensions(private val context: Context) {
     }
 
 }
-    }
-
-}
