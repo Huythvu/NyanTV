@@ -45,6 +45,9 @@ class MalService(context: Context) : MediaService {
     private val _upcoming        = MutableStateFlow<List<Media>>(emptyList())
     private val _recentlyUpdated = MutableStateFlow<List<Media>>(emptyList())
     private val _seasonal        = MutableStateFlow<List<Media>>(emptyList())
+    private val _seasonLabel     = MutableStateFlow("")
+    private var selSeasonYear    = 0
+    private var selSeasonName    = ""
 
     override val isLoggedIn:      StateFlow<Boolean>            = _isLoggedIn.asStateFlow()
     override val profile:         StateFlow<Profile?>           = _profile.asStateFlow()
@@ -56,6 +59,8 @@ class MalService(context: Context) : MediaService {
     override val recentlyUpdated: StateFlow<List<Media>>        = _recentlyUpdated.asStateFlow()
     /** MAL-specific extra row: current-season anime. */
     val seasonal:                 StateFlow<List<Media>>        = _seasonal.asStateFlow()
+    /** Display label for the selected season, e.g. "Summer 2026". */
+    val seasonLabel:              StateFlow<String>             = _seasonLabel.asStateFlow()
 
     // ── Auth ───────────────────────────────────────────────────────────────────
 
@@ -167,8 +172,14 @@ class MalService(context: Context) : MediaService {
         _trending.value = fetchList("$MAL_API/anime/ranking?ranking_type=airing&limit=15&$fields")
         _popular.value  = fetchList("$MAL_API/anime/ranking?ranking_type=bypopularity&limit=15&$fields")
         _upcoming.value = fetchList("$MAL_API/anime/ranking?ranking_type=upcoming&limit=15&$fields")
-        _seasonal.value = fetchSeasonal(fields)
+        if (selSeasonName.isBlank()) {
+            val (y, s) = currentSeason()
+            selSeasonYear = y; selSeasonName = s
+        }
+        loadSeason()
     }
+
+    private val seasonOrder = listOf("winter", "spring", "summer", "fall")
 
     /** Current anime season as (year, "winter"|"spring"|"summer"|"fall"). */
     private fun currentSeason(): Pair<Int, String> {
@@ -182,15 +193,36 @@ class MalService(context: Context) : MediaService {
         return cal.get(java.util.Calendar.YEAR) to season
     }
 
-    private suspend fun fetchSeasonal(fields: String): List<Media> {
-        val (year, season) = currentSeason()
-        // The season endpoint returns everything *airing* this season, which includes
+    private fun seasonLabelOf(year: Int, season: String) =
+        season.replaceFirstChar { it.uppercase() } + " " + year
+
+    private suspend fun loadSeason() {
+        _seasonLabel.value = seasonLabelOf(selSeasonYear, selSeasonName)
+        _seasonal.value    = fetchSeasonalFor(selSeasonYear, selSeasonName)
+    }
+
+    private suspend fun fetchSeasonalFor(year: Int, season: String): List<Media> = withContext(Dispatchers.IO) {
+        val fields = "fields=mean,status,media_type,num_episodes,main_picture,start_season,alternative_titles"
+        // The season endpoint returns everything *airing* that season, which includes
         // long-running shows that premiered years ago (One Piece, etc.). MAL's seasonal page
-        // is about *premieres*, so keep only titles whose start season matches this season.
+        // is about *premieres*, so keep only titles whose start season matches.
         val all = fetchList("$MAL_API/anime/season/$year/$season?sort=anime_num_list_users&limit=100&$fields")
-        return all
-            .filter { it.season.equals(season, ignoreCase = true) && it.seasonYear == year }
-            .take(20)
+        all.filter { it.season.equals(season, ignoreCase = true) && it.seasonYear == year }.take(20)
+    }
+
+    /** Moves the selected season by [delta] (negative = older), clamped to the current season. */
+    suspend fun shiftSeason(delta: Int) {
+        var idx  = seasonOrder.indexOf(selSeasonName).coerceAtLeast(0) + delta
+        var year = selSeasonYear
+        while (idx > 3) { idx -= 4; year += 1 }
+        while (idx < 0) { idx += 4; year -= 1 }
+        val (cy, cs) = currentSeason()
+        val cIdx = seasonOrder.indexOf(cs)
+        if (year > cy || (year == cy && idx > cIdx)) { year = cy; idx = cIdx }  // don't go past now
+        if (year < 1960) { year = 1960; idx = 0 }
+        selSeasonYear = year
+        selSeasonName = seasonOrder[idx]
+        loadSeason()
     }
 
     private suspend fun fetchList(url: String): List<Media> = withContext(Dispatchers.IO) {

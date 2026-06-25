@@ -117,6 +117,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _trendingMovies = MutableStateFlow<List<Media>>(emptyList())
     private val _trendingShows  = MutableStateFlow<List<Media>>(emptyList())
     private val _seasonal       = MutableStateFlow<List<Media>>(emptyList())
+    private val _seasonLabel     = MutableStateFlow("")
 
     private val _carouselLogos     = MutableStateFlow<Map<String, String?>>(emptyMap())
     private val _carouselBackdrops = MutableStateFlow<Map<String, String?>>(emptyMap())
@@ -136,6 +137,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val trendingMovies: StateFlow<List<Media>> = _trendingMovies.asStateFlow()
     val trendingShows:  StateFlow<List<Media>> = _trendingShows.asStateFlow()
     val seasonal:       StateFlow<List<Media>> = _seasonal.asStateFlow()
+    val seasonLabel:    StateFlow<String>      = _seasonLabel.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -173,6 +175,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _trendingMovies.value    = emptyList()
         _trendingShows.value     = emptyList()
         _seasonal.value          = emptyList()
+        _seasonLabel.value       = ""
 
         _service     = buildService(type, getApplication())
         sideService  = buildSideService(type, getApplication())
@@ -219,10 +222,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         val mal = _service as? MalService
         if (mal != null) {
-            serviceJobs += viewModelScope.launch { mal.seasonal.collect { _seasonal.value = it } }
+            serviceJobs += viewModelScope.launch { mal.seasonal.collect    { _seasonal.value = it } }
+            serviceJobs += viewModelScope.launch { mal.seasonLabel.collect { _seasonLabel.value = it } }
         } else {
             _seasonal.value = emptyList()
+            _seasonLabel.value = ""
         }
+    }
+
+    /** Steps the MAL Seasonal row to an older (-1) or newer (+1) season. */
+    fun seasonShift(delta: Int) = viewModelScope.launch {
+        runCatching { (_service as? MalService)?.shiftSeason(delta) }
     }
 
     // ── Tracking Automation ────────────────────────────────────────────────────

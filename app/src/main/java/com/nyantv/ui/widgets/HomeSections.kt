@@ -1,14 +1,81 @@
 package com.nyantv.ui.widgets
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.nyantv.data.Media
 import com.nyantv.data.ServiceType
 import com.nyantv.data.TrackedMedia
 import com.nyantv.ui.SectionRow
+import com.nyantv.ui.utils.focusBorder
 import com.nyantv.viewmodel.AppViewModel
+
+// "Seasonal Anime   ◀ Summer 2026 ▶" — D-pad onto an arrow and press to change season.
+@Composable
+private fun SeasonSwitcherHeader(label: String, onPrev: () -> Unit, onNext: () -> Unit) {
+    Row(
+        modifier              = Modifier.padding(horizontal = 16.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text       = "Seasonal Anime",
+            style      = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color      = MaterialTheme.colorScheme.onBackground,
+        )
+        SeasonArrow(Icons.Filled.KeyboardArrowLeft, "Previous season", onPrev)
+        Text(
+            text  = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        SeasonArrow(Icons.Filled.KeyboardArrowRight, "Next season", onNext)
+    }
+}
+
+@Composable
+private fun SeasonArrow(icon: ImageVector, description: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .size(32.dp)
+            .focusBorder(CircleShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication        = null,
+                onClick           = onClick,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = description,
+            modifier           = Modifier.size(22.dp),
+            tint               = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
 
 @Composable
 fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: (String) -> Unit) {
@@ -20,6 +87,7 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     val trendingShows   by vm.trendingShows.collectAsStateWithLifecycle()
 
     val seasonal        by vm.seasonal.collectAsStateWithLifecycle()
+    val seasonLabel     by vm.seasonLabel.collectAsStateWithLifecycle()
 
     val anilistContinue by vm.anilistShowContinue.collectAsStateWithLifecycle()
     val anilistPlanned  by vm.anilistShowPlanned.collectAsStateWithLifecycle()
@@ -74,8 +142,19 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
             }
             if (malTrending) SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
             if (malPopular)  SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
-            if (malSeasonal && seasonal.isNotEmpty()) {
-                SectionRow(title = "Seasonal Anime", items = seasonal, onItemClick = { navigate(it.id) })
+            if (malSeasonal) {
+                SectionRow(
+                    title       = "Seasonal Anime",
+                    items       = seasonal,
+                    onItemClick = { navigate(it.id) },
+                    header      = {
+                        SeasonSwitcherHeader(
+                            label  = seasonLabel.ifBlank { "Seasonal Anime" },
+                            onPrev = { vm.seasonShift(-1) },
+                            onNext = { vm.seasonShift(1) },
+                        )
+                    },
+                )
             }
         }
 

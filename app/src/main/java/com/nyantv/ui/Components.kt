@@ -235,23 +235,39 @@ fun SectionRow(
     items: List<Media>,
     onItemClick: (Media) -> Unit,
     trackedMap: Map<String, TrackedMedia> = emptyMap(),
-    cardWidth: Dp = 120.dp
+    cardWidth: Dp = 120.dp,
+    header: (@Composable () -> Unit)? = null,
 ) {
-    if (items.isEmpty()) return
+    // Sections with a custom header (e.g. the season switcher) stay visible even when empty
+    // so their controls remain reachable; plain rows collapse when there's nothing to show.
+    if (items.isEmpty() && header == null) return
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text       = title,
-            style      = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color      = MaterialTheme.colorScheme.onBackground,
-            modifier   = Modifier.padding(horizontal = 16.dp)
-        )
-        LazyRow(
-            contentPadding        = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(items.distinctBy { it.id }, key = { it.id }) { media ->
-                MediaCard(media = media, onClick = { onItemClick(media) }, width = cardWidth, trackedMap = trackedMap)
+        if (header != null) {
+            header()
+        } else {
+            Text(
+                text       = title,
+                style      = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color      = MaterialTheme.colorScheme.onBackground,
+                modifier   = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+        if (items.isEmpty()) {
+            Text(
+                text     = "No premieres found for this season",
+                style    = MaterialTheme.typography.bodySmall,
+                color    = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        } else {
+            LazyRow(
+                contentPadding        = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(items.distinctBy { it.id }, key = { it.id }) { media ->
+                    MediaCard(media = media, onClick = { onItemClick(media) }, width = cardWidth, trackedMap = trackedMap)
+                }
             }
         }
     }
