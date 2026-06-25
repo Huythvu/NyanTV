@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.Surface
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
@@ -92,6 +93,28 @@ class PlayerService : Service() {
         getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE)
             .getString("player_engine", "exoplayer") == "libmpv"
 
+    /**
+     * ExoPlayer's [androidx.media3.exoplayer.source.DefaultMediaSourceFactory] selects the
+     * media source from the URI/MIME and does NOT content-sniff adaptive playlists. Extension
+     * streams are usually HLS served from tokenized URLs without a ".m3u8" extension, so without
+     * an explicit MIME ExoPlayer falls back to a progressive extractor and fails with
+     * ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED. Infer the MIME so the right source is used.
+     */
+    private fun inferMimeType(uri: String): String? {
+        val path = uri.substringBefore('?').substringBefore('#').lowercase()
+        return when {
+            path.contains(".m3u8") -> MimeTypes.APPLICATION_M3U8
+            path.contains(".mpd")  -> MimeTypes.APPLICATION_MPD
+            path.contains(".ism")  -> MimeTypes.APPLICATION_SS
+            // Known progressive containers: let ExoPlayer sniff/handle them normally.
+            path.endsWith(".mp4") || path.endsWith(".m4v") || path.endsWith(".mkv") ||
+                path.endsWith(".webm") || path.endsWith(".mov") || path.endsWith(".ts") -> null
+            // No usable hint: adaptive streams from these extensions are overwhelmingly HLS,
+            // and progressive sniffing has already failed, so default to HLS.
+            else -> MimeTypes.APPLICATION_M3U8
+        }
+    }
+
     // ── AIDL stub ──────────────────────────────────────────────────────────────
     private val stub = object : IPlayerService.Stub() {
 
@@ -107,6 +130,7 @@ class PlayerService : Service() {
                 } else {
                     val mediaItem = MediaItem.Builder()
                         .setUri(uri)
+                        .apply { inferMimeType(uri)?.let { setMimeType(it) } }
                         .setClippingConfiguration(
                             MediaItem.ClippingConfiguration.Builder()
                                 .setStartPositionMs(startPositionMs)
@@ -158,8 +182,11 @@ class PlayerService : Service() {
                     val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(dataSourceFactory)
                         .setLoadErrorHandlingPolicy(errorPolicy)
 
+                    val inferredMime = inferMimeType(uri)
+                    Log.d("NyanExt", "ExoPlayer MIME inferred as: $inferredMime")
                     val mediaItem = MediaItem.Builder()
                         .setUri(uri)
+                        .apply { inferredMime?.let { setMimeType(it) } }
                         .setClippingConfiguration(
                             MediaItem.ClippingConfiguration.Builder()
                                 .setStartPositionMs(startPositionMs)
