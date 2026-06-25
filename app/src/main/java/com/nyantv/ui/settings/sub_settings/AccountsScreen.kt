@@ -188,6 +188,7 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
         val malTrending      by vm.malShowTrending.collectAsStateWithLifecycle()
         val malPopular       by vm.malShowPopular.collectAsStateWithLifecycle()
         val malSeasonal      by vm.malShowSeasonal.collectAsStateWithLifecycle()
+        val malUpcoming      by vm.malShowUpcoming.collectAsStateWithLifecycle()
         val malOrder         by vm.malHomeOrder.collectAsStateWithLifecycle()
         val simklContMovies  by vm.simklShowContMovies.collectAsStateWithLifecycle()
         val simklPlanMovies  by vm.simklShowPlanMovies.collectAsStateWithLifecycle()
@@ -219,6 +220,7 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                         "trending" -> "Trending Now"
                         "popular"  -> "Popular Anime"
                         "seasonal" -> "Seasonal Anime"
+                        "upcoming" -> "Upcoming"
                         else       -> key
                     }
                     val checked = when (key) {
@@ -227,6 +229,7 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                         "trending" -> malTrending
                         "popular"  -> malPopular
                         "seasonal" -> malSeasonal
+                        "upcoming" -> malUpcoming
                         else       -> true
                     }
                     HomescreenManageRow(
@@ -239,6 +242,7 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                                 "trending" -> vm.setMalShowTrending(v)
                                 "popular"  -> vm.setMalShowPopular(v)
                                 "seasonal" -> vm.setMalShowSeasonal(v)
+                                "upcoming" -> vm.setMalShowUpcoming(v)
                             }
                         },
                         onUp     = { vm.moveMalSection(key, up = true) },

@@ -84,8 +84,10 @@ data class WatchedEvent(val episode: SEpisode, val mediaId: String)
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
-        private const val TAG          = "NyanTV:PlayerVM"
-        private const val PREF_QUALITY = "preferred_quality_name"
+        private const val TAG           = "NyanTV:PlayerVM"
+        private const val PREF_QUALITY  = "preferred_quality_name"
+        private const val PREF_SUBTITLE = "preferred_subtitle_name"
+        private const val SUBTITLE_OFF  = "__off__"
     }
 
     private val prefs = app.getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE)
@@ -251,7 +253,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             ?.let { name -> streams.indexOfFirst { it.name == name }.takeIf { it >= 0 } }
             ?: snapshot.initialStreamIndex.coerceIn(0, (streams.size - 1).coerceAtLeast(0))
 
-        val initialSubIdx = if (subtitles.isNotEmpty()) 0 else null
+        val initialSubIdx = preferredSubtitleIndex(subtitles)
 
         _state.update {
             it.copy(
@@ -500,7 +502,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         hasResumed               = false
         lastSavedPositionMs      = -1L
 
-        val initialSubIdx = if (subs.isNotEmpty()) 0 else null
+        val initialSubIdx = preferredSubtitleIndex(subs)
 
         _state.update {
             it.copy(
@@ -543,11 +545,29 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     /** Switch subtitle track, or pass null to disable subtitles. */
     fun selectSubtitleTrack(index: Int?) {
         _state.update { it.copy(selectedSubtitleIndex = index) }
+        // Remember the choice (by language name, or "off") so the next episode keeps it.
+        val pref = if (index == null) SUBTITLE_OFF else _state.value.subtitleTracks.getOrNull(index)?.name
+        prefs.edit { putString(PREF_SUBTITLE, pref) }
         if (index == null) {
             subtitleEngine.clear()
             _currentCue.value = null
         } else {
             loadSubtitleByIndex(index)
+        }
+    }
+
+    /**
+     * Index of the subtitle track to start with: the remembered language if present in this
+     * episode's tracks, "off" if the user disabled subs, else the first track (or none).
+     */
+    private fun preferredSubtitleIndex(subs: List<SubtitleTrack>): Int? {
+        val saved = prefs.getString(PREF_SUBTITLE, null)
+        return when {
+            saved == SUBTITLE_OFF -> null
+            saved != null -> subs.indexOfFirst { it.name == saved }
+                .takeIf { it >= 0 }
+                ?: subs.indices.firstOrNull()
+            else -> subs.indices.firstOrNull()
         }
     }
 

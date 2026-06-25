@@ -291,22 +291,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _malShowTrending     = MutableStateFlow(prefs.getBoolean("mal_show_trending",     true))
     private val _malShowPopular      = MutableStateFlow(prefs.getBoolean("mal_show_popular",      true))
     private val _malShowSeasonal     = MutableStateFlow(prefs.getBoolean("mal_show_seasonal",     true))
+    private val _malShowUpcoming     = MutableStateFlow(prefs.getBoolean("mal_show_upcoming",     false))
 
     val anilistShowTrending: StateFlow<Boolean> = _anilistShowTrending.asStateFlow()
     val anilistShowPopular:  StateFlow<Boolean> = _anilistShowPopular.asStateFlow()
     val malShowTrending:     StateFlow<Boolean> = _malShowTrending.asStateFlow()
     val malShowPopular:      StateFlow<Boolean> = _malShowPopular.asStateFlow()
     val malShowSeasonal:     StateFlow<Boolean> = _malShowSeasonal.asStateFlow()
+    val malShowUpcoming:     StateFlow<Boolean> = _malShowUpcoming.asStateFlow()
 
     fun setAnilistShowTrending(v: Boolean) { _anilistShowTrending.value = v; prefs.edit { putBoolean("anilist_show_trending", v) } }
     fun setAnilistShowPopular(v: Boolean)  { _anilistShowPopular.value  = v; prefs.edit { putBoolean("anilist_show_popular",  v) } }
     fun setMalShowTrending(v: Boolean)     { _malShowTrending.value     = v; prefs.edit { putBoolean("mal_show_trending",     v) } }
     fun setMalShowPopular(v: Boolean)      { _malShowPopular.value      = v; prefs.edit { putBoolean("mal_show_popular",      v) } }
     fun setMalShowSeasonal(v: Boolean)     { _malShowSeasonal.value     = v; prefs.edit { putBoolean("mal_show_seasonal",     v) } }
+    fun setMalShowUpcoming(v: Boolean)     { _malShowUpcoming.value     = v; prefs.edit { putBoolean("mal_show_upcoming",     v) } }
 
     // Order of the MAL home rows, top to bottom. Saved keys are sanitised against the known set
     // and any missing keys are appended, so adding new sections later stays forward-compatible.
-    private val defaultMalHomeOrder = listOf("continue", "planned", "trending", "popular", "seasonal")
+    private val defaultMalHomeOrder = listOf("continue", "planned", "trending", "popular", "seasonal", "upcoming")
     private val _malHomeOrder = MutableStateFlow(
         prefs.getString("mal_home_order", null)
             ?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }

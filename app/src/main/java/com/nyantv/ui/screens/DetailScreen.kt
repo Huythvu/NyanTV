@@ -12,8 +12,12 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -485,6 +489,50 @@ private fun LazyListScope.infoItems(
 
 private val STATUSES = listOf("CURRENT", "COMPLETED", "PLANNING", "DROPPED", "PAUSED")
 
+/** D-pad friendly −/value/+ row, so editing progress/score needs no on-screen keyboard. */
+@Composable
+private fun StepperRow(label: String, valueText: String, onMinus: () -> Unit, onPlus: () -> Unit) {
+    Row(
+        modifier              = Modifier.fillMaxWidth(),
+        verticalAlignment     = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Row(
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            StepperButton(Icons.Filled.Remove, "Decrease $label", onMinus)
+            Text(
+                valueText,
+                style     = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                modifier  = Modifier.widthIn(min = 64.dp),
+            )
+            StepperButton(Icons.Filled.Add, "Increase $label", onPlus)
+        }
+    }
+}
+
+@Composable
+private fun StepperButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .focusBorder(CircleShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication        = null,
+                onClick           = onClick,
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = description, modifier = Modifier.size(20.dp))
+    }
+}
+
 @Composable
 private fun ListEditorDialog(
     currentStatus:   String?,
@@ -496,8 +544,9 @@ private fun ListEditorDialog(
     onDelete:        (() -> Unit)?
 ) {
     var status   by remember { mutableStateOf(currentStatus ?: "PLANNING") }
-    var progress by remember { mutableStateOf(currentProgress?.toString() ?: "0") }
-    var score    by remember { mutableStateOf(currentScore?.toString() ?: "0") }
+    var progress by remember { mutableIntStateOf(currentProgress ?: 0) }
+    var score    by remember { mutableIntStateOf(currentScore?.toInt() ?: 0) }
+    val maxProgress = totalEpisodes ?: 9999
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -522,23 +571,22 @@ private fun ListEditorDialog(
                         )
                     }
                 }
-                OutlinedTextField(
-                    value         = progress,
-                    onValueChange = { progress = it },
-                    label         = { Text("Progress (ep)") },
-                    suffix        = { Text("/ ${totalEpisodes ?: "?"}") },
-                    singleLine    = true
+                StepperRow(
+                    label     = "Progress",
+                    valueText = "$progress / ${totalEpisodes ?: "?"}",
+                    onMinus   = { progress = (progress - 1).coerceAtLeast(0) },
+                    onPlus    = { progress = (progress + 1).coerceAtMost(maxProgress) },
                 )
-                OutlinedTextField(
-                    value         = score,
-                    onValueChange = { score = it },
-                    label         = { Text("Score (0–10)") },
-                    singleLine    = true
+                StepperRow(
+                    label     = "Score",
+                    valueText = if (score == 0) "–" else "$score / 10",
+                    onMinus   = { score = (score - 1).coerceAtLeast(0) },
+                    onPlus    = { score = (score + 1).coerceAtMost(10) },
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(status, progress.toIntOrNull(), score.toFloatOrNull()) }) {
+            TextButton(onClick = { onSave(status, progress, score.toFloat()) }) {
                 Text("Save")
             }
         },

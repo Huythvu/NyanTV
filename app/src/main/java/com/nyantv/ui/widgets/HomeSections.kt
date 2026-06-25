@@ -83,6 +83,7 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     val animeList       by vm.animeList.collectAsStateWithLifecycle()
     val trending        by vm.trending.collectAsStateWithLifecycle()
     val popular         by vm.popular.collectAsStateWithLifecycle()
+    val upcoming        by vm.upcoming.collectAsStateWithLifecycle()
     val trendingMovies  by vm.trendingMovies.collectAsStateWithLifecycle()
     val trendingShows   by vm.trendingShows.collectAsStateWithLifecycle()
 
@@ -98,6 +99,7 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     val malTrending     by vm.malShowTrending.collectAsStateWithLifecycle()
     val malPopular      by vm.malShowPopular.collectAsStateWithLifecycle()
     val malSeasonal     by vm.malShowSeasonal.collectAsStateWithLifecycle()
+    val malUpcoming     by vm.malShowUpcoming.collectAsStateWithLifecycle()
     val malOrder        by vm.malHomeOrder.collectAsStateWithLifecycle()
     val simklContMovies by vm.simklShowContMovies.collectAsStateWithLifecycle()
     val simklPlanMovies by vm.simklShowPlanMovies.collectAsStateWithLifecycle()
@@ -146,6 +148,7 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
                     }
                     "trending" -> if (malTrending) SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
                     "popular"  -> if (malPopular)  SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
+                    "upcoming" -> if (malUpcoming) SectionRow(title = "Upcoming",      items = upcoming, onItemClick = { navigate(it.id) })
                     "seasonal" -> if (malSeasonal) {
                         SectionRow(
                             title       = "Seasonal Anime",
