@@ -1,9 +1,10 @@
 package com.nyantv.extensions
 
 import android.app.Activity
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
+import android.provider.Settings
 import android.util.Log
 import eu.kanade.tachiyomi.animesource.AnimeSource
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
@@ -63,30 +64,36 @@ class AniyomiExtensions(private val context: Context) {
         return source.fetchVideoList(episode).awaitSingle()
     }
 
-    // Install via Android's package manager using the extension's download URL
-    suspend fun installExtension(extension: AnimeExtension.Available) {
+    // Install via the PackageInstaller session API using the extension's download URL.
+    // The session API works on Android TV, unlike the legacy ACTION_VIEW + package-archive
+    // intent which depends on an installer activity that TV builds often don't ship.
+    suspend fun installExtension(extension: AnimeExtension.Available): Boolean {
+        // Android O+ requires the "install unknown apps" permission. If it hasn't been
+        // granted yet, send the user to the system screen to grant it (works on TV too)
+        // and stop here; they can tap Install again afterwards.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !context.packageManager.canRequestPackageInstalls()
+        ) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                "package:${context.packageName}".toUri(),
+            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            runCatching { context.startActivity(intent) }
+            return false
+        }
+
         val apkUrl = "${extension.repository}/apk/${extension.apkName}"
 
         val response = networkHelper.client
             .newCall(Request.Builder().url(apkUrl).build())
             .await()
 
-        if (!response.isSuccessful) return
+        if (!response.isSuccessful) return false
 
         val apkFile = File(context.cacheDir, extension.apkName)
         apkFile.writeBytes(response.body.bytes())
 
-        val uri = androidx.core.content.FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            apkFile
-        )
-
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-        }
-        context.startActivity(intent)
+        return ApkInstaller.install(context, apkFile)
     }
 
     fun uninstallExtension(extension: AnimeExtension.Installed, activity: Activity) {
