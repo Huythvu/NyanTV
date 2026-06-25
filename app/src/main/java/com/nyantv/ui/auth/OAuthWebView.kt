@@ -67,6 +67,23 @@ fun OAuthWebViewOverlay(
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
 
+                            // On Android TV there is no touch input: the user navigates with the
+                            // D-pad/remote and types on a hardware/virtual keyboard. For that to
+                            // reach the login form the WebView must take focus itself (otherwise
+                            // Compose swallows the D-pad events for its own focus traversal) and
+                            // hand initial focus to the first input field.
+                            isFocusable = true
+                            isFocusableInTouchMode = true
+                            settings.setNeedInitialFocus(true)
+
+                            // MAL's mobile login layout is awkward to navigate without touch;
+                            // request the desktop page, which is keyboard/tab-friendly.
+                            settings.useWideViewPort = true
+                            settings.loadWithOverviewMode = true
+                            settings.userAgentString =
+                                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
+                                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
                             webViewClient = object : WebViewClient() {
                                 /** Returns true if [url] was the callback redirect (and consumes it). */
                                 fun handleRedirect(url: String?): Boolean {
@@ -90,10 +107,14 @@ fun OAuthWebViewOverlay(
 
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     loading = false
+                                    // Pull focus into the WebView so the D-pad/remote can move
+                                    // between the rendered form fields and the keyboard can type.
+                                    view?.requestFocus()
                                 }
                             }
 
                             loadUrl(authUrl)
+                            requestFocus()
                         }
                     },
                 )
