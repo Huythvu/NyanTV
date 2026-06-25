@@ -47,6 +47,7 @@ class ExtensionViewModel(application: Application) : AndroidViewModel(applicatio
         val updated = _repos.value + trimmed
         _repos.value = updated
         saveRepos(updated)
+        android.util.Log.d("NyanExt", "addRepo: '$trimmed' (now ${updated.size} repo(s))")
         refreshAvailable()
     }
 
@@ -82,11 +83,12 @@ class ExtensionViewModel(application: Application) : AndroidViewModel(applicatio
     private fun loadAvailableExtensions() = refreshAvailable()
 
     fun refreshAvailable() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _isLoading.value = true
+            android.util.Log.d("NyanExt", "refreshAvailable: ${_repos.value.size} repo(s): ${_repos.value}")
             runCatching {
                 _availableExtensions.value = aniyomi.fetchAvailableExtensions(_repos.value)
-            }
+            }.onFailure { android.util.Log.e("NyanExt", "refreshAvailable failed", it) }
             _isLoading.value = false
         }
     }

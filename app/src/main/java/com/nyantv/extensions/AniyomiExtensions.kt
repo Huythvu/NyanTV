@@ -107,16 +107,26 @@ class AniyomiExtensions(private val context: Context) {
     private val networkHelper = NetworkHelper(context)
 
     suspend fun fetchAvailableExtensions(repoUrls: List<String>): List<AnimeExtension.Available> {
-        if (repoUrls.isEmpty()) return emptyList()
+        if (repoUrls.isEmpty()) {
+            Log.d(TAG, "fetchAvailableExtensions: no repos configured")
+            return emptyList()
+        }
         val seen = mutableSetOf<String>()
         return repoUrls.flatMap { indexUrl ->
             val base = indexUrl.substringBeforeLast("/")
             runCatching {
+                Log.d(TAG, "Fetching repo index: $indexUrl")
                 val response = networkHelper.client
                     .newCall(Request.Builder().url(indexUrl).build())
                     .await()
-                if (!response.isSuccessful) return@runCatching emptyList<AnimeExtension.Available>()
-                val entries = json.decodeFromString<List<ExtensionIndexEntry>>(response.body.string())
+                val bodyText = response.body.string()
+                Log.d(TAG, "Repo $indexUrl -> HTTP ${response.code}, body=${bodyText.length} chars")
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Repo $indexUrl returned unsuccessful HTTP ${response.code}")
+                    return@runCatching emptyList<AnimeExtension.Available>()
+                }
+                val entries = json.decodeFromString<List<ExtensionIndexEntry>>(bodyText)
+                Log.d(TAG, "Repo $indexUrl parsed ${entries.size} entries")
                 entries.map { entry ->
                     AnimeExtension.Available(
                         name         = entry.name,
@@ -141,8 +151,20 @@ class AniyomiExtensions(private val context: Context) {
                         },
                     )
                 }
-            }.getOrElse { emptyList() }
-        }.filter { seen.add(it.pkgName) }
+            }.getOrElse { e ->
+                Log.e(TAG, "Failed to fetch/parse repo $indexUrl", e)
+                emptyList()
+            }
+        }.filter { seen.add(it.pkgName) }.also {
+            Log.d(TAG, "fetchAvailableExtensions: total ${it.size} extensions across ${repoUrls.size} repo(s)")
+        }
+    }
+
+    private companion object {
+        const val TAG = "NyanExt"
+    }
+
+}
     }
 
 }
