@@ -184,7 +184,13 @@ class MalService(context: Context) : MediaService {
 
     private suspend fun fetchSeasonal(fields: String): List<Media> {
         val (year, season) = currentSeason()
-        return fetchList("$MAL_API/anime/season/$year/$season?sort=anime_num_list_users&limit=15&$fields")
+        // The season endpoint returns everything *airing* this season, which includes
+        // long-running shows that premiered years ago (One Piece, etc.). MAL's seasonal page
+        // is about *premieres*, so keep only titles whose start season matches this season.
+        val all = fetchList("$MAL_API/anime/season/$year/$season?sort=anime_num_list_users&limit=100&$fields")
+        return all
+            .filter { it.season.equals(season, ignoreCase = true) && it.seasonYear == year }
+            .take(20)
     }
 
     private suspend fun fetchList(url: String): List<Media> = withContext(Dispatchers.IO) {
