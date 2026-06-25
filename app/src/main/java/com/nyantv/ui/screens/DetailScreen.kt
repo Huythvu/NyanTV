@@ -44,7 +44,7 @@ import eu.kanade.tachiyomi.animesource.model.SEpisode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private enum class DetailTab { INFO, PLAYER }
+private enum class DetailTab { PLAYER, INFO }
 
 private val HTML_TAG_REGEX = Regex("<[^>]*>")
 
@@ -70,7 +70,7 @@ fun DetailScreen(
     var netState by remember { mutableStateOf(NetworkState.LOADING) }
     var showEdit by remember { mutableStateOf(false) }
     var retryKey by remember { mutableIntStateOf(0) }
-    var activeTab by rememberSaveable { mutableStateOf(DetailTab.INFO) }
+    var activeTab by rememberSaveable { mutableStateOf(DetailTab.PLAYER) }
 
     val loggedIn     by vm.isLoggedIn.collectAsStateWithLifecycle()
     val currentEntry by vm.currentMedia.collectAsStateWithLifecycle()
@@ -233,17 +233,17 @@ fun DetailScreen(
                         contentColor   = MaterialTheme.colorScheme.primary,
                     ) {
                         Tab(
-                            selected = activeTab == DetailTab.INFO,
-                            onClick  = { activeTab = DetailTab.INFO },
-                            icon     = { Icon(Icons.Default.Info, null, modifier = Modifier.size(18.dp)) },
-                            text     = { Text("Info") },
-                        )
-                        Tab(
                             selected = activeTab == DetailTab.PLAYER,
                             onClick  = { activeTab = DetailTab.PLAYER },
                             modifier = Modifier.focusRequester(playerTabFocusReq),
                             icon     = { Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp)) },
                             text     = { Text("Player") },
+                        )
+                        Tab(
+                            selected = activeTab == DetailTab.INFO,
+                            onClick  = { activeTab = DetailTab.INFO },
+                            icon     = { Icon(Icons.Default.Info, null, modifier = Modifier.size(18.dp)) },
+                            text     = { Text("Info") },
                         )
                     }
                 }
