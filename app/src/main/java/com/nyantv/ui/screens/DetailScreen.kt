@@ -546,7 +546,9 @@ private fun ListEditorDialog(
     var status   by remember { mutableStateOf(currentStatus ?: "PLANNING") }
     var progress by remember { mutableIntStateOf(currentProgress ?: 0) }
     var score    by remember { mutableIntStateOf(currentScore?.toInt() ?: 0) }
-    val maxProgress = totalEpisodes ?: 9999
+    // Ongoing anime report 0 (unknown) total episodes — treat that as "no cap" so progress
+    // can still be incremented past 0.
+    val maxProgress = totalEpisodes?.takeIf { it > 0 } ?: 9999
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -573,7 +575,7 @@ private fun ListEditorDialog(
                 }
                 StepperRow(
                     label     = "Progress",
-                    valueText = "$progress / ${totalEpisodes ?: "?"}",
+                    valueText = "$progress / ${totalEpisodes?.takeIf { it > 0 } ?: "?"}",
                     onMinus   = { progress = (progress - 1).coerceAtLeast(0) },
                     onPlus    = { progress = (progress + 1).coerceAtMost(maxProgress) },
                 )
