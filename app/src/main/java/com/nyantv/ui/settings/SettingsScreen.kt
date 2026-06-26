@@ -54,6 +54,12 @@ fun SettingsScreen(vm: AppViewModel, navController: NavController) {
                 onClick     = { navController.navigate("settings/accounts") }
             )
             SettingsTile(
+                icon        = Icons.Filled.TrackChanges,
+                title       = "Tracking",
+                description = "Automation, exclusions and tracking options",
+                onClick     = { navController.navigate("settings/tracking") }
+            )
+            SettingsTile(
                 icon        = Icons.Filled.Palette,
                 title       = "Theme",
                 description = "Personalize the look and make it yours",

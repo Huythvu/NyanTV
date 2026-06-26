@@ -214,6 +214,19 @@ class PlayerTabViewModel(
         }
     }
 
+    /** True if [source]'s extension is on the user's tracking-exclusion list. */
+    fun isSourceTrackingExcluded(source: SearchableSource?): Boolean {
+        source ?: return false
+        val excluded = getApplication<Application>()
+            .getSharedPreferences("nyantv_prefs", android.content.Context.MODE_PRIVATE)
+            .getString("excluded_tracking_exts", "")?.split("\n")?.filter { it.isNotBlank() }?.toSet()
+            ?: emptySet()
+        if (excluded.isEmpty()) return false
+        val pkg = aniyomi.installedExtensions.value
+            .firstOrNull { ext -> ext.sources.any { it.id == source.id } }?.pkgName ?: return false
+        return pkg in excluded
+    }
+
     private fun buildSources(): List<SearchableSource> {
         return orderStore.sort(aniyomi.installedExtensions.value)
             .flatMap { ext ->

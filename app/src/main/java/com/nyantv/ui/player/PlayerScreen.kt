@@ -207,10 +207,21 @@ fun PlayerScreen(
         vm.loadTracks(PlayerArgs.consume())
         mainFocusRequester.requestFocus()
         showControls()
-        when (appVm.trackingMode.value) {
-            AppViewModel.TrackingMode.ALWAYS_AUTO -> vm.setSessionTracking(true)
-            AppViewModel.TrackingMode.NEVER_AUTO  -> vm.setSessionTracking(false)
-            AppViewModel.TrackingMode.ALWAYS_ASK  -> showTrackingConsentDialog = true
+        when {
+            // Extension excluded from tracking → never track, don't even ask.
+            vm.isTrackingExcluded -> vm.setSessionTracking(false)
+            else -> when (appVm.trackingMode.value) {
+                AppViewModel.TrackingMode.ALWAYS_AUTO -> vm.setSessionTracking(true)
+                AppViewModel.TrackingMode.NEVER_AUTO  -> vm.setSessionTracking(false)
+                AppViewModel.TrackingMode.ALWAYS_ASK  ->
+                    if (appVm.askOncePerSeries.value) {
+                        when (appVm.seriesTrackingConsent(vm.currentMediaId)) {
+                            true  -> vm.setSessionTracking(true)
+                            false -> vm.setSessionTracking(false)
+                            null  -> showTrackingConsentDialog = true
+                        }
+                    } else showTrackingConsentDialog = true
+            }
         }
     }
 
@@ -503,25 +514,23 @@ fun PlayerScreen(
 
 
         if (showTrackingConsentDialog) {
+            val rememberAnswer = appVm.askOncePerSeries.value
+            fun answer(granted: Boolean) {
+                vm.setSessionTracking(granted)
+                if (rememberAnswer) appVm.rememberSeriesConsent(vm.currentMediaId, granted)
+                showTrackingConsentDialog = false
+            }
             AlertDialog(
-                onDismissRequest = {
-                    vm.setSessionTracking(false)
-                    showTrackingConsentDialog = false
-                },
+                onDismissRequest = { answer(false) },
                 title = { Text("Track progress?") },
-                text  = { Text("Automatically update your watch progress for this session?") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        vm.setSessionTracking(true)
-                        showTrackingConsentDialog = false
-                    }) { Text("Yes") }
+                text  = {
+                    Text(
+                        if (rememberAnswer) "Automatically update your watch progress for this series?"
+                        else "Automatically update your watch progress for this session?"
+                    )
                 },
-                dismissButton = {
-                    TextButton(onClick = {
-                        vm.setSessionTracking(false)
-                        showTrackingConsentDialog = false
-                    }) { Text("No") }
-                }
+                confirmButton = { TextButton(onClick = { answer(true) })  { Text("Yes") } },
+                dismissButton = { TextButton(onClick = { answer(false) }) { Text("No") } },
             )
         }
 
@@ -675,6 +684,19 @@ private fun PlayerControls(
                 style    = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f)
             )
+
+            // Incognito toggle — don't track this sitting (hidden when the source is always excluded)
+            if (!vm.isTrackingExcluded) {
+                val tracking by vm.trackingActive.collectAsStateWithLifecycle()
+                TvIconButton(onClick = { vm.toggleSessionTracking() }) {
+                    Icon(
+                        if (tracking) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                        contentDescription = if (tracking) "Tracking on — tap to go incognito" else "Incognito — not tracking this sitting",
+                        tint = if (tracking) Color.White else MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+            }
 
             // Stream picker button — only if more than one stream available
             if (hasStreams) {

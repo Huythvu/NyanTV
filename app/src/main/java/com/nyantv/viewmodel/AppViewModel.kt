@@ -338,6 +338,42 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit { putString("tracking_mode", mode.name) }
     }
 
+    // ── Extra tracking options ───────────────────────────────────────────────────
+    private val _autoCompleteTracking = MutableStateFlow(prefs.getBoolean("track_auto_complete", false))
+    private val _askOncePerSeries     = MutableStateFlow(prefs.getBoolean("track_ask_once",      false))
+    private val _excludedTrackingExts = MutableStateFlow(
+        prefs.getString("excluded_tracking_exts", "")?.split("\n")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+    )
+    val autoCompleteTracking: StateFlow<Boolean>     = _autoCompleteTracking.asStateFlow()
+    val askOncePerSeries:     StateFlow<Boolean>     = _askOncePerSeries.asStateFlow()
+    val excludedTrackingExts: StateFlow<Set<String>> = _excludedTrackingExts.asStateFlow()
+
+    fun setAutoCompleteTracking(v: Boolean) { _autoCompleteTracking.value = v; prefs.edit { putBoolean("track_auto_complete", v) } }
+    fun setAskOncePerSeries(v: Boolean)     { _askOncePerSeries.value     = v; prefs.edit { putBoolean("track_ask_once",      v) } }
+    fun setExtensionTrackingExcluded(pkg: String, excluded: Boolean) {
+        val updated = if (excluded) _excludedTrackingExts.value + pkg else _excludedTrackingExts.value - pkg
+        _excludedTrackingExts.value = updated
+        prefs.edit { putString("excluded_tracking_exts", updated.joinToString("\n")) }
+    }
+
+    // Remembered "Always ask" answer per series (ids are newline-joined so extension ids are safe).
+    private fun consentSet(key: String): Set<String> =
+        prefs.getString(key, "")?.split("\n")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+    fun seriesTrackingConsent(mediaId: String): Boolean? = when (mediaId) {
+        in consentSet("tracking_consent_yes") -> true
+        in consentSet("tracking_consent_no")  -> false
+        else                                  -> null
+    }
+    fun rememberSeriesConsent(mediaId: String, granted: Boolean) {
+        val yes = consentSet("tracking_consent_yes").toMutableSet()
+        val no  = consentSet("tracking_consent_no").toMutableSet()
+        if (granted) { yes += mediaId; no -= mediaId } else { no += mediaId; yes -= mediaId }
+        prefs.edit {
+            putString("tracking_consent_yes", yes.joinToString("\n"))
+            putString("tracking_consent_no",  no.joinToString("\n"))
+        }
+    }
+
     // ── Sync Tracking ──────────────────────────────────────────────────────────
     private val _syncMalWithAnilist = MutableStateFlow(prefs.getBoolean("sync_mal_anilist", false))
     val syncMalWithAnilist: StateFlow<Boolean> = _syncMalWithAnilist.asStateFlow()
@@ -590,9 +626,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun markEpisodeWatched(mediaId: String, episodeNumber: Int) {
+        // Auto-complete: if enabled and this is the final episode of a known total, set Completed.
+        val total = _animeList.value.firstOrNull { it.id == mediaId }?.totalEpisodes
+        val completed = _autoCompleteTracking.value && total != null && total > 0 && episodeNumber >= total
         updateEntry(
             id       = mediaId,
-            status   = "CURRENT",
+            status   = if (completed) "COMPLETED" else "CURRENT",
             progress = episodeNumber,
             score    = null,
         )

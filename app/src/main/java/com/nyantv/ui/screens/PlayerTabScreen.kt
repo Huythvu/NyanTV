@@ -443,6 +443,7 @@ fun PlayerTabScreen(
                     ?.image?.takeIf { it.isNotBlank() } ?: ""
                 PlayerArgs.mediaBannerUrl = vm.mediaBannerUrl
                 PlayerArgs.mediaPosterUrl = vm.mediaPosterUrl
+                PlayerArgs.trackingExcluded = vm.isSourceTrackingExcluded(state.selectedSource)
                 vm.clearStreams()
                 onEpisodeSelected()
             }

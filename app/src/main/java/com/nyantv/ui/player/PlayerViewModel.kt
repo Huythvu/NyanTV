@@ -136,9 +136,20 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private val _watchedEvent = MutableSharedFlow<WatchedEvent>(extraBufferCapacity = 1)
     val watchedEvent: SharedFlow<WatchedEvent> = _watchedEvent.asSharedFlow()
 
+    private var trackingExcluded = false
+    private val _trackingActive = MutableStateFlow(false)
+    /** Whether progress is currently being tracked this sitting (drives the incognito toggle UI). */
+    val trackingActive: StateFlow<Boolean> = _trackingActive.asStateFlow()
+    val isTrackingExcluded: Boolean get() = trackingExcluded
+    val currentMediaId: String get() = mediaId
+
     fun setSessionTracking(enabled: Boolean) {
-        sessionTrackingEnabled = enabled
+        sessionTrackingEnabled = enabled && !trackingExcluded
+        _trackingActive.value  = sessionTrackingEnabled
     }
+
+    /** Player-overlay incognito toggle: flip tracking for this sitting only. */
+    fun toggleSessionTracking() = setSessionTracking(!sessionTrackingEnabled)
 
     private val _currentCue = MutableStateFlow<String?>(null)
     val currentCue: StateFlow<String?> = _currentCue.asStateFlow()
@@ -291,6 +302,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         serviceKey               = snapshot.serviceKey
         anilistId                = snapshot.anilistId
         malId                    = snapshot.malId
+        trackingExcluded         = snapshot.trackingExcluded
         sessionTrackingEnabled   = false
         hasTrackedCurrentEpisode = false
         pendingResumeMs          = snapshot.resumePositionMs
@@ -330,6 +342,14 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 watchHistoryStore.markWatchedSimkl(mediaId, epNum)
             } else {
                 watchHistoryStore.markWatchedAnilistMal(anilistId, malId, epNum)
+            }
+            // Optionally backfill earlier episodes as watched (e.g. jumped in at ep 5 → 1–4 too).
+            if (prefs.getBoolean("track_mark_earlier", false)) {
+                episodes.filter { it.episode_number < episode.episode_number }.forEach { earlier ->
+                    val n = earlier.episode_number.toInt()
+                    if (serviceKey == "simkl") watchHistoryStore.markWatchedSimkl(mediaId, n)
+                    else watchHistoryStore.markWatchedAnilistMal(anilistId, malId, n)
+                }
             }
             viewModelScope.launch { tvWatchNext.remove(mediaId) }
             recordHistory(episode.episode_number, positionMs, durationMs)

@@ -127,32 +127,7 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                 }
             }
         }
-        // ── Tracking Automation ────────────────────────────────────────────────────────
-        val trackingMode by vm.trackingMode.collectAsStateWithLifecycle()
-
-        SectionCard(title = "Tracking Automation") {
-            Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                listOf(
-                    AppViewModel.TrackingMode.ALWAYS_ASK  to "Always ask for tracking permission",
-                    AppViewModel.TrackingMode.ALWAYS_AUTO to "Always track automatically",
-                    AppViewModel.TrackingMode.NEVER_AUTO  to "Never track automatically"
-                ).forEach { (mode, label) ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(MaterialTheme.shapes.small)
-                            .background(if (trackingMode == mode) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) else Color.Transparent)
-                            .clickable { vm.setTrackingMode(mode) }
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment     = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = trackingMode == mode, onClick = { vm.setTrackingMode(mode) })
-                        Text(label, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            }
-        }
+        // Tracking automation + extra options moved to Settings → Tracking.
 
         // ── Sync Tracking ──────────────────────────────────────────────────────────────
         val syncMal by vm.syncMalWithAnilist.collectAsStateWithLifecycle()

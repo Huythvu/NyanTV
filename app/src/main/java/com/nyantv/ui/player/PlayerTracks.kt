@@ -84,12 +84,14 @@ object PlayerArgs {
     var mediaCoverUrl:  String = ""
     var mediaBannerUrl: String = ""
     var mediaPosterUrl: String = ""
+    var trackingExcluded: Boolean = false   // this playback's extension is excluded from tracking
 
     fun consume(): Snapshot {
         val snapshot = Snapshot(
             streams, subtitleTracks, initialStreamIndex, title, seriesTitle,
             mediaId, resumePositionMs, serviceKey, anilistId, malId,
-            episodes, currentEpisodeIndex, onLoadEpisodeVideos, fillerEpisodes, skipTimes, episodeMeta, mediaCoverUrl, mediaBannerUrl, mediaPosterUrl
+            episodes, currentEpisodeIndex, onLoadEpisodeVideos, fillerEpisodes, skipTimes, episodeMeta, mediaCoverUrl, mediaBannerUrl, mediaPosterUrl,
+            trackingExcluded
         )
         clear()
         return snapshot
@@ -115,6 +117,7 @@ object PlayerArgs {
         mediaCoverUrl       = ""
         mediaBannerUrl      = ""
         mediaPosterUrl      = ""
+        trackingExcluded    = false
     }
 
     data class Snapshot(
@@ -137,5 +140,6 @@ object PlayerArgs {
         val mediaCoverUrl:  String = "",
         val mediaBannerUrl: String = "",
         val mediaPosterUrl: String = "",
+        val trackingExcluded: Boolean = false,
     )
 }
