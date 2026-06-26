@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
 import com.nyantv.player.WatchedEntry
+import kotlinx.coroutines.delay
 import com.nyantv.ui.utils.SubScreenHeader
 import com.nyantv.ui.utils.focusBorder
 import com.nyantv.viewmodel.AppViewModel
@@ -27,8 +28,16 @@ import com.nyantv.viewmodel.AppViewModel
 fun WatchHistoryScreen(vm: AppViewModel, navController: NavController) {
     var entries     by remember { mutableStateOf(vm.watchHistoryEntries()) }
     var confirmClear by remember { mutableStateOf(false) }
+    var importTick  by remember { mutableStateOf(0) }
 
     fun reload() { entries = vm.watchHistoryEntries() }
+
+    // After triggering an import (async), refresh the list once it's had time to populate.
+    LaunchedEffect(importTick) {
+        if (importTick == 0) return@LaunchedEffect
+        delay(1500)
+        reload()
+    }
 
     LazyColumn(
         modifier            = Modifier.fillMaxSize(),
@@ -43,6 +52,12 @@ fun WatchHistoryScreen(vm: AppViewModel, navController: NavController) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
             )
+        }
+        item {
+            OutlinedButton(
+                onClick  = { vm.importExistingHistory(force = true); importTick++ },
+                modifier = Modifier.focusBorder(MaterialTheme.shapes.small),
+            ) { Text("Import past progress") }
         }
 
         if (entries.isEmpty()) {

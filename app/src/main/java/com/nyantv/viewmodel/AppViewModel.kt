@@ -164,6 +164,46 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Full local watch history (newest first), for the Watch History settings screen. */
     fun watchHistoryEntries(): List<WatchedEntry> = historyIndex.list()
 
+    /**
+     * Back-fill the watch-history index from resume progress saved before the index existed.
+     * Titles/posters are recovered from the player's source-result cache; entries we can't resolve
+     * are skipped. Runs once automatically; [force] re-scans on demand.
+     */
+    fun importExistingHistory(force: Boolean = false) {
+        if (!force && prefs.getBoolean("watch_history_imported", false)) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val playerCache = com.nyantv.player.PlayerCache(getApplication())
+            val known = historyIndex.list().map { it.id }.toMutableSet()
+            val baseline = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000  // sit below fresh watches
+            watchHistoryStore.allResumeProgress().forEachIndexed { i, (base, prog) ->
+                val anilistId = if (base.startsWith("al_"))    base.removePrefix("al_")    else null
+                val malId     = if (base.startsWith("mal_"))   base.removePrefix("mal_")   else null
+                val simklId   = if (base.startsWith("simkl_")) base.removePrefix("simkl_") else null
+                val mediaId   = anilistId ?: malId ?: simklId ?: return@forEachIndexed
+                if (mediaId in known) return@forEachIndexed
+                val recovered = playerCache.findCachedResult(mediaId) ?: return@forEachIndexed
+                historyIndex.upsert(
+                    WatchedEntry(
+                        id         = mediaId,
+                        title      = recovered.first.title,
+                        poster     = recovered.first.thumbnail,
+                        episode    = prog.episodeNumber,
+                        positionMs = prog.positionMs,
+                        durationMs = prog.durationMs,
+                        updatedAt  = recovered.second.takeIf { it > 0L } ?: (baseline - i),
+                        serviceKey = if (simklId != null) "simkl" else "anilist_mal",
+                        anilistId  = anilistId,
+                        malId      = malId,
+                        simklId    = simklId,
+                    )
+                )
+                known += mediaId
+            }
+            prefs.edit { putBoolean("watch_history_imported", true) }
+            refreshLocalContinue()
+        }
+    }
+
     /** Wipe the entire local watch history and every anime's local progress. */
     fun clearAllWatchHistory() {
         historyIndex.list().forEach { e ->
@@ -196,6 +236,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             )
             bindService()
             loadHome()
+            importExistingHistory()
         }
     }
 

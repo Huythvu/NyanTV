@@ -41,6 +41,15 @@ class WatchHistoryStore(context: Context) {
     fun loadResume(key: String): EpisodeProgress?    = loadByKey("resume_$key")
     fun clearResume(key: String)                     = clearByKey("resume_$key")
 
+    /** All saved resume entries as (baseKey, progress), e.g. baseKey "al_123" / "mal_5" / "simkl_9". */
+    fun allResumeProgress(): List<Pair<String, EpisodeProgress>> =
+        prefs.all.keys
+            .filter { it.startsWith("resume_") && it.endsWith("_ep") }
+            .mapNotNull { epKey ->
+                val base = epKey.removePrefix("resume_").removeSuffix("_ep")
+                loadResume(base)?.let { base to it }
+            }
+
     fun saveEpisodeProgress(key: String, p: EpisodeProgress) =
         saveByKey("ep_${key}_${p.episodeNumber.toInt()}", p)
 

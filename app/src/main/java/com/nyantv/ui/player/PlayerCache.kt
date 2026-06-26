@@ -68,6 +68,27 @@ class PlayerCache(private val context: Context) {
         return runCatching { json.decodeFromString<CachedAnimeResult>(raw) }.getOrNull()
     }
 
+    /**
+     * Best-effort title/thumbnail for an anime we've played before, from any cached source result
+     * or probe entry. Used to back-fill the watch-history index from old resume data. Returns the
+     * result plus a probe timestamp (0 if unknown).
+     */
+    suspend fun findCachedResult(mediaId: String): Pair<CachedAnimeResult, Long>? {
+        val entries = context.playerDataStore.data.first().asMap()
+        // Prefer the explicitly selected result, then any probe match.
+        entries.forEach { (k, v) ->
+            if (k.name.startsWith("result_") && k.name.endsWith("_$mediaId") && v is String) {
+                runCatching { json.decodeFromString<CachedAnimeResult>(v) }.getOrNull()?.let { return it to 0L }
+            }
+        }
+        entries.forEach { (k, v) ->
+            if (k.name.startsWith("probe_") && k.name.endsWith("_$mediaId") && v is String) {
+                runCatching { json.decodeFromString<ProbeCacheEntry>(v) }.getOrNull()?.result?.let { return it to 0L }
+            }
+        }
+        return null
+    }
+
     suspend fun saveQueryOverride(mediaId: String, query: String) {
         context.playerDataStore.edit { it[queryKey(mediaId)] = query }
     }
