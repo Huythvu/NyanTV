@@ -55,6 +55,7 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
 
     private val anilist = AnilistService(app)
     private val aniyomi = AniyomiExtensions(app)
+    private val orderStore = com.nyantv.extensions.ExtensionOrderStore(app)
 
     private val _state = MutableStateFlow(BrowseState())
     val state: StateFlow<BrowseState> = _state.asStateFlow()
@@ -79,12 +80,12 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             aniyomi.installedExtensions.collect { exts ->
                 extSourceMap.clear()
-                val infos = exts.flatMap { ext ->
+                val infos = orderStore.sort(exts).flatMap { ext ->
                     ext.sources.filterIsInstance<AnimeHttpSource>().map { src ->
                         extSourceMap[src.id] = src
                         ExtSourceInfo(id = src.id, name = src.name, lang = src.lang)
                     }
-                }.distinctBy { it.id }.sortedBy { it.name.lowercase() }
+                }.distinctBy { it.id }   // keep the user's extension order from orderStore.sort
                 _state.update { it.copy(extSources = infos) }
             }
         }

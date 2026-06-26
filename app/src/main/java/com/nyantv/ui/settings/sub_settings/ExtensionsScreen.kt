@@ -8,10 +8,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import coil.compose.AsyncImage
+import com.nyantv.extensions.ExtensionOrderStore
 import com.nyantv.ui.utils.SubScreenHeader
 import com.nyantv.ui.utils.focusBorder
 import com.nyantv.viewmodel.ExtensionViewModel
@@ -113,6 +117,18 @@ fun ExtensionsScreen(
     var deleteTarget by remember { mutableStateOf<AnimeExtension.Installed?>(null) }
     var settingsTarget by remember { mutableStateOf<AnimeExtension.Installed?>(null) }
 
+    // User-defined order (decides which extension is probed first). Re-derived whenever the
+    // installed set changes (install / uninstall).
+    val orderStore = remember(context) { ExtensionOrderStore(context) }
+    var ordered by remember(installed) { mutableStateOf(orderStore.sort(installed)) }
+    fun moveExtension(from: Int, to: Int) {
+        if (to < 0 || to > ordered.lastIndex) return
+        val list = ordered.toMutableList()
+        list.add(to, list.removeAt(from))
+        ordered = list
+        orderStore.saveOrder(list.map { it.pkgName })
+    }
+
     if (deleteTarget != null) {
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
@@ -176,9 +192,19 @@ fun ExtensionsScreen(
             )
         }
 
-        if (installed.isNotEmpty()) {
+        if (ordered.isNotEmpty()) {
             item { SectionHeader("Installed") }
-            items(installed, key = { "installed_${it.pkgName}" }) { ext ->
+            if (ordered.size > 1) {
+                item {
+                    Text(
+                        text     = "Order decides which extension is checked first when opening an anime.",
+                        style    = MaterialTheme.typography.bodySmall,
+                        color    = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                }
+            }
+            itemsIndexed(ordered, key = { _, it -> "installed_${it.pkgName}" }) { index, ext ->
                 val hasUpdate = remember(ext.pkgName, ext.versionCode, available) {
                     viewModel.hasUpdate(ext)
                 }
@@ -190,7 +216,12 @@ fun ExtensionsScreen(
                             ?.let { viewModel.installExtension(it) }
                     },
                     onDelete = { deleteTarget = ext },
-                    onSettings = if (ext.isConfigurable()) ({ settingsTarget = ext }) else null
+                    onSettings = if (ext.isConfigurable()) ({ settingsTarget = ext }) else null,
+                    reorderable = ordered.size > 1,
+                    canMoveUp   = index > 0,
+                    canMoveDown = index < ordered.lastIndex,
+                    onMoveUp    = { moveExtension(index, index - 1) },
+                    onMoveDown  = { moveExtension(index, index + 1) },
                 )
             }
         }
@@ -246,13 +277,52 @@ private fun InstalledExtensionItem(
     onUpdate:  () -> Unit,
     onDelete:  () -> Unit,
     onSettings: (() -> Unit)?,
+    reorderable: Boolean = false,
+    canMoveUp:   Boolean = false,
+    canMoveDown: Boolean = false,
+    onMoveUp:    () -> Unit = {},
+    onMoveDown:  () -> Unit = {},
 ) {
     Card(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium) {
         Row(
-            modifier            = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier            = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment   = Alignment.CenterVertically
         ) {
+            if (reorderable) {
+                Column {
+                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                        IconButton(
+                            onClick  = onMoveUp,
+                            enabled  = canMoveUp,
+                            modifier = Modifier.size(28.dp).focusBorder(CircleShape, inset = true)
+                        ) {
+                            Icon(
+                                Icons.Filled.KeyboardArrowUp,
+                                contentDescription = "Move up",
+                                modifier = Modifier.size(20.dp),
+                                tint = if (canMoveUp) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                            )
+                        }
+                        IconButton(
+                            onClick  = onMoveDown,
+                            enabled  = canMoveDown,
+                            modifier = Modifier.size(28.dp).focusBorder(CircleShape, inset = true)
+                        ) {
+                            Icon(
+                                Icons.Filled.KeyboardArrowDown,
+                                contentDescription = "Move down",
+                                modifier = Modifier.size(20.dp),
+                                tint = if (canMoveDown) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                       else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                            )
+                        }
+                    }
+                }
+            } else {
+                Spacer(Modifier.width(4.dp))
+            }
             ExtensionIcon(iconUrl = extension.iconUrl)
             Column(modifier = Modifier.weight(1f)) {
                 Text(extension.name, style = MaterialTheme.typography.bodyLarge)

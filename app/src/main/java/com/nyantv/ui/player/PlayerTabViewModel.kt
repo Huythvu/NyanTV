@@ -57,6 +57,7 @@ class PlayerTabViewModel(
 
     private val cache             = PlayerCache(app)
     private val aniyomi           = AniyomiExtensions(app)
+    private val orderStore        = com.nyantv.extensions.ExtensionOrderStore(app)
     private val watchHistoryStore = WatchHistoryStore(app)
 
     // ── Watch progress ─────────────────────────────────────────────────────────
@@ -214,7 +215,7 @@ class PlayerTabViewModel(
     }
 
     private fun buildSources(): List<SearchableSource> {
-        return aniyomi.installedExtensions.value
+        return orderStore.sort(aniyomi.installedExtensions.value)
             .flatMap { ext ->
                 ext.sources.filterIsInstance<AnimeHttpSource>().map { httpSource ->
                     AniyomiSearchableSource(httpSource = httpSource, iconUrl = ext.iconUrl)
