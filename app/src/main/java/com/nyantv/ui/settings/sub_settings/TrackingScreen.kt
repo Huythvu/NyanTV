@@ -95,6 +95,18 @@ fun TrackingScreen(
                     "In ‘Always ask’ mode, remember your answer per anime",
                     askOnce,
                 ) { vm.setAskOncePerSeries(it) }
+                if (askOnce) {
+                    Row(
+                        modifier              = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        var reset by remember { mutableStateOf(false) }
+                        TextButton(
+                            onClick  = { vm.clearSeriesConsents(); reset = true },
+                            modifier = Modifier.focusBorder(RoundedCornerShape(50)),
+                        ) { Text(if (reset) "Choices reset" else "Reset remembered choices") }
+                    }
+                }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
                 StepperRow(
                     label     = "Watched threshold",

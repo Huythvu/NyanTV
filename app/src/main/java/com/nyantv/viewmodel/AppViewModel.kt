@@ -374,6 +374,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Forget every remembered "Always ask" choice, so each series prompts again. */
+    fun clearSeriesConsents() = prefs.edit {
+        remove("tracking_consent_yes")
+        remove("tracking_consent_no")
+    }
+
     // ── Sync Tracking ──────────────────────────────────────────────────────────
     private val _syncMalWithAnilist = MutableStateFlow(prefs.getBoolean("sync_mal_anilist", false))
     val syncMalWithAnilist: StateFlow<Boolean> = _syncMalWithAnilist.asStateFlow()
@@ -549,6 +555,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun fetchDetails(id: String): Media {
         externalMedia[id]?.let { return it }
+        // Extension-only anime (e.g. opened cold from the TV "Play Next" row) must never hit a
+        // tracking API — recover its title/poster from the local watch index instead.
+        if (id.isExternalMediaId()) {
+            historyIndex.list().firstOrNull { it.id == id }?.let { e ->
+                return Media(id = e.id, title = e.title, poster = e.poster, serviceType = ServiceType.ANILIST, idMal = e.malId)
+                    .also { registerExternalMedia(it) }
+            }
+            return Media(id = id, title = "?")
+        }
         return runCatching { _service.fetchDetails(id) }.getOrElse { Media(id = id, title = "?") }
     }
 
