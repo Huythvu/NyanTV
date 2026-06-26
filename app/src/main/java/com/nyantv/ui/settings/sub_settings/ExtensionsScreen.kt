@@ -22,6 +22,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -116,6 +117,8 @@ fun ExtensionsScreen(
 
     var deleteTarget by remember { mutableStateOf<AnimeExtension.Installed?>(null) }
     var settingsTarget by remember { mutableStateOf<AnimeExtension.Installed?>(null) }
+    // Which language group is expanded in the Available list (null = all collapsed, one at a time).
+    var expandedLang by remember { mutableStateOf<String?>(null) }
 
     // User-defined order (decides which extension is probed first). Re-derived whenever the
     // installed set changes (install / uninstall).
@@ -242,20 +245,62 @@ fun ExtensionsScreen(
         } else {
             availableByLang.forEach { (lang, exts) ->
                 item(key = "header_$lang") {
-                    Text(
-                        text = langDisplayName(lang),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+                    LanguageAccordionHeader(
+                        label    = langDisplayName(lang),
+                        count    = exts.size,
+                        expanded = expandedLang == lang,
+                        onClick  = { expandedLang = if (expandedLang == lang) null else lang },
                     )
                 }
-                items(exts, key = { "available_${it.pkgName}" }) { ext ->
-                    AvailableExtensionItem(
-                        extension = ext,
-                        onInstall = { viewModel.installExtension(ext) }
-                    )
+                if (expandedLang == lang) {
+                    items(exts, key = { "available_${it.pkgName}" }) { ext ->
+                        AvailableExtensionItem(
+                            extension = ext,
+                            onInstall = { viewModel.installExtension(ext) }
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun LanguageAccordionHeader(
+    label:    String,
+    count:    Int,
+    expanded: Boolean,
+    onClick:  () -> Unit,
+) {
+    Surface(
+        onClick  = onClick,
+        modifier = Modifier.fillMaxWidth().focusBorder(MaterialTheme.shapes.medium),
+        shape    = MaterialTheme.shapes.medium,
+        color    = if (expanded) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                   else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+    ) {
+        Row(
+            modifier              = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+        ) {
+            Text(
+                text     = label,
+                style    = MaterialTheme.typography.labelLarge,
+                color    = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text  = "$count",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            )
+            Icon(
+                Icons.Filled.KeyboardArrowDown,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                modifier           = Modifier.rotate(if (expanded) 180f else 0f),
+                tint               = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
         }
     }
 }
