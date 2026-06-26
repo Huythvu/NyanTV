@@ -63,9 +63,24 @@ fun PairLoginScreen(vm: AppViewModel, onBack: () -> Unit, onSuccess: () -> Unit)
         status = "Requesting a code…"
         val s = client.newSession("anilist")
         if (s == null) {
-            error = "Couldn't reach the pairing server" +
-                (client.lastError?.let { " ($it)" } ?: "") +
-                ". Check your connection and try again."
+            val detail = client.lastError
+            // A TLS/certificate failure on this flow is almost always a wrong device clock (the
+            // cert looks out-of-date), so point the user there instead of "check your connection".
+            val looksLikeTls = detail != null && listOf(
+                "chain validation", "certificate", "cert path", "certpath",
+                "trust anchor", "ssl", "handshake", "validation failed",
+            ).any { detail.contains(it, ignoreCase = true) }
+            error = buildString {
+                append("Couldn't reach the pairing server")
+                if (detail != null) append(" ($detail)")
+                append(".\n")
+                if (looksLikeTls) {
+                    append("This usually means the device's date & time is wrong. ")
+                    append("Fix the clock (Settings → Date & time) and try again.")
+                } else {
+                    append("Check your connection and try again.")
+                }
+            }
             return@LaunchedEffect
         }
         session = s
