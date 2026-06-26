@@ -46,6 +46,11 @@ private val FORMATS = listOf(
     "SPECIAL"  to "Special",
     "TV_SHORT" to "Short",
 )
+private val YEARS: List<Pair<Int?, String>> = buildList {
+    add(null to "Any year")
+    val now = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+    for (y in now downTo 1960) add(y to y.toString())
+}
 
 @Composable
 fun BrowseScreen(navController: NavController, onDetailClick: (String) -> Unit) {
@@ -83,6 +88,11 @@ fun BrowseScreen(navController: NavController, onDetailClick: (String) -> Unit) 
                 label    = SORTS.firstOrNull { it.first == state.filters.sort }?.second ?: "Sort",
                 options  = SORTS.map { it.second },
                 onSelect = { idx -> vm.setSort(SORTS[idx].first) },
+            )
+            FilterDropdown(
+                label    = YEARS.firstOrNull { it.first == state.filters.year }?.second ?: "Year",
+                options  = YEARS.map { it.second },
+                onSelect = { idx -> vm.setYear(YEARS[idx].first) },
             )
             FilterDropdown(
                 label    = FORMATS.firstOrNull { it.first == state.filters.format }?.second ?: "Format",
