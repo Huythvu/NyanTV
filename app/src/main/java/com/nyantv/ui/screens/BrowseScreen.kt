@@ -46,6 +46,13 @@ private val FORMATS = listOf(
     "SPECIAL"  to "Special",
     "TV_SHORT" to "Short",
 )
+private val SEASONS = listOf(
+    null     to "Any season",
+    "WINTER" to "Winter",
+    "SPRING" to "Spring",
+    "SUMMER" to "Summer",
+    "FALL"   to "Fall",
+)
 private val YEARS: List<Pair<Int?, String>> = buildList {
     add(null to "Any year")
     val now = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
@@ -79,15 +86,22 @@ fun BrowseScreen(navController: NavController, onDetailClick: (String) -> Unit) 
 
         Spacer(Modifier.height(12.dp))
 
-        // ── Sort + Format selectors ───────────────────────────────────────────
+        // ── Sort / Season / Year / Format selectors ───────────────────────────
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             FilterDropdown(
                 label    = SORTS.firstOrNull { it.first == state.filters.sort }?.second ?: "Sort",
                 options  = SORTS.map { it.second },
                 onSelect = { idx -> vm.setSort(SORTS[idx].first) },
+            )
+            FilterDropdown(
+                label    = SEASONS.firstOrNull { it.first == state.filters.season }?.second ?: "Season",
+                options  = SEASONS.map { it.second },
+                onSelect = { idx -> vm.setSeason(SEASONS[idx].first) },
             )
             FilterDropdown(
                 label    = YEARS.firstOrNull { it.first == state.filters.year }?.second ?: "Year",
