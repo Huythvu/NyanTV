@@ -2,6 +2,15 @@ package com.nyantv.data
 
 import kotlinx.serialization.json.*
 
+/**
+ * Synthetic id prefix for anime opened straight from an extension catalog that has no
+ * matching AniList/MAL entry. Such media are watchable but not trackable; code that talks
+ * to a tracking service must skip these ids.
+ */
+const val EXTERNAL_MEDIA_PREFIX = "ext:"
+
+fun String.isExternalMediaId() = startsWith(EXTERNAL_MEDIA_PREFIX)
+
 // ─── Domain models ────────────────────────────────────────────────────────────
 
 data class Media(

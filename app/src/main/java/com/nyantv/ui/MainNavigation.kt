@@ -185,7 +185,7 @@ fun MainNavigation(
                 composable(Screen.Anime.route) {
                     val browseService by vm.serviceType.collectAsStateWithLifecycle()
                     if (browseService == ServiceType.ANILIST) {
-                        com.nyantv.ui.screens.BrowseScreen(navController) { openDetail(it) }
+                        com.nyantv.ui.screens.BrowseScreen(navController, vm) { openDetail(it) }
                     } else {
                         AnimeScreen(vm, navController) { openDetail(it) }
                     }

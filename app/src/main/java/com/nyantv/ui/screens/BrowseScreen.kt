@@ -16,15 +16,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import android.widget.Toast
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import com.nyantv.ui.MediaCard
 import com.nyantv.ui.utils.focusBorder
+import com.nyantv.viewmodel.AppViewModel
 import com.nyantv.viewmodel.BrowseViewModel
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 
@@ -63,11 +62,10 @@ private val YEARS: List<Pair<Int?, String>> = buildList {
 }
 
 @Composable
-fun BrowseScreen(navController: NavController, onDetailClick: (String) -> Unit) {
+fun BrowseScreen(navController: NavController, appVm: AppViewModel, onDetailClick: (String) -> Unit) {
     val vm: BrowseViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val gridState = rememberLazyGridState()
-    val context = LocalContext.current
 
     val extensionMode = state.selectedSourceId != null
     // Source dropdown: AniList first, then each installed extension.
@@ -199,13 +197,13 @@ fun BrowseScreen(navController: NavController, onDetailClick: (String) -> Unit) 
                                 if (extensionMode) {
                                     vm.resolveAndOpen(
                                         media      = media,
+                                        // Matched on AniList → rich detail page.
                                         onResolved = { onDetailClick(it) },
+                                        // No AniList match → still watchable from the extension,
+                                        // just with sparse metadata.
                                         onFailed   = {
-                                            Toast.makeText(
-                                                context,
-                                                "Couldn't match “${media.title}” on AniList.",
-                                                Toast.LENGTH_SHORT,
-                                            ).show()
+                                            appVm.registerExternalMedia(media)
+                                            onDetailClick(media.id)
                                         },
                                     )
                                 } else {

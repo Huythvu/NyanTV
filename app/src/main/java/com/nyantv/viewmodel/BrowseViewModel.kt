@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nyantv.data.AnilistService
+import com.nyantv.data.EXTERNAL_MEDIA_PREFIX
 import com.nyantv.data.Media
 import com.nyantv.data.ServiceType
 import com.nyantv.extensions.AniyomiExtensions
@@ -210,7 +211,7 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
         }
 
     private fun SAnime.toBrowseMedia(sourceId: Long): Media = Media(
-        id          = "ext:$sourceId:$url",
+        id          = "$EXTERNAL_MEDIA_PREFIX$sourceId:$url",
         title       = title,
         poster      = thumbnail_url,
         serviceType = ServiceType.ANILIST,

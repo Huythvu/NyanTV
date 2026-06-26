@@ -397,8 +397,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { _searchResults.value = _service.search(query) }
     }
 
-    suspend fun fetchDetails(id: String): Media =
-        runCatching { _service.fetchDetails(id) }.getOrElse { Media(id = id, title = "?") }
+    /** Media opened straight from an extension catalog (no AniList/MAL entry); watchable, not tracked. */
+    private val externalMedia = mutableMapOf<String, Media>()
+
+    fun registerExternalMedia(media: Media) { externalMedia[media.id] = media }
+
+    suspend fun fetchDetails(id: String): Media {
+        externalMedia[id]?.let { return it }
+        return runCatching { _service.fetchDetails(id) }.getOrElse { Media(id = id, title = "?") }
+    }
 
     // OAuth authorize URL to display in the in-app WebView (null = no login in progress).
     private val _authUrl = MutableStateFlow<String?>(null)
@@ -419,6 +426,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun updateEntry(id: String, status: String?, progress: Int?, score: Float?) =
         viewModelScope.launch {
+            // Extension-only anime have no tracking entry; skip remote writes (watch
+            // progress is still kept locally via the player's watch-history store).
+            if (id.isExternalMediaId()) return@launch
             _service.updateEntry(id, status, progress, score)
 
             _animeList.update { list ->
@@ -438,6 +448,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
 
     fun deleteEntry(id: String) = viewModelScope.launch {
+        if (id.isExternalMediaId()) return@launch
         _service.deleteEntry(id)
         if (_syncMalWithAnilist.value) {
             val sm = syncManager ?: return@launch

@@ -37,6 +37,7 @@ import coil.compose.AsyncImage
 import com.nyantv.data.Media
 import com.nyantv.data.ServiceType
 import com.nyantv.data.TrackedMedia
+import com.nyantv.data.isExternalMediaId
 import com.nyantv.player.EpisodeState
 import com.nyantv.player.PlayerTabViewModel
 import com.nyantv.ui.*
@@ -273,7 +274,8 @@ fun DetailScreen(
                 when (activeTab) {
                     DetailTab.INFO -> infoItems(
                         media              = m,
-                        loggedIn           = loggedIn,
+                        // Extension-only anime can't be tracked, so hide the list controls.
+                        loggedIn           = loggedIn && !id.isExternalMediaId(),
                         currentEntry       = currentEntry,
                         onShowEdit         = { showEdit = true },
                         onNavigateToDetail = onNavigateToDetail,
