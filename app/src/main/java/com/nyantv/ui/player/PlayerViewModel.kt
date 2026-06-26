@@ -137,19 +137,12 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     val watchedEvent: SharedFlow<WatchedEvent> = _watchedEvent.asSharedFlow()
 
     private var trackingExcluded = false
-    private val _trackingActive = MutableStateFlow(false)
-    /** Whether progress is currently being tracked this sitting (drives the incognito toggle UI). */
-    val trackingActive: StateFlow<Boolean> = _trackingActive.asStateFlow()
     val isTrackingExcluded: Boolean get() = trackingExcluded
     val currentMediaId: String get() = mediaId
 
     fun setSessionTracking(enabled: Boolean) {
         sessionTrackingEnabled = enabled && !trackingExcluded
-        _trackingActive.value  = sessionTrackingEnabled
     }
-
-    /** Player-overlay incognito toggle: flip tracking for this sitting only. */
-    fun toggleSessionTracking() = setSessionTracking(!sessionTrackingEnabled)
 
     private val _currentCue = MutableStateFlow<String?>(null)
     val currentCue: StateFlow<String?> = _currentCue.asStateFlow()

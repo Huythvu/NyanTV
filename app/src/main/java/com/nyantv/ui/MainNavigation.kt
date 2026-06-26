@@ -37,6 +37,7 @@ import androidx.navigation.navArgument
 import kotlinx.coroutines.delay
 import coil.compose.AsyncImage
 import com.nyantv.data.ServiceType
+import com.nyantv.ui.utils.focusBorder
 import com.nyantv.ui.anime.AnimeScreen
 import com.nyantv.ui.home.HomeScreen
 import com.nyantv.ui.library.LibraryScreen
@@ -155,6 +156,10 @@ fun MainNavigation(
                     serviceType     = serviceType,
                     vm              = vm,
                     sidebarFocusReq = sidebarFocusReq,
+                    onLogin         = {
+                        if (vm.serviceType.value == ServiceType.ANILIST) navController.navigate("pair/anilist")
+                        else vm.login()
+                    },
                     onNavigate      = { screen ->
                         if (currentRoute == "search") navController.popBackStack()
                         navController.navigate(screen.route) {
@@ -279,10 +284,13 @@ private fun Sidebar(
     serviceType:     ServiceType,
     vm:              AppViewModel,
     sidebarFocusReq: FocusRequester,
+    onLogin:         () -> Unit,
     onNavigate:      (Screen) -> Unit
 ) {
-    val profile  by vm.profile.collectAsStateWithLifecycle()
-    val loggedIn by vm.isLoggedIn.collectAsStateWithLifecycle()
+    val profile   by vm.profile.collectAsStateWithLifecycle()
+    val loggedIn  by vm.isLoggedIn.collectAsStateWithLifecycle()
+    val incognito by vm.incognito.collectAsStateWithLifecycle()
+    var showMenu  by remember { mutableStateOf(false) }
 
     val focusOwnerRoute = when (currentRoute) {
         "search" -> Screen.Anime.route
@@ -302,21 +310,40 @@ private fun Sidebar(
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainer),
+                .focusBorder(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainer)
+                .clickable { showMenu = true },
             contentAlignment = Alignment.Center
         ) {
-            if (loggedIn && profile?.avatar != null) {
-                AsyncImage(
+            when {
+                incognito -> Icon(
+                    Icons.Filled.VisibilityOff, contentDescription = "Incognito (tracking paused)",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                loggedIn && profile?.avatar != null -> AsyncImage(
                     model              = profile!!.avatar,
                     contentDescription = "Profile",
                     modifier           = Modifier.fillMaxSize().clip(CircleShape)
                 )
-            } else {
-                Icon(
+                else -> Icon(
                     Icons.Filled.Person, contentDescription = "Profile",
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
+        }
+
+        if (showMenu) {
+            ProfileMenuDialog(
+                serviceType = serviceType,
+                loggedIn    = loggedIn,
+                profileName = profile?.name,
+                incognito   = incognito,
+                onSwitchService = { vm.switchService(it) },
+                onSetIncognito  = { vm.setIncognito(it) },
+                onLogin         = { showMenu = false; onLogin() },
+                onLogout        = { showMenu = false; vm.logout() },
+                onDismiss       = { showMenu = false },
+            )
         }
 
         Spacer(Modifier.height(16.dp))
@@ -331,6 +358,66 @@ private fun Sidebar(
             )
         }
     }
+}
+
+// ─── Profile menu ──────────────────────────────────────────────────────────────
+
+@Composable
+private fun ProfileMenuDialog(
+    serviceType:     ServiceType,
+    loggedIn:        Boolean,
+    profileName:     String?,
+    incognito:       Boolean,
+    onSwitchService: (ServiceType) -> Unit,
+    onSetIncognito:  (Boolean) -> Unit,
+    onLogin:         () -> Unit,
+    onLogout:        () -> Unit,
+    onDismiss:       () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(profileName?.takeIf { loggedIn } ?: "Account") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Tracking service", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(ServiceType.ANILIST, ServiceType.MAL).forEach { svc ->
+                        FilterChip(
+                            selected = serviceType == svc,
+                            onClick  = { onSwitchService(svc) },
+                            label    = { Text(svc.label) },
+                            modifier = Modifier.focusBorder(MaterialTheme.shapes.small, inset = true),
+                        )
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                Row(
+                    modifier              = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment     = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Incognito", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Pause all tracking until turned off",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Switch(
+                        checked         = incognito,
+                        onCheckedChange = onSetIncognito,
+                        modifier        = Modifier.focusBorder(androidx.compose.foundation.shape.RoundedCornerShape(50)),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (loggedIn) TextButton(onClick = onLogout) { Text("Log out", color = MaterialTheme.colorScheme.error) }
+            else          TextButton(onClick = onLogin)  { Text("Log in") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }
 
 // ─── Sidebar item ──────────────────────────────────────────────────────────────

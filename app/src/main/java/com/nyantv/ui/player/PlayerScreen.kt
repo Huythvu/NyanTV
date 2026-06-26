@@ -208,7 +208,8 @@ fun PlayerScreen(
         mainFocusRequester.requestFocus()
         showControls()
         when {
-            // Extension excluded from tracking → never track, don't even ask.
+            // Global incognito or an excluded extension → never track, don't even ask.
+            appVm.incognito.value -> vm.setSessionTracking(false)
             vm.isTrackingExcluded -> vm.setSessionTracking(false)
             else -> when (appVm.trackingMode.value) {
                 AppViewModel.TrackingMode.ALWAYS_AUTO -> vm.setSessionTracking(true)
@@ -340,12 +341,6 @@ fun PlayerScreen(
                 onOpenStreamPicker    = { pauseForSettings(); showStreamPicker = true },
                 onOpenSubPicker       = { pauseForSettings(); showSubPicker    = true },
                 onSubSettings         = { pauseForSettings(); showSubSettings  = true },
-                onToggleTracking      = {
-                    vm.toggleSessionTracking()
-                    // In ask-once mode, a manual flip becomes the remembered choice for this series,
-                    // so you can re-enable a series you previously chose not to track.
-                    if (appVm.askOncePerSeries.value) appVm.rememberSeriesConsent(vm.currentMediaId, vm.trackingActive.value)
-                },
                 pauseForSettings      = ::pauseForSettings
             )
         }
@@ -663,7 +658,6 @@ private fun PlayerControls(
     onOpenStreamPicker:    () -> Unit,
     onOpenSubPicker:       () -> Unit,
     onSubSettings:         () -> Unit,
-    onToggleTracking:      () -> Unit,
     pauseForSettings:      () -> Unit
 ) {
     val gradientTop = Color.Black.copy(alpha = 0.7f)
@@ -691,19 +685,6 @@ private fun PlayerControls(
                 style    = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f)
             )
-
-            // Incognito toggle — don't track this sitting (hidden when the source is always excluded)
-            if (!vm.isTrackingExcluded) {
-                val tracking by vm.trackingActive.collectAsStateWithLifecycle()
-                TvIconButton(onClick = onToggleTracking) {
-                    Icon(
-                        if (tracking) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                        contentDescription = if (tracking) "Tracking on — tap to go incognito" else "Incognito — not tracking this sitting",
-                        tint = if (tracking) Color.White else MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Spacer(Modifier.width(4.dp))
-            }
 
             // Stream picker button — only if more than one stream available
             if (hasStreams) {

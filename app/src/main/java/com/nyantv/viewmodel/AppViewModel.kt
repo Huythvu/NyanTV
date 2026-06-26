@@ -338,6 +338,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit { putString("tracking_mode", mode.name) }
     }
 
+    // ── Incognito (global, temporary override — forces tracking off, mutates no settings) ────────
+    private val _incognito = MutableStateFlow(prefs.getBoolean("incognito", false))
+    val incognito: StateFlow<Boolean> = _incognito.asStateFlow()
+    fun setIncognito(v: Boolean) { _incognito.value = v; prefs.edit { putBoolean("incognito", v) } }
+
     // ── Extra tracking options ───────────────────────────────────────────────────
     private val _autoCompleteTracking = MutableStateFlow(prefs.getBoolean("track_auto_complete", false))
     private val _askOncePerSeries     = MutableStateFlow(prefs.getBoolean("track_ask_once",      false))
