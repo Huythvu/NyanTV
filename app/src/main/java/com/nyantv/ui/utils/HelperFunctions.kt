@@ -78,7 +78,7 @@ fun ScoreBadge(averageScore: Int?) {
 fun Modifier.focusBorder(
     shape: Shape,
     gap: Dp = 1.dp,
-    color: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+    color: Color = MaterialTheme.colorScheme.primary,
     inset: Boolean = false,
     isFocused: Boolean? = null,
 ): Modifier {
@@ -89,12 +89,17 @@ fun Modifier.focusBorder(
         .drawWithContent {
             drawContent()
             if (focused) {
-                val strokeWidth = 2f * density
+                val strokeWidth = 3f * density
+                // A dark edge under the ring so focus stays visible even on buttons whose
+                // background is the same colour as the ring (e.g. primary-filled buttons).
+                val haloWidth = strokeWidth + 2f * density
+                val halo      = Color.Black.copy(alpha = 0.55f)
                 if (inset) {
-                    val half = strokeWidth / 2f
+                    val half = haloWidth / 2f
                     val insetSize = Size(size.width - half * 2, size.height - half * 2)
                     val outline = shape.createOutline(insetSize, layoutDirection, this)
                     translate(left = half, top = half) {
+                        drawOutline(outline = outline, color = halo,  style = Stroke(width = haloWidth))
                         drawOutline(outline = outline, color = color, style = Stroke(width = strokeWidth))
                     }
                 } else {
@@ -102,6 +107,7 @@ fun Modifier.focusBorder(
                     val largerSize = Size(size.width + gapPx * 2, size.height + gapPx * 2)
                     val outline = shape.createOutline(largerSize, layoutDirection, this)
                     translate(left = -gapPx, top = -gapPx) {
+                        drawOutline(outline = outline, color = halo,  style = Stroke(width = haloWidth))
                         drawOutline(outline = outline, color = color, style = Stroke(width = strokeWidth))
                     }
                 }

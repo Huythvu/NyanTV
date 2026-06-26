@@ -41,13 +41,24 @@ data class FocusIndication(
         override fun ContentDrawScope.draw() {
             drawContent()
             if (isFocused) {
-                val stroke   = 2f * density
-                val inset    = stroke / 2f
-                val cornerPx = cornerRadiusDp.toPx()
+                val stroke    = 3f * density
+                val haloWidth = stroke + 2f * density
+                val inset     = haloWidth / 2f
+                val cornerPx  = cornerRadiusDp.toPx()
+                val topLeft   = Offset(inset, inset)
+                val rectSize  = Size(size.width - inset * 2, size.height - inset * 2)
+                // Dark edge under the ring so focus reads on same-coloured backgrounds.
+                drawRoundRect(
+                    color        = Color.Black.copy(alpha = 0.55f),
+                    topLeft      = topLeft,
+                    size         = rectSize,
+                    style        = Stroke(width = haloWidth),
+                    cornerRadius = CornerRadius(cornerPx)
+                )
                 drawRoundRect(
                     color        = borderColor,
-                    topLeft      = Offset(inset, inset),
-                    size         = Size(size.width - inset * 2, size.height - inset * 2),
+                    topLeft      = topLeft,
+                    size         = rectSize,
                     style        = Stroke(width = stroke),
                     cornerRadius = CornerRadius(cornerPx)
                 )
