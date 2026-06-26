@@ -43,6 +43,16 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
     ) {
         SubScreenHeader(title = "Accounts & Services", navController = navController)
 
+        // AniList logs in via phone/PC pairing (TV-friendly, no Cloudflare); the others use the
+        // in-app WebView. [fresh] forces a signed-out login so a different account can be used.
+        fun beginLogin(fresh: Boolean) {
+            when {
+                service == ServiceType.ANILIST -> navController.navigate("pair/anilist")
+                fresh                          -> vm.loginWithDifferentAccount()
+                else                           -> vm.login()
+            }
+        }
+
         // ── Account ────────────────────────────────────────────────────────────
         SectionCard(title = "Account") {
             if (loggedIn && profile != null) {
@@ -65,7 +75,16 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         }
                     }
-                    OutlinedButton(onClick = { vm.logout() }) { Text("Logout") }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(
+                            onClick  = { beginLogin(fresh = true) },
+                            modifier = Modifier.focusBorder(MaterialTheme.shapes.small)
+                        ) { Text("Switch account") }
+                        OutlinedButton(
+                            onClick  = { vm.logout() },
+                            modifier = Modifier.focusBorder(MaterialTheme.shapes.small)
+                        ) { Text("Logout") }
+                    }
                 }
             } else {
                 Row(
@@ -77,12 +96,7 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                     Text("Not logged in", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
                         Button(
-                            onClick = {
-                                // AniList logs in via phone/PC pairing (TV-friendly, no Cloudflare);
-                                // the others use the in-app WebView.
-                                if (service == ServiceType.ANILIST) navController.navigate("pair/anilist")
-                                else vm.login()
-                            },
+                            onClick  = { beginLogin(fresh = false) },
                             modifier = Modifier.focusBorder(CircleShape)
                         ) {
                             Text("Login")

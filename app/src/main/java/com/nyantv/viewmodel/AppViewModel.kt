@@ -416,12 +416,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Called by the auth WebView once the login flow ends (success or cancel). */
     fun onAuthHandled() { _authUrl.value = null }
 
-    fun logout() = viewModelScope.launch {
-        _service.logout()
-        // The in-app login WebView (MAL/Simkl) keeps its session in the shared cookie jar, so
-        // without this a logout → login would silently sign back into the same account. Clearing
-        // it forces a fresh login form, making account switching possible.
+    fun logout() = viewModelScope.launch { _service.logout() }
+
+    /**
+     * Starts a login while forcing a signed-out state first: the in-app WebView (MAL/Simkl) keeps
+     * its session in the shared cookie jar, so a plain login would silently reuse the same account.
+     * This clears that session so the user can sign into a different account.
+     */
+    fun loginWithDifferentAccount() {
         clearAuthWebViewSession()
+        login()
     }
 
     /** Wipes the in-app WebView's cookies + DOM storage so the next OAuth login starts signed-out. */
