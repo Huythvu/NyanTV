@@ -437,7 +437,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
 
 
-    fun deleteEntry(id: String) = viewModelScope.launch { _service.deleteEntry(id) }
+    fun deleteEntry(id: String) = viewModelScope.launch {
+        _service.deleteEntry(id)
+        if (_syncMalWithAnilist.value) {
+            val sm = syncManager ?: return@launch
+            when (_serviceType.value) {
+                ServiceType.ANILIST -> sm.syncDeleteFromAnilist(id)
+                ServiceType.MAL     -> sm.syncDeleteFromMal(id)
+                ServiceType.SIMKL   -> { }
+            }
+        }
+    }
 
     fun markEpisodeWatched(mediaId: String, episodeNumber: Int) {
         updateEntry(

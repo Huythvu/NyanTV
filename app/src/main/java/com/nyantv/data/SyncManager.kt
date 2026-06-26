@@ -93,6 +93,36 @@ class SyncManager(
         }
     }
 
+    /** Mirror an AniList delete to MAL (if MAL is logged in and an id mapping exists). */
+    suspend fun syncDeleteFromAnilist(anilistId: String) = withContext(Dispatchers.IO) {
+        if (!mal.isLoggedIn.value) {
+            Log.d(TAG, "MAL not logged in – skipping delete sync from AniList")
+            return@withContext
+        }
+        val malId = resolveMalId(anilistId) ?: run {
+            Log.w(TAG, "Could not resolve MAL id for AniList id=$anilistId (delete)")
+            return@withContext
+        }
+        Log.d(TAG, "Deleting on MAL($malId) to mirror AniList($anilistId)")
+        runCatching { mal.deleteEntry(malId) }
+            .onFailure { Log.e(TAG, "MAL deleteEntry failed for malId=$malId", it) }
+    }
+
+    /** Mirror a MAL delete to AniList (if AniList is logged in and an id mapping exists). */
+    suspend fun syncDeleteFromMal(malId: String) = withContext(Dispatchers.IO) {
+        if (!anilist.isLoggedIn.value) {
+            Log.d(TAG, "AniList not logged in – skipping delete sync from MAL")
+            return@withContext
+        }
+        val anilistId = resolveAnilistId(malId) ?: run {
+            Log.w(TAG, "Could not resolve AniList id for MAL id=$malId (delete)")
+            return@withContext
+        }
+        Log.d(TAG, "Deleting on AniList($anilistId) to mirror MAL($malId)")
+        runCatching { anilist.deleteEntry(anilistId) }
+            .onFailure { Log.e(TAG, "AniList deleteEntry failed for anilistId=$anilistId", it) }
+    }
+
     // ── ID resolution ──────────────────────────────────────────────────────────
 
     /**
