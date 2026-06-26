@@ -106,8 +106,9 @@ class WatchHistoryStore(context: Context) {
         anilistId?.let { "al_$it" } ?: malId?.let { "mal_$it" }
 
     /** Wipes every local trace (resume, per-episode progress, watched set) for one anime. */
-    fun clearAllForAnilistMal(anilistId: String?, malId: String?) =
+    fun clearAllForAnilistMal(anilistId: String?, malId: String?) {
         clearAllForKey(resumeKey(anilistId, malId) ?: return)
+    }
 
     fun clearAllForSimkl(simklId: String) = clearAllForKey("simkl_$simklId")
 
