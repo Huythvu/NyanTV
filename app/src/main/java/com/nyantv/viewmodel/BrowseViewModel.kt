@@ -39,6 +39,8 @@ data class BrowseState(
     val selectedSourceId: Long? = null,
     /** The selected extension's own (live, mutable) filter controls. */
     val extFilters: List<AnimeFilter<*>> = emptyList(),
+    /** Free-text search within the selected extension (blank = its popular catalog). */
+    val extQuery: String = "",
     /** Bumped whenever an extension filter's state is mutated, to force a UI refresh. */
     val filterVersion: Int = 0,
     val results: List<Media> = emptyList(),
@@ -64,6 +66,8 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
     private var currentFilterList: AnimeFilterList? = null
     /** Once the user touches any extension filter, browse via search instead of popular. */
     private var extFiltersModified = false
+    /** Current free-text query within the selected extension. */
+    private var extQuery = ""
 
     private var page = 1
     private var loadJob: Job? = null
@@ -103,17 +107,32 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
         loadJob?.cancel()
         page = 1
         extFiltersModified = false
+        extQuery = ""
         currentFilterList = sourceId?.let { id -> runCatching { extSourceMap[id]?.getFilterList() }.getOrNull() }
         val extFilters = currentFilterList?.toList() ?: emptyList()
         _state.update {
             it.copy(
                 selectedSourceId = sourceId,
                 extFilters       = extFilters,
+                extQuery         = "",
                 filterVersion    = it.filterVersion + 1,
                 results          = emptyList(),
                 loading          = true,
                 endReached       = false,
             )
+        }
+        reload()
+    }
+
+    /** Search within the selected extension's catalog (blank query → its popular catalog). */
+    fun setExtensionQuery(query: String) {
+        val q = query.trim()
+        if (q == extQuery) return
+        extQuery = q
+        loadJob?.cancel()
+        page = 1
+        _state.update {
+            it.copy(extQuery = q, results = emptyList(), loading = true, endReached = false)
         }
         reload()
     }
@@ -198,11 +217,12 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
         withContext(Dispatchers.IO) {
             val src = extSourceMap[sourceId] ?: return@withContext FetchResult(emptyList(), false)
             val filters = currentFilterList
+            val query   = extQuery
             runCatching {
-                // Use the source's own filters/sort once the user touches them; otherwise
-                // show its popular catalog as the default landing view.
-                val ap = if (extFiltersModified && filters != null) {
-                    src.getSearchAnime(page, "", filters)
+                // Search the source once the user types a query or touches its filters;
+                // otherwise show its popular catalog as the default landing view.
+                val ap = if (query.isNotBlank() || extFiltersModified) {
+                    src.getSearchAnime(page, query, filters ?: AnimeFilterList())
                 } else {
                     src.getPopularAnime(page)
                 }

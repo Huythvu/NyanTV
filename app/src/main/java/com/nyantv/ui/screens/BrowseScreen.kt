@@ -9,9 +9,13 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -85,13 +89,23 @@ fun BrowseScreen(navController: NavController, appVm: AppViewModel, onDetailClic
     Column(modifier = Modifier.fillMaxSize().padding(top = 16.dp)) {
 
         // ── Search ────────────────────────────────────────────────────────────
-        SearchBar(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .focusBorder(MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primary, inset = true),
-            onClick = { navController.navigate("search") },
-        )
+        // In extension mode, search within the selected extension's catalog;
+        // otherwise jump to the global (AniList) search screen.
+        if (extensionMode) {
+            ExtensionSearchBar(
+                query    = state.extQuery,
+                onSubmit = { vm.setExtensionQuery(it) },
+                onClear  = { vm.setExtensionQuery("") },
+            )
+        } else {
+            SearchBar(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .focusBorder(MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primary, inset = true),
+                onClick = { navController.navigate("search") },
+            )
+        }
 
         Spacer(Modifier.height(12.dp))
 
@@ -259,6 +273,36 @@ private fun SearchBar(modifier: Modifier, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             )
+        }
+    }
+}
+
+/** Free-text search box for the current extension's catalog (TV-friendly, submit-on-enter). */
+@Composable
+private fun ExtensionSearchBar(query: String, onSubmit: (String) -> Unit, onClear: () -> Unit) {
+    var text by remember(query) { mutableStateOf(query) }
+    Row(
+        modifier              = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        OutlinedTextField(
+            value           = text,
+            onValueChange   = { text = it; if (it.isBlank()) onClear() },
+            placeholder     = { Text("Search this extension…", style = MaterialTheme.typography.bodyMedium) },
+            singleLine      = true,
+            leadingIcon     = { Icon(Icons.Filled.Search, contentDescription = null) },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSubmit(text.trim()) }),
+            shape           = MaterialTheme.shapes.large,
+            modifier        = Modifier
+                .weight(1f)
+                .focusBorder(MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primary, inset = true),
+        )
+        if (text.isNotEmpty()) {
+            IconButton(onClick = { text = ""; onClear() }) {
+                Icon(Icons.Filled.Close, contentDescription = "Clear search")
+            }
         }
     }
 }
