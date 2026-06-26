@@ -27,20 +27,34 @@ class PairingClient(private val baseUrl: String = BuildConfig.PAIR_BASE_URL) {
     private val http = OkHttpClient()
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** Why the last [newSession] failed (HTTP status / exception), for surfacing in the UI. */
+    var lastError: String? = null
+        private set
+
     suspend fun newSession(provider: String = "anilist"): PairSession? = withContext(Dispatchers.IO) {
-        runCatching {
+        lastError = null
+        try {
             val req = Request.Builder()
                 .url("$baseUrl/api/pair/new?provider=$provider")
                 .post("".toRequestBody("application/json".toMediaType()))
                 .build()
             http.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@use null
-                val o = json.parseToJsonElement(resp.body.string()).jsonObject
+                val body = resp.body.string()
+                if (!resp.isSuccessful) {
+                    lastError = "HTTP ${resp.code}" + body.take(120).let { if (it.isNotBlank()) ": $it" else "" }
+                    android.util.Log.e("PairingClient", "newSession failed: $lastError")
+                    return@use null
+                }
+                val o = json.parseToJsonElement(body).jsonObject
                 val code = o["code"]?.jsonPrimitive?.contentOrNull ?: return@use null
                 val url  = o["verifyUrl"]?.jsonPrimitive?.contentOrNull ?: return@use null
                 PairSession(code, url, o["expiresIn"]?.jsonPrimitive?.intOrNull ?: 600)
             }
-        }.getOrNull()
+        } catch (e: Exception) {
+            lastError = e.message ?: e.javaClass.simpleName
+            android.util.Log.e("PairingClient", "newSession error: $lastError", e)
+            null
+        }
     }
 
     suspend fun poll(code: String): PollResult = withContext(Dispatchers.IO) {

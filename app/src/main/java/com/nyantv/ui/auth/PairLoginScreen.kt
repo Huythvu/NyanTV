@@ -63,7 +63,9 @@ fun PairLoginScreen(vm: AppViewModel, onBack: () -> Unit, onSuccess: () -> Unit)
         status = "Requesting a code…"
         val s = client.newSession("anilist")
         if (s == null) {
-            error = "Couldn't reach the pairing server. Check your connection and try again."
+            error = "Couldn't reach the pairing server" +
+                (client.lastError?.let { " ($it)" } ?: "") +
+                ". Check your connection and try again."
             return@LaunchedEffect
         }
         session = s
