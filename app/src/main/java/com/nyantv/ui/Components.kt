@@ -80,7 +80,7 @@ fun MediaCard(
                         modifier = Modifier.size(9.dp)
                     )
                     Text(
-                        text  = "${tracked.episodeCount ?: 0}/${tracked.totalEpisodes ?: "?"}",
+                        text  = "${tracked.episodeCount ?: 0}/${tracked.totalEpisodes?.takeIf { it > 0 } ?: "?"}",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                         color = Color.White
                     )
@@ -195,7 +195,7 @@ fun TrackedCard(
                 color      = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                "${item.episodeCount ?: 0} / ${item.totalEpisodes ?: "?"} ep",
+                "${item.episodeCount ?: 0} / ${item.totalEpisodes?.takeIf { it > 0 } ?: "?"} ep",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
