@@ -16,8 +16,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -64,6 +66,14 @@ fun BrowseScreen(navController: NavController, onDetailClick: (String) -> Unit) 
     val vm: BrowseViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     val gridState = rememberLazyGridState()
+    val context = LocalContext.current
+
+    val extensionMode = state.selectedSourceId != null
+    // Source dropdown: AniList first, then each installed extension.
+    val sourceLabels = remember(state.extSources) {
+        listOf("AniList") + state.extSources.map { it.name }
+    }
+    val selectedSourceLabel = state.extSources.firstOrNull { it.id == state.selectedSourceId }?.name ?: "AniList"
 
     // Load the next page as the user nears the end of the grid.
     LaunchedEffect(gridState, state.results.size, state.endReached) {
@@ -86,56 +96,67 @@ fun BrowseScreen(navController: NavController, onDetailClick: (String) -> Unit) 
 
         Spacer(Modifier.height(12.dp))
 
-        // ── Sort / Season / Year / Format selectors ───────────────────────────
+        // ── Sort / Season / Year / Format / Source selectors ──────────────────
+        // AniList filters don't apply to an extension catalog, so hide them in
+        // extension mode and keep only the Source dropdown (always last).
         Row(
             modifier = Modifier
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            if (!extensionMode) {
+                FilterDropdown(
+                    label    = SORTS.firstOrNull { it.first == state.filters.sort }?.second ?: "Sort",
+                    options  = SORTS.map { it.second },
+                    onSelect = { idx -> vm.setSort(SORTS[idx].first) },
+                )
+                FilterDropdown(
+                    label    = SEASONS.firstOrNull { it.first == state.filters.season }?.second ?: "Season",
+                    options  = SEASONS.map { it.second },
+                    onSelect = { idx -> vm.setSeason(SEASONS[idx].first) },
+                )
+                FilterDropdown(
+                    label    = YEARS.firstOrNull { it.first == state.filters.year }?.second ?: "Year",
+                    options  = YEARS.map { it.second },
+                    onSelect = { idx -> vm.setYear(YEARS[idx].first) },
+                )
+                FilterDropdown(
+                    label    = FORMATS.firstOrNull { it.first == state.filters.format }?.second ?: "Format",
+                    options  = FORMATS.map { it.second },
+                    onSelect = { idx -> vm.setFormat(FORMATS[idx].first) },
+                )
+            }
             FilterDropdown(
-                label    = SORTS.firstOrNull { it.first == state.filters.sort }?.second ?: "Sort",
-                options  = SORTS.map { it.second },
-                onSelect = { idx -> vm.setSort(SORTS[idx].first) },
-            )
-            FilterDropdown(
-                label    = SEASONS.firstOrNull { it.first == state.filters.season }?.second ?: "Season",
-                options  = SEASONS.map { it.second },
-                onSelect = { idx -> vm.setSeason(SEASONS[idx].first) },
-            )
-            FilterDropdown(
-                label    = YEARS.firstOrNull { it.first == state.filters.year }?.second ?: "Year",
-                options  = YEARS.map { it.second },
-                onSelect = { idx -> vm.setYear(YEARS[idx].first) },
-            )
-            FilterDropdown(
-                label    = FORMATS.firstOrNull { it.first == state.filters.format }?.second ?: "Format",
-                options  = FORMATS.map { it.second },
-                onSelect = { idx -> vm.setFormat(FORMATS[idx].first) },
+                label    = selectedSourceLabel,
+                options  = sourceLabels,
+                onSelect = { idx -> vm.selectSource(if (idx == 0) null else state.extSources[idx - 1].id) },
             )
         }
 
         Spacer(Modifier.height(8.dp))
 
-        // ── Genre chips ───────────────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            GENRES.forEach { genre ->
-                val selected = genre in state.filters.genres
-                FilterChip(
-                    selected = selected,
-                    onClick  = { vm.toggleGenre(genre) },
-                    label    = { Text(genre, style = MaterialTheme.typography.labelMedium) },
-                    modifier = Modifier.focusBorder(MaterialTheme.shapes.small, inset = true),
-                )
+        // ── Genre chips (AniList mode only) ───────────────────────────────────
+        if (!extensionMode) {
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                GENRES.forEach { genre ->
+                    val selected = genre in state.filters.genres
+                    FilterChip(
+                        selected = selected,
+                        onClick  = { vm.toggleGenre(genre) },
+                        label    = { Text(genre, style = MaterialTheme.typography.labelMedium) },
+                        modifier = Modifier.focusBorder(MaterialTheme.shapes.small, inset = true),
+                    )
+                }
             }
-        }
 
-        Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
+        }
 
         // ── Results grid ──────────────────────────────────────────────────────
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
@@ -154,7 +175,26 @@ fun BrowseScreen(navController: NavController, onDetailClick: (String) -> Unit) 
                     verticalArrangement   = Arrangement.spacedBy(12.dp),
                 ) {
                     items(state.results, key = { it.id }) { media ->
-                        MediaCard(media = media, onClick = { onDetailClick(media.id) })
+                        MediaCard(
+                            media   = media,
+                            onClick = {
+                                if (extensionMode) {
+                                    vm.resolveAndOpen(
+                                        media      = media,
+                                        onResolved = { onDetailClick(it) },
+                                        onFailed   = {
+                                            Toast.makeText(
+                                                context,
+                                                "Couldn't match “${media.title}” on AniList.",
+                                                Toast.LENGTH_SHORT,
+                                            ).show()
+                                        },
+                                    )
+                                } else {
+                                    onDetailClick(media.id)
+                                }
+                            },
+                        )
                     }
                 }
             }
@@ -166,6 +206,17 @@ fun BrowseScreen(navController: NavController, onDetailClick: (String) -> Unit) 
                         .size(28.dp),
                     strokeWidth = 2.dp,
                 )
+            }
+            // Resolving an extension result to its AniList entry before opening detail.
+            if (state.resolving) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
             }
         }
     }
