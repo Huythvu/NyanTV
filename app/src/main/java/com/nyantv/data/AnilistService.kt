@@ -223,7 +223,16 @@ class AnilistService(context: Context) : MediaService {
         }
 
     override suspend fun deleteEntry(id: String) = withContext(Dispatchers.IO) {
-        gql(DELETE_MUTATION, mapOf("id" to (id.toIntOrNull() ?: 0)))
+        val mediaId = id.toIntOrNull() ?: return@withContext
+        val userId = _profile.value?.id?.toIntOrNull()
+            ?: run { fetchUserProfile(); _profile.value?.id?.toIntOrNull() }
+            ?: return@withContext
+        // AniList deletes by the MediaList *entry* id, not the media id — resolve it first.
+        val entryId = runCatching {
+            gql(MEDIA_LIST_ID_QUERY, mapOf("userId" to userId, "mediaId" to mediaId))["data"]
+                ?.jsonObject?.get("MediaList")?.jsonObject?.get("id")?.jsonPrimitive?.intOrNull
+        }.getOrNull() ?: return@withContext   // not on the list → nothing to delete
+        gql(DELETE_MUTATION, mapOf("id" to entryId))
         refreshUserLists()
         setCurrentMedia(id)
     }
@@ -363,6 +372,13 @@ class AnilistService(context: Context) : MediaService {
 
         val DELETE_MUTATION = $$"""
         mutation($id:Int) { DeleteMediaListEntry(id:$id) { deleted } }
+        """.trimIndent()
+
+        // Resolve the MediaList *entry* id (needed to delete) from the media id.
+        val MEDIA_LIST_ID_QUERY = $$"""
+        query($userId:Int, $mediaId:Int) {
+          MediaList(userId:$userId, mediaId:$mediaId) { id }
+        }
         """.trimIndent()
     }
 }
