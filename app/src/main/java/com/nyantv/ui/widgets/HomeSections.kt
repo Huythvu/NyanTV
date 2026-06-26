@@ -114,6 +114,7 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
         poster       = poster,
         episodes     = totalEpisodes,
         averageScore = averageScore?.takeIf { it > 0f },
+        status       = status,
         serviceType  = service,
         idMal        = if (service == ServiceType.MAL) id else null,
     )

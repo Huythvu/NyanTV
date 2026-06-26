@@ -12,7 +12,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.PauseCircle
-import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,7 +33,7 @@ import com.nyantv.ui.utils.ScoreBadge
 
 /** Airing states across services, each with the icon + colour shown on cards. */
 enum class AiringState(val key: String, val label: String, val icon: ImageVector, val color: Color) {
-    AIRING   ("airing",    "Currently Airing", Icons.Filled.FiberManualRecord, Color(0xFF4CAF50)),
+    AIRING   ("airing",    "Currently Airing", Icons.Filled.Sensors, Color(0xFF4CAF50)),
     FINISHED ("finished",  "Finished Airing",  Icons.Filled.CheckCircle,       Color(0xFF42A5F5)),
     NOT_YET  ("not_yet",   "Not Yet Aired",    Icons.Filled.Schedule,          Color(0xFFFFB300)),
     CANCELLED("cancelled", "Cancelled",        Icons.Filled.Cancel,            Color(0xFFEF5350)),

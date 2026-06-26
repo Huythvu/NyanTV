@@ -271,7 +271,7 @@ class MalService(context: Context) : MediaService {
     // ── User list ──────────────────────────────────────────────────────────────
 
     override suspend fun refreshUserLists() = withContext(Dispatchers.IO) {
-        val fields = "fields=num_episodes,mean,list_status,alternative_titles"
+        val fields = "fields=num_episodes,mean,list_status,alternative_titles,status"
         val data = get("$MAL_API/users/@me/animelist?$fields&limit=1000&sort=list_updated_at") ?: return@withContext
         val english = preferEnglishTitles()
         _animeList.value = data["data"]?.jsonArray?.map { entry ->
@@ -286,7 +286,8 @@ class MalService(context: Context) : MediaService {
                 totalEpisodes  = node["num_episodes"]?.jsonPrimitive?.intOrNull,
                 score          = status["score"]?.jsonPrimitive?.floatOrNull,
                 averageScore   = node["mean"]?.jsonPrimitive?.floatOrNull?.times(10)?.toInt(),
-                isMovie        = null
+                isMovie        = null,
+                status         = node["status"]?.jsonPrimitive?.contentOrNull.normalizeStatus(),
             )
         } ?: emptyList()
     }
