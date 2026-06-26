@@ -137,6 +137,7 @@ fun DetailScreen(
         val m = media ?: return@LaunchedEffect
         runCatching { backFocusReq.requestFocus() }
         playerVm.updateMediaTitle(m.title)
+        playerVm.setSearchTitles(listOf(m.title) + m.romajiTitle.orEmpty() + m.altTitles)
         playerVm.setMediaImages(m.cover, m.poster)
         m.idMal?.let { playerVm.updateMalId(it) }
         if (serviceType == ServiceType.SIMKL) {

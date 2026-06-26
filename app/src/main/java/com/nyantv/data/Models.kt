@@ -8,6 +8,7 @@ data class Media(
     val id: String,
     val title: String,
     val romajiTitle: String? = null,
+    val altTitles: List<String> = emptyList(),   // alternative titles (en/ja/synonyms) for source search
     val poster: String? = null,
     val cover: String? = null,          // banner
     val logo: String? = null,
@@ -66,6 +67,11 @@ fun JsonObject.toMedia(serviceType: ServiceType = ServiceType.ANILIST): Media {
         title       = title?.get("english")?.jsonPrimitive?.contentOrNull
             ?: title?.get("romaji")?.jsonPrimitive?.contentOrNull ?: "?",
         romajiTitle = title?.get("romaji")?.jsonPrimitive?.contentOrNull,
+        altTitles   = listOfNotNull(
+            title?.get("english")?.jsonPrimitive?.contentOrNull,
+            title?.get("romaji")?.jsonPrimitive?.contentOrNull,
+            title?.get("native")?.jsonPrimitive?.contentOrNull,
+        ).distinct(),
         poster      = cover?.get("large")?.jsonPrimitive?.contentOrNull,
         cover       = this["bannerImage"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.contentOrNull,
         color       = cover?.get("color")?.jsonPrimitive?.contentOrNull,

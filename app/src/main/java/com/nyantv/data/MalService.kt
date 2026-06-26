@@ -402,9 +402,17 @@ private fun JsonObject.toMalMedia(preferEnglish: Boolean = false): Media {
     val pic = this["main_picture"]?.jsonObject
     val malId = this["id"]?.jsonPrimitive?.contentOrNull.orEmpty()
     val startSeason = this["start_season"]?.jsonObject
+    val alt = this["alternative_titles"]?.jsonObject
+    val altTitles = buildList {
+        this@toMalMedia["title"]?.jsonPrimitive?.contentOrNull?.let { add(it) }
+        alt?.get("en")?.jsonPrimitive?.contentOrNull?.let { add(it) }
+        alt?.get("ja")?.jsonPrimitive?.contentOrNull?.let { add(it) }
+        alt?.get("synonyms")?.jsonArray?.forEach { s -> s.jsonPrimitive.contentOrNull?.let { add(it) } }
+    }.filter { it.isNotBlank() }.distinct()
     return Media(
         id           = malId,
         title        = pickTitle(preferEnglish),
+        altTitles    = altTitles,
         poster       = pic?.get("large")?.jsonPrimitive?.contentOrNull,
         description  = this["synopsis"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.contentOrNull,
         averageScore = this["mean"]?.jsonPrimitive?.floatOrNull?.times(10)?.toInt(),

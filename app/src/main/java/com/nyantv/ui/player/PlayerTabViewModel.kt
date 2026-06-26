@@ -129,6 +129,7 @@ class PlayerTabViewModel(
     private var pendingTargetSourceId: Long? = null
     private var probeJob:       Job? = null
     private var probeStartedQuery: String? = null
+    private var searchTitles: List<String> = emptyList()
 
     init {
         refreshWatchProgress()
@@ -240,6 +241,14 @@ class PlayerTabViewModel(
             }
     }
 
+    /** Extra title variants (romaji / English / synonyms) to widen the source probe. */
+    fun setSearchTitles(titles: List<String>) {
+        val cleaned = titles.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        if (cleaned == searchTitles) return
+        searchTitles = cleaned
+        if (_state.value.sources.isNotEmpty()) startProbe()
+    }
+
     /** Forget cached probe results for this anime and re-check every source from scratch. */
     fun recheckSources() {
         viewModelScope.launch {
@@ -252,10 +261,13 @@ class PlayerTabViewModel(
     /** Searches every installed source for the current title and records which ones have it. */
     private fun startProbe(force: Boolean = false) {
         val sources = _state.value.sources
-        val query   = _state.value.searchQuery.ifBlank { mediaTitle }.trim()
-        if (sources.isEmpty() || query.isBlank()) return
-        if (!force && probeStartedQuery == query) return
-        probeStartedQuery = query
+        val primary = _state.value.searchQuery.ifBlank { mediaTitle }.trim()
+        val queries = (listOf(primary) + searchTitles)
+            .map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        if (sources.isEmpty() || queries.isEmpty()) return
+        val key = queries.joinToString("|")
+        if (!force && probeStartedQuery == key) return
+        probeStartedQuery = key
 
         probeJob?.cancel()
         probeJob = viewModelScope.launch {
@@ -265,7 +277,7 @@ class PlayerTabViewModel(
                 sources.forEach { source ->
                     launch(Dispatchers.IO) {
                         gate.withPermit {
-                            if (probeSource(source, query, force)) {
+                            if (probeSource(source, queries, force)) {
                                 _state.update { it.copy(matchedSources = it.matchedSources + source.id) }
                             }
                         }
@@ -276,25 +288,32 @@ class PlayerTabViewModel(
         }
     }
 
-    /** True if [source] has the anime. Uses the persistent cache unless [force]d or it's stale. */
-    private suspend fun probeSource(source: SearchableSource, query: String, force: Boolean): Boolean {
+    /** True if [source] has the anime under any of [queries]. Uses the cache unless forced/stale. */
+    private suspend fun probeSource(source: SearchableSource, queries: List<String>, force: Boolean): Boolean {
         if (!force) {
             cache.loadProbe(source.id, mediaId)?.let { cached ->
                 if (System.currentTimeMillis() - cached.ts < PROBE_TTL_MS) return cached.matched
             }
         }
-        val page = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
-            try {
-                source.search(query)
-            } catch (c: kotlinx.coroutines.CancellationException) {
-                throw c
-            } catch (e: Throwable) {
-                null
+        // Try each title variant; an extension may list the anime under a different name.
+        for (q in queries) {
+            val page = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
+                try {
+                    source.search(q)
+                } catch (c: kotlinx.coroutines.CancellationException) {
+                    throw c
+                } catch (e: Throwable) {
+                    null
+                }
+            }
+            val firstAnime = page?.animes?.firstOrNull()
+            if (firstAnime != null) {
+                cache.saveProbe(source.id, mediaId, matched = true, anime = firstAnime)
+                return true
             }
         }
-        val firstAnime = page?.animes?.firstOrNull()
-        cache.saveProbe(source.id, mediaId, matched = firstAnime != null, anime = firstAnime)
-        return firstAnime != null
+        cache.saveProbe(source.id, mediaId, matched = false, anime = null)
+        return false
     }
 
     fun updateMediaTitle(title: String) {
