@@ -7,6 +7,8 @@ import com.nyantv.data.AnilistService
 import com.nyantv.data.Media
 import com.nyantv.data.ServiceType
 import com.nyantv.extensions.AniyomiExtensions
+import eu.kanade.tachiyomi.animesource.model.AnimeFilter
+import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,10 @@ data class BrowseState(
     val extSources: List<ExtSourceInfo> = emptyList(),
     /** null = AniList browse; otherwise the selected extension source id. */
     val selectedSourceId: Long? = null,
+    /** The selected extension's own (live, mutable) filter controls. */
+    val extFilters: List<AnimeFilter<*>> = emptyList(),
+    /** Bumped whenever an extension filter's state is mutated, to force a UI refresh. */
+    val filterVersion: Int = 0,
     val results: List<Media> = emptyList(),
     val loading: Boolean = true,        // filter-change / initial load
     val loadingMore: Boolean = false,   // pagination
@@ -52,6 +58,11 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
 
     /** id → raw extension source, for catalog/browse calls. */
     private val extSourceMap = mutableMapOf<Long, AnimeHttpSource>()
+
+    /** Live filter list for the selected extension (its `state`s are mutated in place). */
+    private var currentFilterList: AnimeFilterList? = null
+    /** Once the user touches any extension filter, browse via search instead of popular. */
+    private var extFiltersModified = false
 
     private var page = 1
     private var loadJob: Job? = null
@@ -90,8 +101,34 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
         if (sourceId == _state.value.selectedSourceId) return
         loadJob?.cancel()
         page = 1
+        extFiltersModified = false
+        currentFilterList = sourceId?.let { id -> runCatching { extSourceMap[id]?.getFilterList() }.getOrNull() }
+        val extFilters = currentFilterList?.toList() ?: emptyList()
         _state.update {
-            it.copy(selectedSourceId = sourceId, results = emptyList(), loading = true, endReached = false)
+            it.copy(
+                selectedSourceId = sourceId,
+                extFilters       = extFilters,
+                filterVersion    = it.filterVersion + 1,
+                results          = emptyList(),
+                loading          = true,
+                endReached       = false,
+            )
+        }
+        reload()
+    }
+
+    /** Called after an extension filter's state is mutated in place; re-runs the search. */
+    fun onExtFilterChanged() {
+        extFiltersModified = true
+        loadJob?.cancel()
+        page = 1
+        _state.update {
+            it.copy(
+                filterVersion = it.filterVersion + 1,
+                results       = emptyList(),
+                loading       = true,
+                endReached    = false,
+            )
         }
         reload()
     }
@@ -159,8 +196,15 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun fetchExtension(sourceId: Long, page: Int): FetchResult =
         withContext(Dispatchers.IO) {
             val src = extSourceMap[sourceId] ?: return@withContext FetchResult(emptyList(), false)
+            val filters = currentFilterList
             runCatching {
-                val ap = src.getPopularAnime(page)
+                // Use the source's own filters/sort once the user touches them; otherwise
+                // show its popular catalog as the default landing view.
+                val ap = if (extFiltersModified && filters != null) {
+                    src.getSearchAnime(page, "", filters)
+                } else {
+                    src.getPopularAnime(page)
+                }
                 FetchResult(ap.animes.map { it.toBrowseMedia(sourceId) }, ap.hasNextPage)
             }.getOrElse { FetchResult(emptyList(), false) }
         }

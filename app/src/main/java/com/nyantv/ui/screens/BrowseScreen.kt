@@ -26,6 +26,7 @@ import androidx.navigation.NavController
 import com.nyantv.ui.MediaCard
 import com.nyantv.ui.utils.focusBorder
 import com.nyantv.viewmodel.BrowseViewModel
+import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 
 private val GENRES = listOf(
     "Action", "Adventure", "Comedy", "Drama", "Ecchi", "Fantasy", "Horror", "Mahou Shoujo",
@@ -158,6 +159,23 @@ fun BrowseScreen(navController: NavController, onDetailClick: (String) -> Unit) 
             Spacer(Modifier.height(12.dp))
         }
 
+        // ── Extension's own filters / sort (extension mode only) ──────────────
+        if (extensionMode && state.extFilters.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                state.extFilters.forEach { filter ->
+                    key(filter) { ExtFilterControl(filter) { vm.onExtFilterChanged() } }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+        }
+
         // ── Results grid ──────────────────────────────────────────────────────
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when {
@@ -260,5 +278,76 @@ private fun FilterDropdown(label: String, options: List<String>, onSelect: (Int)
                 DropdownMenuItem(text = { Text(opt) }, onClick = { onSelect(idx); expanded = false })
             }
         }
+    }
+}
+
+/**
+ * Renders a single Aniyomi extension filter as a TV-friendly control. Each control
+ * mirrors the filter's live `state` into local Compose state so toggling it doesn't
+ * rebuild the whole row (preserving D-pad focus); [onChanged] re-runs the search.
+ */
+@Composable
+private fun ExtFilterControl(filter: AnimeFilter<*>, onChanged: () -> Unit) {
+    when (filter) {
+        is AnimeFilter.Select<*> -> {
+            var sel by remember { mutableStateOf(filter.state) }
+            val values = filter.values
+            FilterDropdown(
+                label    = "${filter.name}: ${values.getOrNull(sel)?.toString() ?: ""}",
+                options  = values.map { it.toString() },
+                onSelect = { idx -> filter.state = idx; sel = idx; onChanged() },
+            )
+        }
+        is AnimeFilter.Sort -> {
+            var sel by remember { mutableStateOf(filter.state) }
+            val current = sel?.let { filter.values.getOrNull(it.index) }
+            val arrow   = when { sel == null -> ""; sel!!.ascending -> " ↑"; else -> " ↓" }
+            FilterDropdown(
+                label    = "${filter.name}: ${current ?: "—"}$arrow",
+                options  = filter.values.toList(),
+                onSelect = { idx ->
+                    // Re-selecting the current option flips ascending/descending.
+                    val asc = if (sel?.index == idx) !(sel!!.ascending) else false
+                    val newSel = AnimeFilter.Sort.Selection(idx, asc)
+                    filter.state = newSel; sel = newSel; onChanged()
+                },
+            )
+        }
+        is AnimeFilter.CheckBox -> {
+            var checked by remember { mutableStateOf(filter.state) }
+            FilterChip(
+                selected = checked,
+                onClick  = { val v = !checked; filter.state = v; checked = v; onChanged() },
+                label    = { Text(filter.name, style = MaterialTheme.typography.labelMedium) },
+                modifier = Modifier.focusBorder(MaterialTheme.shapes.small, inset = true),
+            )
+        }
+        is AnimeFilter.TriState -> {
+            var st by remember { mutableStateOf(filter.state) }
+            val prefix = when (st) {
+                AnimeFilter.TriState.STATE_INCLUDE -> "✓ "
+                AnimeFilter.TriState.STATE_EXCLUDE -> "✕ "
+                else -> ""
+            }
+            FilterChip(
+                selected = st != AnimeFilter.TriState.STATE_IGNORE,
+                onClick  = { val v = (st + 1) % 3; filter.state = v; st = v; onChanged() },
+                label    = { Text("$prefix${filter.name}", style = MaterialTheme.typography.labelMedium) },
+                modifier = Modifier.focusBorder(MaterialTheme.shapes.small, inset = true),
+            )
+        }
+        is AnimeFilter.Group<*> -> {
+            Text(
+                "${filter.name}:",
+                style    = MaterialTheme.typography.labelMedium,
+                color    = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.padding(end = 2.dp),
+            )
+            filter.state.forEach { child ->
+                if (child is AnimeFilter<*>) key(child) { ExtFilterControl(child, onChanged) }
+            }
+        }
+        // Header / Separator are visual-only; Text needs a keyboard (skipped on TV).
+        else -> Unit
     }
 }
