@@ -416,7 +416,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Called by the auth WebView once the login flow ends (success or cancel). */
     fun onAuthHandled() { _authUrl.value = null }
 
-    fun logout() = viewModelScope.launch { _service.logout() }
+    fun logout() = viewModelScope.launch {
+        _service.logout()
+        // The in-app login WebView (MAL/Simkl) keeps its session in the shared cookie jar, so
+        // without this a logout → login would silently sign back into the same account. Clearing
+        // it forces a fresh login form, making account switching possible.
+        clearAuthWebViewSession()
+    }
+
+    /** Wipes the in-app WebView's cookies + DOM storage so the next OAuth login starts signed-out. */
+    private fun clearAuthWebViewSession() {
+        runCatching {
+            val cookies = android.webkit.CookieManager.getInstance()
+            cookies.removeAllCookies(null)
+            cookies.flush()
+            android.webkit.WebStorage.getInstance().deleteAllData()
+        }
+    }
 
     /** Apply an AniList access token obtained via the device-pairing flow (switches to AniList). */
     fun applyPairedAnilistToken(token: String) = viewModelScope.launch {
