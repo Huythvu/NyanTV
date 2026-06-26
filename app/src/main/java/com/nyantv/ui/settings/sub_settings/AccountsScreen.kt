@@ -84,6 +84,30 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
             }
         }
 
+        // ── AniList device pairing ──────────────────────────────────────────────
+        SectionCard(title = "Sign in with AniList (phone/PC)") {
+            Row(
+                modifier              = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Pair on phone/PC", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    Text(
+                        "Recommended for TV — log in on your phone via a QR code, no on-screen keyboard or browser issues.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                    Button(
+                        onClick  = { navController.navigate("pair/anilist") },
+                        modifier = Modifier.focusBorder(RoundedCornerShape(50))
+                    ) { Text("Pair") }
+                }
+            }
+        }
+
         // ── Tracking Service ───────────────────────────────────────────────────
         SectionCard(title = "Tracking Service") {
             Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

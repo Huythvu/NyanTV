@@ -92,6 +92,15 @@ class AnilistService(context: Context) : MediaService {
         }
     }
 
+    /** Apply an access token obtained out-of-band (e.g. from the device-pairing relay). */
+    suspend fun applyAccessToken(accessToken: String) = withContext(Dispatchers.IO) {
+        token = accessToken
+        prefs.edit { putString(TOKEN_KEY, token) }
+        _isLoggedIn.value = true
+        fetchUserProfile()
+        refreshUserLists()
+    }
+
     override suspend fun logout() {
         token = null
         prefs.edit { remove(TOKEN_KEY) }

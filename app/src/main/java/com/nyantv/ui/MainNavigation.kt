@@ -193,6 +193,13 @@ fun MainNavigation(
                 composable("settings/experimental") { ExperimentalScreen(navController, onOpenPlayer = { showPlayer = true }) }
                 composable("settings/player")       { PlayerSettingsScreen(navController) }
                 composable("settings/extensions")   { ExtensionsScreen(navController) }
+                composable("pair/anilist") {
+                    com.nyantv.ui.auth.PairLoginScreen(
+                        vm        = vm,
+                        onBack    = { navController.popBackStack() },
+                        onSuccess = { navController.popBackStack() },
+                    )
+                }
             }
         }
 

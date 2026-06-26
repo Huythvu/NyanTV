@@ -411,6 +411,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun logout() = viewModelScope.launch { _service.logout() }
 
+    /** Apply an AniList access token obtained via the device-pairing flow (switches to AniList). */
+    fun applyPairedAnilistToken(token: String) = viewModelScope.launch {
+        if (_serviceType.value != ServiceType.ANILIST) switchService(ServiceType.ANILIST)
+        (_service as? AnilistService)?.applyAccessToken(token)
+    }
+
     fun updateEntry(id: String, status: String?, progress: Int?, score: Float?) =
         viewModelScope.launch {
             _service.updateEntry(id, status, progress, score)

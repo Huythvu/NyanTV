@@ -35,6 +35,7 @@ android {
         buildConfigField("String", "SIMKL_CLIENT_SECRET",   "\"${secret("SIMKL_CLIENT_SECRET")}\"")
         buildConfigField("String", "TMDB_API_KEY",          "\"${secret("TMDB_API_KEY")}\"")
         buildConfigField("String", "REDIRECT_URI",          "\"nyantv://callback\"")
+        buildConfigField("String", "PAIR_BASE_URL",         "\"${secret("PAIR_BASE_URL").ifBlank { "https://nyan-tv.vercel.app" }}\"")
 
         val abiFilter = secret("ABI_FILTER").ifBlank { null }
         if (abiFilter != null) {
@@ -123,6 +124,9 @@ dependencies {
 
     // Images
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // QR code generation for the device-pairing login
+    implementation("com.google.zxing:core:3.5.3")
 
     // OAuth browser
     implementation("androidx.browser:browser:1.10.0")
