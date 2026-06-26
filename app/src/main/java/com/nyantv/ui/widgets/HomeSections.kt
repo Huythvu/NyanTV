@@ -6,16 +6,29 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -106,6 +119,9 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     val simklContSeries by vm.simklShowContSeries.collectAsStateWithLifecycle()
     val simklPlanSeries by vm.simklShowPlanSeries.collectAsStateWithLifecycle()
 
+    val localContinue by vm.localContinue.collectAsStateWithLifecycle()
+    var showManage by remember { mutableStateOf(false) }
+
     val trackedMap = animeList.associateBy { it.id }
 
     fun TrackedMedia.toMedia() = Media(
@@ -125,8 +141,17 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
         ServiceType.ANILIST -> {
             val watching = animeList.filter { it.watchingStatus == "CURRENT" }
             val planned  = animeList.filter { it.watchingStatus == "PLANNING" }
+            if (localContinue.isNotEmpty()) {
+                SectionRow(
+                    title       = "Continue Watching",
+                    items       = localContinue.take(30),
+                    onItemClick = { navigate(it.id) },
+                    count       = localContinue.size,
+                    header      = { ContinueWatchingHeader(localContinue.size) { showManage = true } },
+                )
+            }
             if (anilistContinue && watching.isNotEmpty()) {
-                SectionRow(title = "Continue Watching", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = watching.size)
+                SectionRow(title = "Watching Anime", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = watching.size)
             }
             if (anilistPlanned && planned.isNotEmpty()) {
                 SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = planned.size)
@@ -138,11 +163,20 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
         ServiceType.MAL -> {
             val watching = animeList.filter { it.watchingStatus == "CURRENT" }
             val planned  = animeList.filter { it.watchingStatus == "PLANNING" }
+            if (localContinue.isNotEmpty()) {
+                SectionRow(
+                    title       = "Continue Watching",
+                    items       = localContinue.take(30),
+                    onItemClick = { navigate(it.id) },
+                    count       = localContinue.size,
+                    header      = { ContinueWatchingHeader(localContinue.size) { showManage = true } },
+                )
+            }
             // Render rows in the user-configured order (Settings → Manage MyAnimeList Homescreen).
             malOrder.forEach { key ->
                 when (key) {
                     "continue" -> if (malContinue && watching.isNotEmpty()) {
-                        SectionRow(title = "Continue Watching", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = watching.size)
+                        SectionRow(title = "Watching Anime", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = watching.size)
                     }
                     "planned"  -> if (malPlanned && planned.isNotEmpty()) {
                         SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = planned.size)
@@ -194,4 +228,100 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
             }
         }
     }
+
+    if (showManage) {
+        ManageWatchListDialog(
+            items     = localContinue,
+            onRemove  = { vm.removeFromLocalWatch(it) },
+            onDismiss = { showManage = false },
+        )
+    }
+}
+
+// "Continue Watching   N        ✎" — the pencil opens the manage dialog for quick removal.
+@Composable
+private fun ContinueWatchingHeader(count: Int, onManage: () -> Unit) {
+    Row(
+        modifier              = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text       = "Continue Watching",
+            style      = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color      = MaterialTheme.colorScheme.onBackground,
+        )
+        Text(
+            text  = count.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            modifier = Modifier.weight(1f),
+        )
+        Row(
+            modifier = Modifier
+                .size(32.dp)
+                .focusBorder(CircleShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication        = null,
+                    onClick           = onManage,
+                ),
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Icon(
+                Icons.Outlined.Edit,
+                contentDescription = "Manage continue watching",
+                modifier           = Modifier.size(20.dp),
+                tint               = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ManageWatchListDialog(
+    items:     List<Media>,
+    onRemove:  (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title            = { Text("Continue Watching") },
+        text = {
+            if (items.isEmpty()) {
+                Text("Nothing here yet.", style = MaterialTheme.typography.bodySmall)
+            } else {
+                Column(modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    items.forEachIndexed { index, media ->
+                        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                        Row(
+                            modifier              = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                media.title,
+                                style    = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(
+                                onClick  = { onRemove(media.id) },
+                                modifier = Modifier.focusBorder(CircleShape, inset = true),
+                            ) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = "Remove ${media.title}",
+                                    tint               = MaterialTheme.colorScheme.error,
+                                    modifier           = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    )
 }

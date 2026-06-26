@@ -255,6 +255,7 @@ fun MainNavigation(
                 onBack = {
                     showPlayer = false
                     playerReturnCount++
+                    vm.refreshLocalContinue()   // surface anything just watched in Continue Watching
                     scope.launch {
                         delay(100)
                         runCatching { returnFocusReq.requestFocus() }

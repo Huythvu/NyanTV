@@ -5,6 +5,8 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nyantv.data.*
+import com.nyantv.player.WatchHistoryStore
+import com.nyantv.player.WatchHistoryIndexStore
 import com.nyantv.ui.theme.AppTheme
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -138,6 +140,39 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val trendingShows:  StateFlow<List<Media>> = _trendingShows.asStateFlow()
     val seasonal:       StateFlow<List<Media>> = _seasonal.asStateFlow()
     val seasonLabel:    StateFlow<String>      = _seasonLabel.asStateFlow()
+
+    // ── Local "Continue Watching" (offline recently-watched, incl. extension entries) ──────────
+    private val watchHistoryStore = WatchHistoryStore(app)
+    private val historyIndex      = WatchHistoryIndexStore(app)
+    private val _localContinue    = MutableStateFlow<List<Media>>(emptyList())
+    val localContinue: StateFlow<List<Media>> = _localContinue.asStateFlow()
+
+    /** Re-read the recently-watched index into [localContinue] (call on home show / player return). */
+    fun refreshLocalContinue() {
+        _localContinue.value = historyIndex.list().map { e ->
+            Media(
+                id          = e.id,
+                title       = e.title,
+                poster      = e.poster,
+                serviceType = ServiceType.ANILIST,
+                idMal       = e.malId,
+            ).also { if (e.id.isExternalMediaId()) registerExternalMedia(it) }
+        }
+    }
+
+    /** Remove an anime from the local watch list, wiping all of its local progress too. */
+    fun removeFromLocalWatch(id: String) {
+        val entry = historyIndex.list().firstOrNull { it.id == id }
+        historyIndex.remove(id)
+        if (entry != null) {
+            if (entry.serviceKey == "simkl" && entry.simklId != null) {
+                watchHistoryStore.clearAllForSimkl(entry.simklId)
+            } else {
+                watchHistoryStore.clearAllForAnilistMal(entry.anilistId, entry.malId)
+            }
+        }
+        refreshLocalContinue()
+    }
 
     init {
         viewModelScope.launch {
@@ -368,6 +403,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadHome() = viewModelScope.launch {
         _networkState.value = NetworkState.LOADING
+        refreshLocalContinue()
 
         repeat(3) { attempt ->
             val result = runCatching { _service.fetchHomePage() }
