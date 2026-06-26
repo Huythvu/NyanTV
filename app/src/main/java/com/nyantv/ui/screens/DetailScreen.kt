@@ -37,6 +37,7 @@ import coil.compose.AsyncImage
 import com.nyantv.data.Media
 import com.nyantv.data.ServiceType
 import com.nyantv.data.TrackedMedia
+import com.nyantv.player.EpisodeState
 import com.nyantv.player.PlayerTabViewModel
 import com.nyantv.ui.*
 import com.nyantv.ui.theme.FocusIndication
@@ -106,6 +107,11 @@ fun DetailScreen(
     )
 
     val scope = rememberCoroutineScope()
+
+    // Episodes the streaming source currently lists ≈ episodes aired so far. Used to cap the
+    // progress stepper for ongoing shows where MAL reports an unknown (0) total.
+    val playerTabState by playerVm.state.collectAsStateWithLifecycle()
+    val airedEpisodes = (playerTabState.episodeState as? EpisodeState.Success)?.episodes?.size ?: 0
 
     suspend fun tryFetch(): Boolean {
         val result = runCatching { vm.fetchDetails(id) }
@@ -297,6 +303,7 @@ fun DetailScreen(
                 currentProgress = currentEntry?.episodeCount,
                 currentScore    = currentEntry?.score,
                 totalEpisodes   = media?.episodes,
+                airedEpisodes   = airedEpisodes,
                 onDismiss       = { showEdit = false },
                 onSave          = { status, progress, score ->
                     vm.updateEntry(id, status, progress, score)
@@ -539,6 +546,7 @@ private fun ListEditorDialog(
     currentProgress: Int?,
     currentScore:    Float?,
     totalEpisodes:   Int?,
+    airedEpisodes:   Int = 0,
     onDismiss:       () -> Unit,
     onSave:          (String?, Int?, Float?) -> Unit,
     onDelete:        (() -> Unit)?
@@ -546,9 +554,11 @@ private fun ListEditorDialog(
     var status   by remember { mutableStateOf(currentStatus ?: "PLANNING") }
     var progress by remember { mutableIntStateOf(currentProgress ?: 0) }
     var score    by remember { mutableIntStateOf(currentScore?.toInt() ?: 0) }
-    // Ongoing anime report 0 (unknown) total episodes — treat that as "no cap" so progress
-    // can still be incremented past 0.
-    val maxProgress = totalEpisodes?.takeIf { it > 0 } ?: 9999
+    // Cap progress at the known total; for ongoing shows (MAL total = 0) fall back to the number
+    // of episodes currently aired (from the source list), then to "no cap". Never cap below the
+    // user's existing progress, in case the source lists fewer episodes than they've watched.
+    val episodeCap  = totalEpisodes?.takeIf { it > 0 } ?: airedEpisodes.takeIf { it > 0 }
+    val maxProgress = (episodeCap ?: 9999).coerceAtLeast(currentProgress ?: 0)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -575,7 +585,7 @@ private fun ListEditorDialog(
                 }
                 StepperRow(
                     label     = "Progress",
-                    valueText = "$progress / ${totalEpisodes?.takeIf { it > 0 } ?: "?"}",
+                    valueText = "$progress / ${episodeCap ?: "?"}",
                     onMinus   = { progress = (progress - 1).coerceAtLeast(0) },
                     onPlus    = { progress = (progress + 1).coerceAtMost(maxProgress) },
                 )
