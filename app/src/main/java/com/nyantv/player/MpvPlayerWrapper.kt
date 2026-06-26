@@ -64,11 +64,19 @@ class MpvPlayerWrapper(private val context: Context) {
         }
         override fun eventProperty(property: String, value: String) {}
 
+        // libmpv's simple event callback doesn't carry the end-file reason, so we infer a failed
+        // open: a successful play always reaches PLAYBACK_RESTART before END_FILE, whereas a bad
+        // URL / HTTP error / unsupported stream goes START_FILE → END_FILE with nothing in between.
+        private var startedPlayback = false
+
         override fun event(eventId: Int) {
             when (eventId) {
-                MPVLib.MpvEvent.MPV_EVENT_START_FILE       -> listener?.onStateChanged(2)
-                MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART -> listener?.onStateChanged(3)
-                MPVLib.MpvEvent.MPV_EVENT_END_FILE         -> listener?.onStateChanged(4)
+                MPVLib.MpvEvent.MPV_EVENT_START_FILE       -> { startedPlayback = false; listener?.onStateChanged(2) }
+                MPVLib.MpvEvent.MPV_EVENT_PLAYBACK_RESTART -> { startedPlayback = true;  listener?.onStateChanged(3) }
+                MPVLib.MpvEvent.MPV_EVENT_END_FILE         -> {
+                    if (!startedPlayback) listener?.onError("MPV_LOAD_FAILED")
+                    listener?.onStateChanged(4)
+                }
                 MPVLib.MpvEvent.MPV_EVENT_VIDEO_RECONFIG   -> {
                     val w = lib?.getPropertyInt("width")  ?: 0
                     val h = lib?.getPropertyInt("height") ?: 0

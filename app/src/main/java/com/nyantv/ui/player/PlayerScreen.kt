@@ -601,7 +601,10 @@ private fun friendlyPlaybackError(raw: String): String {
             "This video is copy-protected and can't be played here."
         "BEHIND_LIVE_WINDOW" in c ->
             "Playback fell behind the stream. Try again."
-        // ── Generic fallbacks (e.g. mpv / ffmpeg phrasing) ─────────────────────
+        // ── mpv failed to open the stream (no end-file reason available) ───────
+        "LOAD_FAILED" in c || "FAILED_TO_OPEN" in c ->
+            "This server couldn't load the video. It may be down, region-locked, or the link expired."
+        // ── Generic fallbacks (e.g. ffmpeg / other phrasing) ──────────────────
         "HTTP" in c || "STATUS" in c || "403" in c || "404" in c ->
             "This server couldn't load the video. It may be down, region-locked, or the link expired."
         "NETWORK" in c || "CONNECT" in c || "RESOLVE" in c ->
