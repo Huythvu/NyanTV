@@ -249,7 +249,9 @@ fun PlayerTabScreen(
                     item {
                         OutlinedButton(
                             onClick  = { showResultPicker = true },
-                            modifier = Modifier.focusRequester(changeFocusReq),
+                            modifier = Modifier
+                                .focusRequester(changeFocusReq)
+                                .focusBorder(CircleShape),
                         ) { Text("Change") }
                     }
 
@@ -495,7 +497,7 @@ private fun SourceDropdown(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth().focusBorder(CircleShape)) {
             Row(
                 modifier              = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -806,9 +808,10 @@ private fun ResultPickerOverlay(
 @Composable
 private fun ResultCard(anime: SAnime, onClick: () -> Unit) {
     Surface(
-        onClick = onClick,
-        shape   = MaterialTheme.shapes.medium,
-        color   = MaterialTheme.colorScheme.surfaceContainer,
+        onClick  = onClick,
+        modifier = Modifier.focusBorder(MaterialTheme.shapes.medium),
+        shape    = MaterialTheme.shapes.medium,
+        color    = MaterialTheme.colorScheme.surfaceContainer,
     ) {
         Column {
             AsyncImage(
