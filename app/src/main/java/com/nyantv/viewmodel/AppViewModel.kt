@@ -356,6 +356,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setMalShowSeasonal(v: Boolean)     { _malShowSeasonal.value     = v; prefs.edit { putBoolean("mal_show_seasonal",     v) } }
     fun setMalShowUpcoming(v: Boolean)     { _malShowUpcoming.value     = v; prefs.edit { putBoolean("mal_show_upcoming",     v) } }
 
+    // Local "Continue Watching" row + AniList "Upcoming" row (toggles for the new sections).
+    private val _anilistShowLocalContinue = MutableStateFlow(prefs.getBoolean("anilist_show_local_continue", true))
+    private val _malShowLocalContinue     = MutableStateFlow(prefs.getBoolean("mal_show_local_continue",     true))
+    private val _anilistShowUpcoming      = MutableStateFlow(prefs.getBoolean("anilist_show_upcoming",       false))
+    val anilistShowLocalContinue: StateFlow<Boolean> = _anilistShowLocalContinue.asStateFlow()
+    val malShowLocalContinue:     StateFlow<Boolean> = _malShowLocalContinue.asStateFlow()
+    val anilistShowUpcoming:      StateFlow<Boolean> = _anilistShowUpcoming.asStateFlow()
+    fun setAnilistShowLocalContinue(v: Boolean) { _anilistShowLocalContinue.value = v; prefs.edit { putBoolean("anilist_show_local_continue", v) } }
+    fun setMalShowLocalContinue(v: Boolean)     { _malShowLocalContinue.value     = v; prefs.edit { putBoolean("mal_show_local_continue",     v) } }
+    fun setAnilistShowUpcoming(v: Boolean)      { _anilistShowUpcoming.value      = v; prefs.edit { putBoolean("anilist_show_upcoming",       v) } }
+
     // ── Card airing-status badges ────────────────────────────────────────────────
     private val allCardStatusKeys = setOf("airing", "finished", "not_yet", "cancelled", "hiatus")
     private val _showCardStatus   = MutableStateFlow(prefs.getBoolean("show_card_status", true))
@@ -380,26 +391,33 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // Order of the MAL home rows, top to bottom. Saved keys are sanitised against the known set
     // and any missing keys are appended, so adding new sections later stays forward-compatible.
-    private val defaultMalHomeOrder = listOf("continue", "planned", "trending", "popular", "seasonal", "upcoming")
-    private val _malHomeOrder = MutableStateFlow(
-        prefs.getString("mal_home_order", null)
+    private fun loadHomeOrder(prefKey: String, default: List<String>): List<String> =
+        prefs.getString(prefKey, null)
             ?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() }
-            ?.let { saved -> saved.filter { it in defaultMalHomeOrder } + defaultMalHomeOrder.filter { it !in saved } }
+            ?.let { saved -> saved.filter { it in default } + default.filter { it !in saved } }
             ?.takeIf { it.isNotEmpty() }
-            ?: defaultMalHomeOrder
-    )
-    val malHomeOrder: StateFlow<List<String>> = _malHomeOrder.asStateFlow()
+            ?: default
 
-    fun moveMalSection(key: String, up: Boolean) {
-        val list = _malHomeOrder.value.toMutableList()
+    private fun moveSection(flow: MutableStateFlow<List<String>>, prefKey: String, key: String, up: Boolean) {
+        val list = flow.value.toMutableList()
         val i = list.indexOf(key)
         if (i < 0) return
         val j = if (up) i - 1 else i + 1
         if (j !in list.indices) return
         val tmp = list[i]; list[i] = list[j]; list[j] = tmp
-        _malHomeOrder.value = list
-        prefs.edit { putString("mal_home_order", list.joinToString(",")) }
+        flow.value = list
+        prefs.edit { putString(prefKey, list.joinToString(",")) }
     }
+
+    private val defaultMalHomeOrder = listOf("local_continue", "continue", "planned", "trending", "popular", "seasonal", "upcoming")
+    private val _malHomeOrder = MutableStateFlow(loadHomeOrder("mal_home_order", defaultMalHomeOrder))
+    val malHomeOrder: StateFlow<List<String>> = _malHomeOrder.asStateFlow()
+    fun moveMalSection(key: String, up: Boolean) = moveSection(_malHomeOrder, "mal_home_order", key, up)
+
+    private val defaultAnilistHomeOrder = listOf("local_continue", "continue", "planned", "trending", "popular", "upcoming")
+    private val _anilistHomeOrder = MutableStateFlow(loadHomeOrder("anilist_home_order", defaultAnilistHomeOrder))
+    val anilistHomeOrder: StateFlow<List<String>> = _anilistHomeOrder.asStateFlow()
+    fun moveAnilistSection(key: String, up: Boolean) = moveSection(_anilistHomeOrder, "anilist_home_order", key, up)
 
     // ── MAL title language ───────────────────────────────────────────────────────
     private val _malEnglishTitles = MutableStateFlow(prefs.getBoolean("mal_english_titles", false))

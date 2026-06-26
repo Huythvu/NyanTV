@@ -212,6 +212,10 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
         val malSeasonal      by vm.malShowSeasonal.collectAsStateWithLifecycle()
         val malUpcoming      by vm.malShowUpcoming.collectAsStateWithLifecycle()
         val malOrder         by vm.malHomeOrder.collectAsStateWithLifecycle()
+        val anilistUpcoming  by vm.anilistShowUpcoming.collectAsStateWithLifecycle()
+        val anilistOrder     by vm.anilistHomeOrder.collectAsStateWithLifecycle()
+        val anilistLocalCont by vm.anilistShowLocalContinue.collectAsStateWithLifecycle()
+        val malLocalCont     by vm.malShowLocalContinue.collectAsStateWithLifecycle()
         val simklContMovies  by vm.simklShowContMovies.collectAsStateWithLifecycle()
         val simklPlanMovies  by vm.simklShowPlanMovies.collectAsStateWithLifecycle()
         val simklContSeries  by vm.simklShowContSeries.collectAsStateWithLifecycle()
@@ -220,13 +224,45 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
         SectionCard(
             title = "Manage AniList Homescreen",
             dialogContent = {
-                HomescreenToggleRow("Continue Watching", anilistContinue) { vm.setAnilistShowContinue(it) }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-                HomescreenToggleRow("Planned Anime", anilistPlanned) { vm.setAnilistShowPlanned(it) }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-                HomescreenToggleRow("Trending Now", anilistTrending) { vm.setAnilistShowTrending(it) }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-                HomescreenToggleRow("Popular Anime", anilistPopular) { vm.setAnilistShowPopular(it) }
+                anilistOrder.forEachIndexed { index, key ->
+                    if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                    val label = when (key) {
+                        "local_continue" -> "Continue Watching"
+                        "continue"       -> "Watching Anime"
+                        "planned"        -> "Planned Anime"
+                        "trending"       -> "Trending Now"
+                        "popular"        -> "Popular Anime"
+                        "upcoming"       -> "Upcoming"
+                        else             -> key
+                    }
+                    val checked = when (key) {
+                        "local_continue" -> anilistLocalCont
+                        "continue"       -> anilistContinue
+                        "planned"        -> anilistPlanned
+                        "trending"       -> anilistTrending
+                        "popular"        -> anilistPopular
+                        "upcoming"       -> anilistUpcoming
+                        else             -> true
+                    }
+                    HomescreenManageRow(
+                        label    = label,
+                        checked  = checked,
+                        onToggle = { v ->
+                            when (key) {
+                                "local_continue" -> vm.setAnilistShowLocalContinue(v)
+                                "continue"       -> vm.setAnilistShowContinue(v)
+                                "planned"        -> vm.setAnilistShowPlanned(v)
+                                "trending"       -> vm.setAnilistShowTrending(v)
+                                "popular"        -> vm.setAnilistShowPopular(v)
+                                "upcoming"       -> vm.setAnilistShowUpcoming(v)
+                            }
+                        },
+                        onUp     = { vm.moveAnilistSection(key, up = true) },
+                        onDown   = { vm.moveAnilistSection(key, up = false) },
+                        canUp    = index > 0,
+                        canDown  = index < anilistOrder.size - 1,
+                    )
+                }
             }
         ) {}
 
@@ -237,7 +273,8 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                 malOrder.forEachIndexed { index, key ->
                     if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
                     val label = when (key) {
-                        "continue" -> "Continue Watching"
+                        "local_continue" -> "Continue Watching"
+                        "continue" -> "Watching Anime"
                         "planned"  -> "Planned Anime"
                         "trending" -> "Trending Now"
                         "popular"  -> "Popular Anime"
@@ -246,6 +283,7 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                         else       -> key
                     }
                     val checked = when (key) {
+                        "local_continue" -> malLocalCont
                         "continue" -> malContinue
                         "planned"  -> malPlanned
                         "trending" -> malTrending
@@ -259,6 +297,7 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                         checked  = checked,
                         onToggle = { v ->
                             when (key) {
+                                "local_continue" -> vm.setMalShowLocalContinue(v)
                                 "continue" -> vm.setMalShowContinue(v)
                                 "planned"  -> vm.setMalShowPlanned(v)
                                 "trending" -> vm.setMalShowTrending(v)

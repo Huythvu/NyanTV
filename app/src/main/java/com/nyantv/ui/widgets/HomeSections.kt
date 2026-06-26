@@ -107,6 +107,10 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     val anilistPlanned  by vm.anilistShowPlanned.collectAsStateWithLifecycle()
     val anilistTrending by vm.anilistShowTrending.collectAsStateWithLifecycle()
     val anilistPopular  by vm.anilistShowPopular.collectAsStateWithLifecycle()
+    val anilistUpcoming by vm.anilistShowUpcoming.collectAsStateWithLifecycle()
+    val anilistOrder    by vm.anilistHomeOrder.collectAsStateWithLifecycle()
+    val anilistLocalCont by vm.anilistShowLocalContinue.collectAsStateWithLifecycle()
+    val malLocalCont    by vm.malShowLocalContinue.collectAsStateWithLifecycle()
     val malContinue     by vm.malShowContinue.collectAsStateWithLifecycle()
     val malPlanned      by vm.malShowPlanned.collectAsStateWithLifecycle()
     val malTrending     by vm.malShowTrending.collectAsStateWithLifecycle()
@@ -141,40 +145,46 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
         ServiceType.ANILIST -> {
             val watching = animeList.filter { it.watchingStatus == "CURRENT" }
             val planned  = animeList.filter { it.watchingStatus == "PLANNING" }
-            if (localContinue.isNotEmpty()) {
-                SectionRow(
-                    title       = "Continue Watching",
-                    items       = localContinue.take(30),
-                    onItemClick = { navigate(it.id) },
-                    count       = localContinue.size,
-                    header      = { ContinueWatchingHeader(localContinue.size) { showManage = true } },
-                )
+            // Render rows in the user-configured order (Settings → Manage AniList Homescreen).
+            anilistOrder.forEach { key ->
+                when (key) {
+                    "local_continue" -> if (anilistLocalCont && localContinue.isNotEmpty()) {
+                        SectionRow(
+                            title       = "Continue Watching",
+                            items       = localContinue.take(30),
+                            onItemClick = { navigate(it.id) },
+                            count       = localContinue.size,
+                            header      = { ContinueWatchingHeader(localContinue.size) { showManage = true } },
+                        )
+                    }
+                    "continue" -> if (anilistContinue && watching.isNotEmpty()) {
+                        SectionRow(title = "Watching Anime", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = watching.size)
+                    }
+                    "planned"  -> if (anilistPlanned && planned.isNotEmpty()) {
+                        SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = planned.size)
+                    }
+                    "trending" -> if (anilistTrending) SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
+                    "popular"  -> if (anilistPopular)  SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
+                    "upcoming" -> if (anilistUpcoming) SectionRow(title = "Upcoming",      items = upcoming, onItemClick = { navigate(it.id) })
+                }
             }
-            if (anilistContinue && watching.isNotEmpty()) {
-                SectionRow(title = "Watching Anime", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = watching.size)
-            }
-            if (anilistPlanned && planned.isNotEmpty()) {
-                SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = planned.size)
-            }
-            if (anilistTrending) SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
-            if (anilistPopular)  SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
         }
 
         ServiceType.MAL -> {
             val watching = animeList.filter { it.watchingStatus == "CURRENT" }
             val planned  = animeList.filter { it.watchingStatus == "PLANNING" }
-            if (localContinue.isNotEmpty()) {
-                SectionRow(
-                    title       = "Continue Watching",
-                    items       = localContinue.take(30),
-                    onItemClick = { navigate(it.id) },
-                    count       = localContinue.size,
-                    header      = { ContinueWatchingHeader(localContinue.size) { showManage = true } },
-                )
-            }
             // Render rows in the user-configured order (Settings → Manage MyAnimeList Homescreen).
             malOrder.forEach { key ->
                 when (key) {
+                    "local_continue" -> if (malLocalCont && localContinue.isNotEmpty()) {
+                        SectionRow(
+                            title       = "Continue Watching",
+                            items       = localContinue.take(30),
+                            onItemClick = { navigate(it.id) },
+                            count       = localContinue.size,
+                            header      = { ContinueWatchingHeader(localContinue.size) { showManage = true } },
+                        )
+                    }
                     "continue" -> if (malContinue && watching.isNotEmpty()) {
                         SectionRow(title = "Watching Anime", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = watching.size)
                     }
