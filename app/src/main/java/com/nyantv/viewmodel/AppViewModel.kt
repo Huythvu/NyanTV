@@ -307,6 +307,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setMalShowSeasonal(v: Boolean)     { _malShowSeasonal.value     = v; prefs.edit { putBoolean("mal_show_seasonal",     v) } }
     fun setMalShowUpcoming(v: Boolean)     { _malShowUpcoming.value     = v; prefs.edit { putBoolean("mal_show_upcoming",     v) } }
 
+    // ── Card airing-status badges ────────────────────────────────────────────────
+    private val allCardStatusKeys = setOf("airing", "finished", "not_yet", "cancelled", "hiatus")
+    private val _showCardStatus   = MutableStateFlow(prefs.getBoolean("show_card_status", true))
+    private val _cardStatusStates = MutableStateFlow(
+        prefs.getString("card_status_states", null)
+            ?.split(",")?.map { it.trim() }?.filter { it in allCardStatusKeys }?.toSet()
+            ?: allCardStatusKeys
+    )
+    val showCardStatus:   StateFlow<Boolean>     = _showCardStatus.asStateFlow()
+    val cardStatusStates: StateFlow<Set<String>> = _cardStatusStates.asStateFlow()
+
+    fun setShowCardStatus(v: Boolean) {
+        _showCardStatus.value = v
+        prefs.edit { putBoolean("show_card_status", v) }
+    }
+
+    fun setCardStatusState(key: String, on: Boolean) {
+        val updated = _cardStatusStates.value.toMutableSet().apply { if (on) add(key) else remove(key) }
+        _cardStatusStates.value = updated
+        prefs.edit { putString("card_status_states", updated.joinToString(",")) }
+    }
+
     // Order of the MAL home rows, top to bottom. Saved keys are sanitised against the known set
     // and any missing keys are appended, so adding new sections later stays forward-compatible.
     private val defaultMalHomeOrder = listOf("continue", "planned", "trending", "popular", "seasonal", "upcoming")

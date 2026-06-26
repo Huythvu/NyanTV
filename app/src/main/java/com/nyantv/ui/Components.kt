@@ -8,6 +8,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.PauseCircle
+import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -22,6 +28,38 @@ import coil.compose.AsyncImage
 import com.nyantv.data.Media
 import com.nyantv.data.TrackedMedia
 import com.nyantv.ui.utils.ScoreBadge
+
+// ─── Airing status badge ──────────────────────────────────────────────────────
+
+/** Airing states across services, each with the icon + colour shown on cards. */
+enum class AiringState(val key: String, val label: String, val icon: ImageVector, val color: Color) {
+    AIRING   ("airing",    "Currently Airing", Icons.Filled.FiberManualRecord, Color(0xFF4CAF50)),
+    FINISHED ("finished",  "Finished Airing",  Icons.Filled.CheckCircle,       Color(0xFF42A5F5)),
+    NOT_YET  ("not_yet",   "Not Yet Aired",    Icons.Filled.Schedule,          Color(0xFFFFB300)),
+    CANCELLED("cancelled", "Cancelled",        Icons.Filled.Cancel,            Color(0xFFEF5350)),
+    HIATUS   ("hiatus",    "Hiatus",           Icons.Filled.PauseCircle,       Color(0xFF9E9E9E)),
+}
+
+/** Maps a service's status string (AniList / MAL / Simkl vocabularies) to an [AiringState]. */
+fun airingStateOf(status: String?): AiringState? {
+    val s = status?.uppercase() ?: return null
+    return when {
+        "CANCEL" in s                                          -> AiringState.CANCELLED
+        "HIATUS" in s                                          -> AiringState.HIATUS
+        "NOT YET" in s || "NOT_YET" in s || "UPCOMING" in s    -> AiringState.NOT_YET
+        // Check FINISHED before AIRING — MAL's "FINISHED AIRING" contains "AIRING".
+        "FINISHED" in s || "ENDED" in s || "RELEASED" in s     -> AiringState.FINISHED
+        "RELEASING" in s || "AIRING" in s || "CONTINUING" in s || "ONGOING" in s -> AiringState.AIRING
+        else -> null
+    }
+}
+
+/** Which status badges to render on cards; provided app-wide so cards needn't take params. */
+data class CardStatusConfig(
+    val show:   Boolean     = true,
+    val states: Set<String> = AiringState.entries.map { it.key }.toSet(),
+)
+val LocalCardStatusConfig = androidx.compose.runtime.compositionLocalOf { CardStatusConfig() }
 
 // ─── Media card (poster + title + score) ──────────────────────────────────────
 
@@ -112,6 +150,26 @@ fun MediaCard(
                 .align(Alignment.BottomStart)
                 .padding(horizontal = 6.dp, vertical = 6.dp)
         )
+
+        // ── Airing-status badge (top-left) ────────────────────────────────
+        val statusCfg = LocalCardStatusConfig.current
+        val airing = if (statusCfg.show) airingStateOf(media.status)?.takeIf { it.key in statusCfg.states } else null
+        airing?.let { st ->
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .clip(RoundedCornerShape(bottomEnd = 4.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+                    .padding(4.dp),
+            ) {
+                Icon(
+                    st.icon,
+                    contentDescription = st.label,
+                    tint     = st.color,
+                    modifier = Modifier.size(11.dp),
+                )
+            }
+        }
     }
 }
 

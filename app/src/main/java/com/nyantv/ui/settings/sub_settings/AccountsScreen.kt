@@ -266,6 +266,27 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                 HomescreenToggleRow("Planned (Series)", simklPlanSeries) { vm.setSimklShowPlanSeries(it) }
             }
         ) {}
+
+        // ── Card Status Badges ──────────────────────────────────────────────────────────
+        val showCardStatus   by vm.showCardStatus.collectAsStateWithLifecycle()
+        val cardStatusStates by vm.cardStatusStates.collectAsStateWithLifecycle()
+
+        SectionCard(
+            title = "Card Status Badges",
+            dialogContent = {
+                HomescreenToggleRow("Show status badges", showCardStatus) { vm.setShowCardStatus(it) }
+                listOf(
+                    "airing"    to "Currently Airing",
+                    "finished"  to "Finished Airing",
+                    "not_yet"   to "Not Yet Aired",
+                    "cancelled" to "Cancelled",
+                    "hiatus"    to "Hiatus",
+                ).forEach { (key, label) ->
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                    HomescreenToggleRow(label, key in cardStatusStates) { vm.setCardStatusState(key, it) }
+                }
+            }
+        ) {}
     }
 }
 

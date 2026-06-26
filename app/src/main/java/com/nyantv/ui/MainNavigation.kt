@@ -130,6 +130,12 @@ fun MainNavigation(
 
     val playerVm: PlayerViewModel = viewModel()
 
+    val showCardStatus   by vm.showCardStatus.collectAsStateWithLifecycle()
+    val cardStatusStates by vm.cardStatusStates.collectAsStateWithLifecycle()
+
+    CompositionLocalProvider(
+        LocalCardStatusConfig provides CardStatusConfig(showCardStatus, cardStatusStates)
+    ) {
     Box(modifier = Modifier.fillMaxSize()) {
 
         Row(
@@ -242,6 +248,7 @@ fun MainNavigation(
                 }
             )
         }
+    }
     }
 }
 
