@@ -46,8 +46,10 @@ TV                         Relay (this)                       AniList           
 ## Deploy (Vercel)
 
 1. **Import** this repo into Vercel as a new project; set **Root Directory** to `pair-server`.
-2. **Add a Vercel KV store**: project → Storage → Create → KV → connect. It auto-injects the
-   `KV_REST_API_*` env vars (free Hobby tier is plenty).
+2. **Add a Redis/KV store**: project → Storage → connect **Upstash** (Redis) from the
+   Marketplace (Vercel's first-party "KV" is deprecated). It auto-injects the REST credentials
+   (`UPSTASH_REDIS_REST_URL/_TOKEN`, or `KV_REST_API_URL/_TOKEN`) — the code reads either. Free tier
+   is plenty.
 3. **Set env vars** (Settings → Environment Variables), see `.env.example`:
    - `ANILIST_CLIENT_ID`, `ANILIST_CLIENT_SECRET`
    - `ANILIST_REDIRECT_URI` = `https://<your-domain>/api/pair/callback`

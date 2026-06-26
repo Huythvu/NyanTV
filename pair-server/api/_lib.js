@@ -1,7 +1,37 @@
 // Shared helpers for the NyanTV pairing relay. Files prefixed with "_" are not routed by Vercel.
-import { kv } from '@vercel/kv';
+//
+// Minimal Redis/KV client over the Upstash REST API — zero dependencies. Works with either the
+// Vercel-injected names (KV_REST_API_*) or the Upstash-native ones (UPSTASH_REDIS_REST_*), so it
+// doesn't matter which storage integration is connected.
+const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '';
+const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '';
 
-export { kv };
+async function kvCommand(args) {
+  if (!KV_URL || !KV_TOKEN) throw new Error('KV store not configured (missing REST url/token env vars)');
+  const resp = await fetch(KV_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  });
+  if (!resp.ok) throw new Error(`KV ${args[0]} failed: ${resp.status} ${(await resp.text()).slice(0, 120)}`);
+  return (await resp.json()).result;
+}
+
+export const kv = {
+  async get(key) {
+    const r = await kvCommand(['GET', key]);
+    if (r == null) return null;
+    try { return JSON.parse(r); } catch { return r; }
+  },
+  async set(key, value, opts = {}) {
+    const args = ['SET', key, JSON.stringify(value)];
+    if (opts.ex) args.push('EX', String(opts.ex));
+    return kvCommand(args);
+  },
+  async del(key) {
+    return kvCommand(['DEL', key]);
+  },
+};
 
 // Pairing entries live for this long; the TV must finish within the window.
 export const PAIR_TTL_SECONDS = 600; // 10 minutes
