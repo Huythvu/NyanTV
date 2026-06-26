@@ -126,10 +126,14 @@ class PlayerTabViewModel(
     private var searchJob:      Job? = null
     private var episodeMetaJob: Job? = null
     private var episodeMetaKey: String? = null
-    private var pendingTargetSourceId: Long? = null
     private var probeJob:       Job? = null
     private var probeStartedQuery: String? = null
     private var searchTitles: List<String> = emptyList()
+
+    // Probe-driven source auto-selection.
+    private val probeLock       = Any()
+    private val probedSourceIds = mutableSetOf<Long>()   // sources whose probe has finished (matched or not)
+    private var userSelectedSource = false               // true once the user picks a source by hand
 
     init {
         refreshWatchProgress()
@@ -150,35 +154,20 @@ class PlayerTabViewModel(
                     initialised = true
 
                     val savedQuery = cache.loadQueryOverride(mediaId)
-                    val fallback   = newSources.firstOrNull()
 
+                    // Start with NO source selected. The probe decides which extension to open:
+                    // the first one (in list order) confirmed to actually have this anime. This
+                    // avoids sticking on a previously-used extension that has no entry for the
+                    // current title.
                     _state.update {
                         it.copy(
                             sources        = newSources,
                             searchQuery    = savedQuery ?: mediaTitle,
-                            selectedSource = fallback,
+                            selectedSource = null,
                         )
                     }
 
                     startProbe()
-
-                    viewModelScope.launch {
-                        cache.observeSelectedSourceId(serviceKey).collect { savedSourceId ->
-                            pendingTargetSourceId = savedSourceId
-                            val currentSources = buildSources()
-                            val resolved = currentSources.firstOrNull { it.id == savedSourceId }
-                                ?: _state.value.sources.firstOrNull()
-                                ?: return@collect
-
-                            applySource(resolved)
-
-                            if (savedSourceId != null && resolved.id != savedSourceId) {
-                                pendingTargetSourceId = savedSourceId
-                            } else {
-                                pendingTargetSourceId = null
-                            }
-                        }
-                    }
 
                 } else if (initialised) {
                     _state.update { s ->
@@ -188,15 +177,7 @@ class PlayerTabViewModel(
                                 ?: s.selectedSource,
                         )
                     }
-
-                    val targetId = pendingTargetSourceId
-                    if (targetId != null) {
-                        val late = newSources.firstOrNull { it.id == targetId }
-                        if (late != null && _state.value.selectedSource?.id != targetId) {
-                            pendingTargetSourceId = null
-                            applySource(late)
-                        }
-                    }
+                    maybeAutoSelectMatched()
                 }
             }
         }
@@ -269,6 +250,8 @@ class PlayerTabViewModel(
         if (!force && probeStartedQuery == key) return
         probeStartedQuery = key
 
+        synchronized(probeLock) { probedSourceIds.clear() }
+
         probeJob?.cancel()
         probeJob = viewModelScope.launch {
             _state.update { it.copy(probing = true, matchedSources = emptySet()) }
@@ -277,14 +260,45 @@ class PlayerTabViewModel(
                 sources.forEach { source ->
                     launch(Dispatchers.IO) {
                         gate.withPermit {
-                            if (probeSource(source, queries, force)) {
+                            val matched = probeSource(source, queries, force)
+                            if (matched) {
                                 _state.update { it.copy(matchedSources = it.matchedSources + source.id) }
                             }
+                            onSourceProbed(source.id)
                         }
                     }
                 }
             }
             _state.update { it.copy(probing = false) }
+            maybeAutoSelectMatched()
+        }
+    }
+
+    private fun onSourceProbed(sourceId: Long) {
+        synchronized(probeLock) { probedSourceIds.add(sourceId) }
+        maybeAutoSelectMatched()
+    }
+
+    /**
+     * Auto-select the first extension (in list order) confirmed to have this anime, as soon as
+     * every earlier extension has finished probing. No-op once the user has picked a source by
+     * hand, or when the current selection is already a confirmed match.
+     */
+    private fun maybeAutoSelectMatched() {
+        synchronized(probeLock) {
+            if (userSelectedSource) return
+            val s = _state.value
+            val selected = s.selectedSource
+            if (selected != null && selected.id in s.matchedSources) return
+            for (src in s.sources) {
+                if (src.id in s.matchedSources) {
+                    if (selected?.id != src.id) applySource(src)
+                    return
+                }
+                // An earlier-listed source hasn't finished probing yet — wait so we never skip
+                // past it and pick a later match by mistake.
+                if (src.id !in probedSourceIds) return
+            }
         }
     }
 
@@ -392,7 +406,7 @@ class PlayerTabViewModel(
 
     fun selectSource(source: SearchableSource) {
         if (source.id == _state.value.selectedSource?.id) return
-        pendingTargetSourceId = null
+        userSelectedSource = true
         _state.update {
             it.copy(
                 selectedSource = source,
