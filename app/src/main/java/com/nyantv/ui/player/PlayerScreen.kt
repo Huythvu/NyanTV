@@ -565,16 +565,47 @@ fun PlayerScreen(
     }
 }
 
-/** Turns a raw mpv/ffmpeg error into a short, user-facing explanation. */
+/**
+ * Turns a raw player error into a short, user-facing explanation. The string is usually an
+ * ExoPlayer [androidx.media3.common.PlaybackException] error-code name (e.g.
+ * ERROR_CODE_IO_BAD_HTTP_STATUS), so we match on those; a lowercase fallback covers other sources.
+ */
 private fun friendlyPlaybackError(raw: String): String {
-    val r = raw.lowercase()
+    val c = raw.uppercase()
     return when {
-        "http" in r || "status" in r || "403" in r || "404" in r || "410" in r ->
-            "This server couldn't load the video. It may be temporarily down, region-locked, or the link expired."
-        "timeout" in r || "timed out" in r ->
-            "The server took too long to respond."
-        "connection" in r || "network" in r || "resolve" in r || "dns" in r ->
-            "Couldn't reach this server. Check your connection or try another server."
+        // ── Host rejected / link gone → change server ──────────────────────────
+        "BAD_HTTP_STATUS" in c || "NO_PERMISSION" in c ->
+            "This server rejected the request. It may be down, region-locked, or the link expired — try another server."
+        "FILE_NOT_FOUND" in c ->
+            "The video isn't on this server anymore (the link likely expired). Try another server."
+        "INVALID_HTTP_CONTENT_TYPE" in c ->
+            "This server returned a page instead of a video (often a block or redirect). Try another server."
+        "CLEARTEXT_NOT_PERMITTED" in c ->
+            "This server only offers an insecure (HTTP) link, which is blocked. Try another server."
+        // ── Connection → check network / retry ─────────────────────────────────
+        "TIMEOUT" in c ->
+            "The server took too long to respond. Try again, or pick another server."
+        "DNS_FAILED" in c || "NETWORK_CONNECTION" in c ->
+            "Couldn't reach this server. Check your connection, or try another server."
+        // ── Device can't decode → lower quality / different server ─────────────
+        "EXCEEDS_CAPABILITIES" in c ->
+            "This video is higher quality than this device can play. Try a lower quality."
+        "DECOD" in c ->   // DECODING_* / DECODER_*
+            "This device can't play this video's format. Try a different quality or server."
+        // ── Bad/unsupported stream → change server ─────────────────────────────
+        "PARSING" in c || "MALFORMED" in c || "UNSUPPORTED" in c ->
+            "This stream looks corrupted or unsupported. Try another server."
+        "AUDIO_TRACK" in c ->
+            "There was an audio playback problem. Try again."
+        "DRM" in c ->
+            "This video is copy-protected and can't be played here."
+        "BEHIND_LIVE_WINDOW" in c ->
+            "Playback fell behind the stream. Try again."
+        // ── Generic fallbacks (e.g. mpv / ffmpeg phrasing) ─────────────────────
+        "HTTP" in c || "STATUS" in c || "403" in c || "404" in c ->
+            "This server couldn't load the video. It may be down, region-locked, or the link expired."
+        "NETWORK" in c || "CONNECT" in c || "RESOLVE" in c ->
+            "Couldn't reach this server. Check your connection, or try another server."
         else ->
             "Something went wrong playing this video from this server."
     }
