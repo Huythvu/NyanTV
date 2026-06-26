@@ -72,6 +72,12 @@ fun SettingsScreen(vm: AppViewModel, navController: NavController) {
                 onClick     = { navController.navigate("settings/extensions") }
             )
             SettingsTile(
+                icon        = Icons.Filled.History,
+                title       = "Watch History",
+                description = "Review and remove locally tracked videos",
+                onClick     = { navController.navigate("settings/watch_history") }
+            )
+            SettingsTile(
                 icon        = Icons.Filled.Share,
                 title       = "Share Logs",
                 description = "Share logs of the app",

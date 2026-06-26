@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.nyantv.data.*
 import com.nyantv.player.WatchHistoryStore
 import com.nyantv.player.WatchHistoryIndexStore
+import com.nyantv.player.WatchedEntry
 import com.nyantv.ui.theme.AppTheme
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -158,6 +159,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 idMal       = e.malId,
             ).also { if (e.id.isExternalMediaId()) registerExternalMedia(it) }
         }
+    }
+
+    /** Full local watch history (newest first), for the Watch History settings screen. */
+    fun watchHistoryEntries(): List<WatchedEntry> = historyIndex.list()
+
+    /** Wipe the entire local watch history and every anime's local progress. */
+    fun clearAllWatchHistory() {
+        historyIndex.list().forEach { e ->
+            if (e.serviceKey == "simkl" && e.simklId != null) watchHistoryStore.clearAllForSimkl(e.simklId)
+            else watchHistoryStore.clearAllForAnilistMal(e.anilistId, e.malId)
+        }
+        historyIndex.clearAll()
+        refreshLocalContinue()
     }
 
     /** Remove an anime from the local watch list, wiping all of its local progress too. */

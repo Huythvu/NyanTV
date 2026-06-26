@@ -200,6 +200,7 @@ fun MainNavigation(
                 composable("settings/experimental") { ExperimentalScreen(navController, onOpenPlayer = { showPlayer = true }) }
                 composable("settings/player")       { PlayerSettingsScreen(navController) }
                 composable("settings/extensions")   { ExtensionsScreen(navController) }
+                composable("settings/watch_history") { com.nyantv.ui.settings.sub_settings.WatchHistoryScreen(vm, navController) }
                 composable("pair/anilist") {
                     com.nyantv.ui.auth.PairLoginScreen(
                         vm        = vm,
