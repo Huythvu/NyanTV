@@ -105,6 +105,21 @@ class WatchHistoryStore(context: Context) {
     private fun resumeKey(anilistId: String?, malId: String?): String? =
         anilistId?.let { "al_$it" } ?: malId?.let { "mal_$it" }
 
+    /** Wipes every local trace (resume, per-episode progress, watched set) for one anime. */
+    fun clearAllForAnilistMal(anilistId: String?, malId: String?) =
+        clearAllForKey(resumeKey(anilistId, malId) ?: return)
+
+    fun clearAllForSimkl(simklId: String) = clearAllForKey("simkl_$simklId")
+
+    private fun clearAllForKey(key: String) {
+        // Saved keys are "resume_<key>_<suffix>", "ep_<key>_<n>_<suffix>", "watched_<key>";
+        // match the trailing underscore so "al_12" doesn't also wipe "al_123".
+        val doomed = prefs.all.keys.filter {
+            it.startsWith("resume_${key}_") || it.startsWith("ep_${key}_") || it == "watched_$key"
+        }
+        prefs.edit { doomed.forEach { remove(it) } }
+    }
+
     // ── Simkl ─────────────────────────────────────────────────────────────────
 
     fun saveSimkl(simklId: String, progress: EpisodeProgress) {

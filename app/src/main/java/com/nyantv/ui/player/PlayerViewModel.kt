@@ -20,6 +20,8 @@ import com.nyantv.player.IPlayerService
 import com.nyantv.player.PlayerService
 import com.nyantv.player.TvWatchNextHelper
 import com.nyantv.player.WatchHistoryStore
+import com.nyantv.player.WatchHistoryIndexStore
+import com.nyantv.player.WatchedEntry
 import com.nyantv.ui.utils.displayName
 import com.nyantv.ui.utils.resolveEpisodeMeta
 import eu.kanade.tachiyomi.animesource.model.SEpisode
@@ -105,6 +107,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Watch history ──────────────────────────────────────────────────────────
     private val watchHistoryStore   = WatchHistoryStore(app)
+    private val historyIndex        = WatchHistoryIndexStore(app)
     private var serviceKey          = "anilist_mal"
     private var anilistId:  String? = null
     private var malId:      String? = null
@@ -172,7 +175,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             _currentCue.value = subtitleEngine.currentCue(positionMs)
             checkAndTrackIfNeeded(positionMs, durationMs)
 
-            if (durationMs > 0L && positionMs - lastSavedPositionMs >= 5_000L) {
+            // The "track progress" master switch gates every local trace: with it off we save no
+            // resume/minutes, fill no episode bars, and surface nothing in Watch Next / history.
+            if (sessionTrackingEnabled && durationMs > 0L && positionMs - lastSavedPositionMs >= 5_000L) {
                 lastSavedPositionMs = positionMs
                 episodes.getOrNull(currentEpisodeIndex)?.let { ep ->
                     if (mediaId.isNotEmpty()) {
@@ -327,12 +332,14 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 watchHistoryStore.markWatchedAnilistMal(anilistId, malId, epNum)
             }
             viewModelScope.launch { tvWatchNext.remove(mediaId) }
+            recordHistory(episode.episode_number, positionMs, durationMs)
         }
 
         viewModelScope.launch { _watchedEvent.emit(WatchedEvent(episode, mediaId)) }
     }
 
     private fun saveCurrentProgress() {
+        if (!sessionTrackingEnabled) return   // track off → leave no local trace
         val ep  = episodes.getOrNull(currentEpisodeIndex) ?: return
         if (mediaId.isEmpty()) return
         val pos = _state.value.positionMs
@@ -344,7 +351,28 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             watchHistoryStore.saveAnilistMal(anilistId, malId, p)
         }
+        recordHistory(ep.episode_number, pos, dur)
         lastSavedPositionMs = pos
+    }
+
+    /** Adds/refreshes this anime in the local recently-watched index (only when tracking is on). */
+    private fun recordHistory(episode: Float, positionMs: Long, durationMs: Long) {
+        if (mediaId.isEmpty() || seriesTitle.isBlank()) return
+        historyIndex.upsert(
+            WatchedEntry(
+                id         = mediaId,
+                title      = seriesTitle,
+                poster     = mediaPosterUrl.ifBlank { null },
+                episode    = episode,
+                positionMs = positionMs,
+                durationMs = durationMs,
+                updatedAt  = System.currentTimeMillis(),
+                serviceKey = serviceKey,
+                anilistId  = anilistId,
+                malId      = malId,
+                simklId    = if (serviceKey == "simkl") mediaId else null,
+            )
+        )
     }
 
     private fun computeActiveSkip(positionSec: Int): ActiveSkip? {
