@@ -76,34 +76,18 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                     Icon(Icons.Filled.Person, null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
                     Text("Not logged in", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-                        Button(onClick = { vm.login() }, modifier = Modifier.focusBorder(CircleShape)) {
+                        Button(
+                            onClick = {
+                                // AniList logs in via phone/PC pairing (TV-friendly, no Cloudflare);
+                                // the others use the in-app WebView.
+                                if (service == ServiceType.ANILIST) navController.navigate("pair/anilist")
+                                else vm.login()
+                            },
+                            modifier = Modifier.focusBorder(CircleShape)
+                        ) {
                             Text("Login")
                         }
                     }
-                }
-            }
-        }
-
-        // ── AniList device pairing ──────────────────────────────────────────────
-        SectionCard(title = "Sign in with AniList (phone/PC)") {
-            Row(
-                modifier              = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment     = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Pair on phone/PC", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    Text(
-                        "Recommended for TV — log in on your phone via a QR code, no on-screen keyboard or browser issues.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
-                    Button(
-                        onClick  = { navController.navigate("pair/anilist") },
-                        modifier = Modifier.focusBorder(RoundedCornerShape(50))
-                    ) { Text("Pair") }
                 }
             }
         }
