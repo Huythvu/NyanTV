@@ -1,0 +1,13 @@
+{
+  "name": "nyantv-pair-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TV-friendly OAuth device-pairing relay for NyanTV (AniList first, MAL later).",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@vercel/kv": "^2.0.0"
+  }
+}
