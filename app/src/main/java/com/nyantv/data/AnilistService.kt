@@ -237,6 +237,32 @@ class AnilistService(context: Context) : MediaService {
         setCurrentMedia(id)
     }
 
+    /** Filtered, paginated AniList discovery. All filters optional; null/empty = no constraint. */
+    suspend fun browse(
+        page: Int,
+        genres: List<String> = emptyList(),
+        format: String? = null,
+        status: String? = null,
+        season: String? = null,
+        seasonYear: Int? = null,
+        sort: String = "POPULARITY_DESC",
+    ): List<Media> = withContext(Dispatchers.IO) {
+        val vars = buildJsonObject {
+            put("page", page)
+            put("sort", buildJsonArray { add(sort) })
+            if (genres.isNotEmpty()) put("genres", buildJsonArray { genres.forEach { add(it) } })
+            format?.let     { put("format", it) }
+            status?.let     { put("status", it) }
+            season?.let     { put("season", it) }
+            seasonYear?.let { put("seasonYear", it) }
+        }
+        runCatching {
+            gql(BROWSE_QUERY, emptyMap(), vars)["data"]?.jsonObject
+                ?.get("Page")?.jsonObject?.get("media")?.jsonArray
+                ?.map { it.jsonObject.toMedia(ServiceType.ANILIST) }
+        }.getOrNull() ?: emptyList()
+    }
+
     // ── GraphQL helper ─────────────────────────────────────────────────────────
 
     private suspend fun gql(
@@ -378,6 +404,17 @@ class AnilistService(context: Context) : MediaService {
         val MEDIA_LIST_ID_QUERY = $$"""
         query($userId:Int, $mediaId:Int) {
           MediaList(userId:$userId, mediaId:$mediaId) { id }
+        }
+        """.trimIndent()
+
+        val BROWSE_QUERY = $$"""
+        query($page:Int, $genres:[String], $format:MediaFormat, $status:MediaStatus, $season:MediaSeason, $seasonYear:Int, $sort:[MediaSort]) {
+          Page(page:$page, perPage:30) {
+            media(type:ANIME, genre_in:$genres, format:$format, status:$status, season:$season, seasonYear:$seasonYear, sort:$sort, isAdult:false) {
+              id idMal title { romaji english native } coverImage { large color } bannerImage
+              averageScore episodes status format season seasonYear genres popularity
+            }
+          }
         }
         """.trimIndent()
     }
