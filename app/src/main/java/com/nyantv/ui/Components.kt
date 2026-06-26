@@ -294,6 +294,7 @@ fun SectionRow(
     onItemClick: (Media) -> Unit,
     trackedMap: Map<String, TrackedMedia> = emptyMap(),
     cardWidth: Dp = 120.dp,
+    count: Int? = null,
     header: (@Composable () -> Unit)? = null,
 ) {
     // Sections with a custom header (e.g. the season switcher) stay visible even when empty
@@ -303,13 +304,25 @@ fun SectionRow(
         if (header != null) {
             header()
         } else {
-            Text(
-                text       = title,
-                style      = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color      = MaterialTheme.colorScheme.onBackground,
-                modifier   = Modifier.padding(horizontal = 16.dp)
-            )
+            Row(
+                modifier              = Modifier.padding(horizontal = 16.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text       = title,
+                    style      = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color      = MaterialTheme.colorScheme.onBackground,
+                )
+                count?.let {
+                    Text(
+                        text  = it.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    )
+                }
+            }
         }
         if (items.isEmpty()) {
             Text(

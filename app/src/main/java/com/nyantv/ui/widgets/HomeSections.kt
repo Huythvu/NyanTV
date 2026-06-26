@@ -126,10 +126,10 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
             val watching = animeList.filter { it.watchingStatus == "CURRENT" }
             val planned  = animeList.filter { it.watchingStatus == "PLANNING" }
             if (anilistContinue && watching.isNotEmpty()) {
-                SectionRow(title = "Continue Watching", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
+                SectionRow(title = "Continue Watching", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = watching.size)
             }
             if (anilistPlanned && planned.isNotEmpty()) {
-                SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
+                SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = planned.size)
             }
             if (anilistTrending) SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
             if (anilistPopular)  SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
@@ -142,10 +142,10 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
             malOrder.forEach { key ->
                 when (key) {
                     "continue" -> if (malContinue && watching.isNotEmpty()) {
-                        SectionRow(title = "Continue Watching", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
+                        SectionRow(title = "Continue Watching", items = watching.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = watching.size)
                     }
                     "planned"  -> if (malPlanned && planned.isNotEmpty()) {
-                        SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
+                        SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = planned.size)
                     }
                     "trending" -> if (malTrending) SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
                     "popular"  -> if (malPopular)  SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
@@ -175,16 +175,16 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
             val planSeries = animeList.filter { it.watchingStatus == "PLANNING" && it.isMovie != true }
 
             if (simklContMovies && contMovies.isNotEmpty()) {
-                SectionRow(title = "Continue Watching (Movies)", items = contMovies.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
+                SectionRow(title = "Continue Watching (Movies)", items = contMovies.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = contMovies.size)
             }
             if (simklPlanMovies && planMovies.isNotEmpty()) {
-                SectionRow(title = "Planned Movies", items = planMovies.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
+                SectionRow(title = "Planned Movies", items = planMovies.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = planMovies.size)
             }
             if (simklContSeries && contSeries.isNotEmpty()) {
-                SectionRow(title = "Continue Watching (Series)", items = contSeries.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
+                SectionRow(title = "Continue Watching (Series)", items = contSeries.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = contSeries.size)
             }
             if (simklPlanSeries && planSeries.isNotEmpty()) {
-                SectionRow(title = "Planned Series", items = planSeries.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap)
+                SectionRow(title = "Planned Series", items = planSeries.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = planSeries.size)
             }
             if (trendingMovies.isNotEmpty()) {
                 SectionRow(title = "Trending Movies", items = trendingMovies, onItemClick = { navigate(it.id) })
