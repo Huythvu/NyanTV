@@ -524,16 +524,59 @@ fun PlayerScreen(
         }
 
         state.error?.let { msg ->
-            LaunchedEffect(msg) {
-                delay(4_000)
-                vm.clearError()
-            }
-            Snackbar(
-                modifier       = Modifier.align(Alignment.BottomCenter).padding(16.dp),
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor   = MaterialTheme.colorScheme.onErrorContainer
-            ) { Text(msg) }
+            val multipleServers = state.streams.size > 1
+            AlertDialog(
+                onDismissRequest = { vm.clearError() },
+                title = { Text("Can't play this video") },
+                text  = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(friendlyPlaybackError(msg))
+                        Text(
+                            if (multipleServers) "Try a different server, or go back to the anime."
+                            else "Go back to the anime and try another server or source.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                        Text(
+                            msg,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        )
+                    }
+                },
+                confirmButton = {
+                    if (multipleServers) {
+                        TextButton(onClick = { vm.clearError(); showStreamPicker = true }) {
+                            Text("Change server")
+                        }
+                    } else {
+                        TextButton(onClick = { vm.clearError(); vm.selectStream(state.selectedStreamIndex) }) {
+                            Text("Try again")
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { vm.clearError(); vm.stop(); onBack() }) {
+                        Text("Back to anime")
+                    }
+                },
+            )
         }
+    }
+}
+
+/** Turns a raw mpv/ffmpeg error into a short, user-facing explanation. */
+private fun friendlyPlaybackError(raw: String): String {
+    val r = raw.lowercase()
+    return when {
+        "http" in r || "status" in r || "403" in r || "404" in r || "410" in r ->
+            "This server couldn't load the video. It may be temporarily down, region-locked, or the link expired."
+        "timeout" in r || "timed out" in r ->
+            "The server took too long to respond."
+        "connection" in r || "network" in r || "resolve" in r || "dns" in r ->
+            "Couldn't reach this server. Check your connection or try another server."
+        else ->
+            "Something went wrong playing this video from this server."
     }
 }
 
