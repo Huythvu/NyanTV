@@ -20,6 +20,14 @@ data class CachedAnimeResult(
     val thumbnail: String? = null,
 )
 
+/** Result of probing whether a source has a given anime, with the time it was checked. */
+@Serializable
+data class ProbeCacheEntry(
+    val matched: Boolean,
+    val result:  CachedAnimeResult? = null,
+    val ts:      Long = 0L,
+)
+
 class PlayerCache(private val context: Context) {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -69,5 +77,28 @@ class PlayerCache(private val context: Context) {
 
     suspend fun clearResult(sourceId: Long, mediaId: String) {
         context.playerDataStore.edit { it.remove(resultKey(sourceId, mediaId)) }
+    }
+
+    // ── Source probe cache ("does source X have anime Y?") ──────────────────────
+    // "probe_{sourceId}_{mediaId}" → ProbeCacheEntry JSON
+    private fun probeKey(sourceId: Long, mediaId: String) =
+        stringPreferencesKey("probe_${sourceId}_$mediaId")
+
+    suspend fun saveProbe(sourceId: Long, mediaId: String, matched: Boolean, anime: SAnime?) {
+        val entry = ProbeCacheEntry(
+            matched = matched,
+            result  = anime?.let { CachedAnimeResult(it.url, it.title, it.thumbnail_url) },
+            ts      = System.currentTimeMillis(),
+        )
+        context.playerDataStore.edit { it[probeKey(sourceId, mediaId)] = json.encodeToString(entry) }
+    }
+
+    suspend fun loadProbe(sourceId: Long, mediaId: String): ProbeCacheEntry? {
+        val raw = context.playerDataStore.data.first()[probeKey(sourceId, mediaId)] ?: return null
+        return runCatching { json.decodeFromString<ProbeCacheEntry>(raw) }.getOrNull()
+    }
+
+    suspend fun clearProbe(sourceId: Long, mediaId: String) {
+        context.playerDataStore.edit { it.remove(probeKey(sourceId, mediaId)) }
     }
 }

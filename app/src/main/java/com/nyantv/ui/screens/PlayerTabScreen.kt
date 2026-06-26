@@ -141,10 +141,16 @@ fun PlayerTabScreen(
         ) {
             // ── Source Dropdown ──────────────────────────────────────────
             item {
+                // Only show sources confirmed to have this anime (plus whatever is selected).
+                val visibleSources = state.sources.filter {
+                    it.id in state.matchedSources || it.id == state.selectedSource?.id
+                }
                 SourceDropdown(
-                    sources        = state.sources,
+                    sources        = visibleSources,
                     selectedSource = state.selectedSource,
+                    probing        = state.probing,
                     onSelect       = { vm.selectSource(it) },
+                    onRecheck      = { vm.recheckSources() },
                 )
             }
 
@@ -483,23 +489,28 @@ fun PlayerTabScreen(
 private fun SourceDropdown(
     sources:        List<SearchableSource>,
     selectedSource: SearchableSource?,
+    probing:        Boolean,
     onSelect:       (SearchableSource) -> Unit,
+    onRecheck:      () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier              = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment     = Alignment.CenterVertically,
             ) {
                 Text(
-                    selectedSource?.let { "${it.name} (${it.lang.uppercase()})" } ?: "No source",
+                    selectedSource?.let { "${it.name} (${it.lang.uppercase()})" }
+                        ?: if (probing) "Checking sources…" else "No source",
                     style    = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                // A small spinner while some sources are still being confirmed.
+                if (probing) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 Icon(Icons.Default.ArrowDropDown, contentDescription = null)
             }
         }
@@ -519,6 +530,22 @@ private fun SourceDropdown(
                     },
                 )
             }
+            if (probing) {
+                DropdownMenuItem(
+                    text        = { Text("Checking more sources…") },
+                    onClick     = {},
+                    enabled     = false,
+                    leadingIcon = { CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) },
+                )
+            } else if (sources.isEmpty()) {
+                DropdownMenuItem(text = { Text("No sources have this anime") }, onClick = {}, enabled = false)
+            }
+            HorizontalDivider()
+            DropdownMenuItem(
+                text        = { Text("Re-check sources") },
+                onClick     = { onRecheck(); expanded = false },
+                leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+            )
         }
     }
 }

@@ -18,12 +18,22 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+
+private const val PROBE_CONCURRENCY = 5
+private const val PROBE_TIMEOUT_MS  = 8_000L
+private const val PROBE_TTL_MS      = 7L * 24 * 60 * 60 * 1000  // re-check matches after 7 days
 
 data class PlayerTabUiState(
     val sources:        List<SearchableSource>          = emptyList(),
+    val matchedSources: Set<Long>                       = emptySet(),   // sources confirmed to have this anime
+    val probing:        Boolean                         = false,        // a source check is still in flight
     val selectedSource: SearchableSource?               = null,
     val searchQuery:    String                          = "",
     val isEditingQuery: Boolean                         = false,
@@ -117,6 +127,8 @@ class PlayerTabViewModel(
     private var episodeMetaJob: Job? = null
     private var episodeMetaKey: String? = null
     private var pendingTargetSourceId: Long? = null
+    private var probeJob:       Job? = null
+    private var probeStartedQuery: String? = null
 
     init {
         refreshWatchProgress()
@@ -146,6 +158,8 @@ class PlayerTabViewModel(
                             selectedSource = fallback,
                         )
                     }
+
+                    startProbe()
 
                     viewModelScope.launch {
                         cache.observeSelectedSourceId(serviceKey).collect { savedSourceId ->
@@ -200,6 +214,7 @@ class PlayerTabViewModel(
         _state.update { it.copy(selectedSource = source) }
         viewModelScope.launch {
             val cached = cache.loadSelectedResult(source.id, mediaId)
+                ?: cache.loadProbe(source.id, mediaId)?.takeIf { it.matched }?.result
             if (cached != null) {
                 val anime = SAnime.create().apply {
                     url           = cached.url
@@ -225,12 +240,70 @@ class PlayerTabViewModel(
             }
     }
 
+    /** Forget cached probe results for this anime and re-check every source from scratch. */
+    fun recheckSources() {
+        viewModelScope.launch {
+            _state.value.sources.forEach { cache.clearProbe(it.id, mediaId) }
+            probeStartedQuery = null
+            startProbe(force = true)
+        }
+    }
+
+    /** Searches every installed source for the current title and records which ones have it. */
+    private fun startProbe(force: Boolean = false) {
+        val sources = _state.value.sources
+        val query   = _state.value.searchQuery.ifBlank { mediaTitle }.trim()
+        if (sources.isEmpty() || query.isBlank()) return
+        if (!force && probeStartedQuery == query) return
+        probeStartedQuery = query
+
+        probeJob?.cancel()
+        probeJob = viewModelScope.launch {
+            _state.update { it.copy(probing = true, matchedSources = emptySet()) }
+            val gate = Semaphore(PROBE_CONCURRENCY)
+            coroutineScope {
+                sources.forEach { source ->
+                    launch(Dispatchers.IO) {
+                        gate.withPermit {
+                            if (probeSource(source, query, force)) {
+                                _state.update { it.copy(matchedSources = it.matchedSources + source.id) }
+                            }
+                        }
+                    }
+                }
+            }
+            _state.update { it.copy(probing = false) }
+        }
+    }
+
+    /** True if [source] has the anime. Uses the persistent cache unless [force]d or it's stale. */
+    private suspend fun probeSource(source: SearchableSource, query: String, force: Boolean): Boolean {
+        if (!force) {
+            cache.loadProbe(source.id, mediaId)?.let { cached ->
+                if (System.currentTimeMillis() - cached.ts < PROBE_TTL_MS) return cached.matched
+            }
+        }
+        val page = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
+            try {
+                source.search(query)
+            } catch (c: kotlinx.coroutines.CancellationException) {
+                throw c
+            } catch (e: Throwable) {
+                null
+            }
+        }
+        val firstAnime = page?.animes?.firstOrNull()
+        cache.saveProbe(source.id, mediaId, matched = firstAnime != null, anime = firstAnime)
+        return firstAnime != null
+    }
+
     fun updateMediaTitle(title: String) {
         if (title.isBlank()) return
         if (mediaTitle.isBlank()) mediaTitle = title
         val s = _state.value
         if (s.searchQuery.isNotBlank()) return
         _state.update { it.copy(searchQuery = title) }
+        startProbe()
         if (s.selectedAnime == null && s.searchState is SearchState.Idle) {
             val source = s.selectedSource ?: return
             autoSearch(source, title)
@@ -312,6 +385,7 @@ class PlayerTabViewModel(
         viewModelScope.launch {
             cache.saveSelectedSource(serviceKey, source.id)
             val cached = cache.loadSelectedResult(source.id, mediaId)
+                ?: cache.loadProbe(source.id, mediaId)?.takeIf { it.matched }?.result
             if (cached != null) {
                 val anime = SAnime.create().apply {
                     url           = cached.url
