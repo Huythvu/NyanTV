@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -791,7 +793,6 @@ private fun TrackPickerPanel(
 ) {
     val closeFocus    = remember { FocusRequester() }
     val trapRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { closeFocus.requestFocus() } }
 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val maxPanelHeight = maxHeight * 0.60f
@@ -821,6 +822,24 @@ private fun TrackPickerPanelContent(
     onSelect:      (Int?) -> Unit,
     onDismiss:     () -> Unit,
 ) {
+    val listState        = rememberLazyListState()
+    val selectedRowFocus = remember { FocusRequester() }
+    val noneOffset       = if (showNone) 1 else 0
+    // Which LazyColumn item should start focused: the current selection (so pressing the panel
+    // open lands on it, matching the highlight), or "Off"/the close button as a fallback.
+    val targetIndex = when {
+        selectedIndex != null -> selectedIndex + noneOffset
+        showNone              -> 0
+        else                  -> -1
+    }
+    LaunchedEffect(Unit) {
+        if (targetIndex < 0) { runCatching { closeFocus.requestFocus() }; return@LaunchedEffect }
+        listState.scrollToItem(targetIndex)
+        // Wait until the target row is actually laid out, then focus it.
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.index == targetIndex } }.first { it }
+        runCatching { selectedRowFocus.requestFocus() }
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -860,6 +879,7 @@ private fun TrackPickerPanelContent(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
             LazyColumn(
+                state               = listState,
                 modifier            = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
@@ -868,7 +888,8 @@ private fun TrackPickerPanelContent(
                         TrackPickerRow(
                             name       = "Off",
                             isSelected = selectedIndex == null,
-                            onSelect   = { onSelect(null) }
+                            onSelect   = { onSelect(null) },
+                            modifier   = if (selectedIndex == null) Modifier.focusRequester(selectedRowFocus) else Modifier
                         )
                     }
                 }
@@ -876,7 +897,8 @@ private fun TrackPickerPanelContent(
                     TrackPickerRow(
                         name       = name,
                         isSelected = selectedIndex == idx,
-                        onSelect   = { onSelect(idx) }
+                        onSelect   = { onSelect(idx) },
+                        modifier   = if (selectedIndex == idx) Modifier.focusRequester(selectedRowFocus) else Modifier
                     )
                 }
             }
@@ -888,14 +910,15 @@ private fun TrackPickerPanelContent(
 private fun TrackPickerRow(
     name:      String,
     isSelected: Boolean,
-    onSelect:  () -> Unit
+    onSelect:  () -> Unit,
+    modifier:  Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused        by interactionSource.collectIsFocusedAsState()
     val primary           = MaterialTheme.colorScheme.primary
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .background(
                 color = when {
