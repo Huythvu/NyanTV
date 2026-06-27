@@ -54,6 +54,7 @@ data class TrackedMedia(
     val score: Float? = null,
     val isMovie: Boolean? = null,
     val status: String? = null,           // airing status (RELEASING / FINISHED / …)
+    val nextAiringEpisode: AiringEpisode? = null,
 )
 
 data class Profile(
@@ -142,6 +143,12 @@ fun JsonObject.toTrackedMedia(): TrackedMedia {
         score          = this["score"]?.jsonPrimitive?.floatOrNull,
         averageScore   = media?.get("averageScore")?.jsonPrimitive?.intOrNull,
         status         = media?.get("status")?.jsonPrimitive?.contentOrNull.normalizeStatus(),
+        nextAiringEpisode = media?.get("nextAiringEpisode")?.takeIf { it !is JsonNull }?.jsonObject?.let {
+            AiringEpisode(
+                airingAt = it["airingAt"]?.jsonPrimitive?.long ?: 0L,
+                episode  = it["episode"]?.jsonPrimitive?.int ?: 0,
+            )
+        },
     )
 }
 

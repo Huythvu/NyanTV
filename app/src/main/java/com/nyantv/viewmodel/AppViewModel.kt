@@ -635,6 +635,39 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ── Airing This Week ─────────────────────────────────────────────────────────
+
+    /** A tracked, currently-airing show with its next episode and unwatched-aired count. */
+    data class AiringItem(
+        val id:          String,
+        val title:       String,
+        val poster:      String?,
+        val episode:     Int,    // next (upcoming) episode number
+        val airingAtSec: Long,   // epoch seconds when the next episode airs
+        val newEpisodes: Int,    // aired but not yet watched
+    )
+
+    /** Tracked shows still airing, soonest next-episode first. Strongest for AniList (others lack data). */
+    val airingThisWeek: StateFlow<List<AiringItem>> = animeList
+        .map { list ->
+            val active = setOf("CURRENT", "WATCHING", "REPEATING")
+            list.mapNotNull { tm ->
+                val next = tm.nextAiringEpisode ?: return@mapNotNull null
+                if (tm.watchingStatus != null && tm.watchingStatus !in active) return@mapNotNull null
+                val latestAired = (next.episode - 1).coerceAtLeast(0)
+                val watched     = tm.episodeCount ?: 0
+                AiringItem(
+                    id          = tm.id,
+                    title       = tm.title,
+                    poster      = tm.poster,
+                    episode     = next.episode,
+                    airingAtSec = next.airingAt,
+                    newEpisodes = (latestAired - watched).coerceAtLeast(0),
+                )
+            }.sortedBy { it.airingAtSec }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** Media opened straight from an extension catalog (no AniList/MAL entry); watchable, not tracked. */
     private val externalMedia = mutableMapOf<String, Media>()
 

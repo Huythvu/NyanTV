@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
@@ -124,6 +127,7 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     val simklPlanSeries by vm.simklShowPlanSeries.collectAsStateWithLifecycle()
 
     val localContinue by vm.localContinue.collectAsStateWithLifecycle()
+    val airing        by vm.airingThisWeek.collectAsStateWithLifecycle()
     var showManage by remember { mutableStateOf(false) }
 
     val trackedMap = animeList.associateBy { it.id }
@@ -140,6 +144,20 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     )
     fun List<TrackedMedia>.toMedia() = map { it.toMedia() }
     fun navigate(id: String) = onDetailClick(id)
+
+    // Airing This Week: tracked shows still releasing, soonest episode first, with a "new" count.
+    if (airing.isNotEmpty()) {
+        val airingMedia = airing.map { Media(id = it.id, title = it.title, poster = it.poster, serviceType = service) }
+        val newShows    = airing.count { it.newEpisodes > 0 }
+        SectionRow(
+            title       = "Airing This Week",
+            items       = airingMedia,
+            onItemClick = { navigate(it.id) },
+            trackedMap  = trackedMap,
+            count       = airing.size,
+            header      = { AiringHeader(newShows) },
+        )
+    }
 
     when (service) {
         ServiceType.ANILIST -> {
@@ -245,6 +263,34 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
             onRemove  = { vm.removeFromLocalWatch(it) },
             onDismiss = { showManage = false },
         )
+    }
+}
+
+// "Airing This Week   [N new]" — the chip flags how many tracked shows have unwatched aired episodes.
+@Composable
+private fun AiringHeader(newShows: Int) {
+    Row(
+        modifier              = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text       = "Airing This Week",
+            style      = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color      = MaterialTheme.colorScheme.onBackground,
+        )
+        if (newShows > 0) {
+            Text(
+                text     = "$newShows new",
+                style    = MaterialTheme.typography.labelMedium,
+                color    = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(MaterialTheme.colorScheme.primary)
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+            )
+        }
     }
 }
 

@@ -385,7 +385,7 @@ class AnilistService(context: Context) : MediaService {
         val USER_LIST_QUERY = $$"""
         query($userId: Int) { MediaListCollection(userId: $userId, type:ANIME, sort:UPDATED_TIME_DESC) {
           lists { entries { status progress score
-            media { id title { romaji english } coverImage { large } episodes popularity averageScore status }
+            media { id title { romaji english } coverImage { large } episodes popularity averageScore status nextAiringEpisode { airingAt episode } }
           } }
         } }
         """.trimIndent()
