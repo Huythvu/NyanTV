@@ -10,6 +10,7 @@ import com.nyantv.data.ServiceType
 import com.nyantv.extensions.AniyomiExtensions
 import eu.kanade.tachiyomi.animesource.model.AnimeFilter
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
+import eu.kanade.tachiyomi.animesource.model.AnimesPage
 import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import kotlinx.coroutines.Dispatchers
@@ -245,25 +246,25 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
             val src = extSourceMap[sourceId] ?: return@withContext FetchResult(emptyList(), false)
             val filters = currentFilterList
             val query   = extQuery
+            val searching = query.isNotBlank() || extFiltersModified
+            suspend fun tryGet(block: suspend () -> AnimesPage): AnimesPage? =
+                runCatching { block() }.getOrNull()
+
             // Bound each fetch so a slow/hung source can't spin the grid forever.
-            withTimeoutOrNull(EXT_FETCH_TIMEOUT_MS) {
-                runCatching {
-                    // A query or touched filter searches the source; otherwise show its Latest feed
-                    // (if requested and supported) or its popular catalog as the default landing view.
-                    val searching = query.isNotBlank() || extFiltersModified
-                    var ap = when {
-                        searching                       -> src.getSearchAnime(page, query, filters ?: AnimeFilterList())
-                        extLatest && src.supportsLatest -> src.getLatestUpdates(page)
-                        else                            -> src.getPopularAnime(page)
-                    }
-                    // Some sources don't implement a popular feed — fall back to Latest so the grid
-                    // isn't blank for them.
-                    if (ap.animes.isEmpty() && !searching && !extLatest && src.supportsLatest) {
-                        runCatching { src.getLatestUpdates(page) }.getOrNull()?.let { ap = it }
-                    }
-                    FetchResult(ap.animes.map { it.toBrowseMedia(sourceId) }, ap.hasNextPage)
-                }.getOrElse { FetchResult(emptyList(), false) }
-            } ?: FetchResult(emptyList(), false)
+            val ap: AnimesPage? = withTimeoutOrNull(EXT_FETCH_TIMEOUT_MS) {
+                when {
+                    searching -> tryGet { src.getSearchAnime(page, query, filters ?: AnimeFilterList()) }
+                    extLatest && src.supportsLatest -> tryGet { src.getLatestUpdates(page) }
+                    // Default landing view. Many extensions only implement one of these (some have no
+                    // popular feed at all), so fall through popular → latest → blank search until one
+                    // returns content, instead of leaving the grid empty.
+                    else -> tryGet { src.getPopularAnime(page) }?.takeIf { it.animes.isNotEmpty() }
+                        ?: (if (src.supportsLatest) tryGet { src.getLatestUpdates(page) }?.takeIf { it.animes.isNotEmpty() } else null)
+                        ?: tryGet { src.getSearchAnime(page, "", src.getFilterList()) }
+                }
+            }
+            val nonNull = ap ?: AnimesPage(emptyList(), false)
+            FetchResult(nonNull.animes.map { it.toBrowseMedia(sourceId) }, nonNull.hasNextPage)
         }
 
     private fun SAnime.toBrowseMedia(sourceId: Long): Media = Media(
