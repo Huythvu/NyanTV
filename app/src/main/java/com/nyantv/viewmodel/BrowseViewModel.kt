@@ -84,6 +84,11 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         applyFilters(BrowseFilters())
+        // Self-heal a cold-start load: if any extension's sources lost the app-init race and were
+        // dropped as load errors, re-loading repopulates them. The player screen already refreshes
+        // on open; Browse didn't, so reordered/heavy extensions could stay missing until the user
+        // opened the Extensions settings. StateFlow dedups, so this is a no-op when nothing changed.
+        viewModelScope.launch(Dispatchers.IO) { runCatching { aniyomi.extensionManager.refresh() } }
         viewModelScope.launch {
             aniyomi.installedExtensions.collect { exts ->
                 extSourceMap.clear()

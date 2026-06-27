@@ -39,8 +39,12 @@ class NyanTVApp : Application() {
 
         networkHelper = NetworkHelper(this)
         NetworkHelper.setInstance(networkHelper)
-        extensionManager = AnimeExtensionManager(this)
 
+        // Register Injekt singletons BEFORE loading extensions. Many extension source classes
+        // resolve Injekt dependencies (Application, Json, …) in their constructors, and the
+        // extension manager loads/instantiates every source in its init block. If Injekt isn't
+        // configured yet, those constructors throw and the extension is silently dropped as a
+        // load error on cold start — only reappearing after a later refresh(). Order matters.
         Injekt.importModule(object : InjektModule {
             override fun InjektRegistrar.registerInjectables() {
                 addSingleton<Application>(this@NyanTVApp)
@@ -52,6 +56,8 @@ class NyanTVApp : Application() {
                 )
             }
         })
+
+        extensionManager = AnimeExtensionManager(this)
 
         Coil.setImageLoader(
             ImageLoader.Builder(this)
