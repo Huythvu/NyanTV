@@ -69,18 +69,29 @@ class AnimeExtensionManager(
         MutableStateFlow(emptyList<AnimeExtension.Untrusted>())
     val untrustedExtensionsFlow = _untrustedAnimeExtensionsFlow.asStateFlow()
 
+    /** Fingerprint of the installed extension set at the last full load, to skip redundant reloads. */
+    private var lastLoadFingerprint: String? = null
+
     init {
         initAnimeExtensions()
     }
 
+    /**
+     * Re-load extensions only if the installed set actually changed since the last load. Callers fire
+     * this on every player/browse open; the full load classloads and instantiates every source, so
+     * skipping it when nothing changed avoids needless CPU and jank. A newly installed/removed/updated
+     * extension changes the fingerprint and still triggers a real reload.
+     */
     fun refresh() {
-        initAnimeExtensions()
+        val fingerprint = ExtensionLoader.installedExtensionFingerprint(context)
+        if (isInitialized && fingerprint == lastLoadFingerprint) return
+        initAnimeExtensions(fingerprint)
     }
 
     /**
      * Loads and registers the installed animeextensions.
      */
-    private fun initAnimeExtensions() {
+    private fun initAnimeExtensions(fingerprint: String? = null) {
         val animeextensions = ExtensionLoader.loadAnimeExtensions(context)
 
         _installedAnimeExtensionsFlow.value = animeextensions
@@ -91,6 +102,7 @@ class AnimeExtensionManager(
             .filterIsInstance<AnimeLoadResult.Untrusted>()
             .map { it.extension }
 
+        lastLoadFingerprint = fingerprint ?: ExtensionLoader.installedExtensionFingerprint(context)
         isInitialized = true
     }
 }

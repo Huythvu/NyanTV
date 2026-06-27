@@ -175,22 +175,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             val playerCache = com.nyantv.player.PlayerCache(getApplication())
             val known = historyIndex.list().map { it.id }.toMutableSet()
             val baseline = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000  // sit below fresh watches
-            watchHistoryStore.allResumeProgress().forEachIndexed { i, (base, prog) ->
+            val resumeList = watchHistoryStore.allResumeProgress()
+            // Resolve every candidate's title/poster in a single DataStore read instead of one
+            // full-store scan per entry.
+            val candidateIds = resumeList.mapNotNull { (base, _) ->
+                when {
+                    base.startsWith("al_")    -> base.removePrefix("al_")
+                    base.startsWith("mal_")   -> base.removePrefix("mal_")
+                    base.startsWith("simkl_") -> base.removePrefix("simkl_")
+                    else -> null
+                }
+            }.filter { it !in known }.toSet()
+            val recoveredMap = playerCache.findCachedResults(candidateIds)
+            resumeList.forEachIndexed { i, (base, prog) ->
                 val anilistId = if (base.startsWith("al_"))    base.removePrefix("al_")    else null
                 val malId     = if (base.startsWith("mal_"))   base.removePrefix("mal_")   else null
                 val simklId   = if (base.startsWith("simkl_")) base.removePrefix("simkl_") else null
                 val mediaId   = anilistId ?: malId ?: simklId ?: return@forEachIndexed
                 if (mediaId in known) return@forEachIndexed
-                val recovered = playerCache.findCachedResult(mediaId) ?: return@forEachIndexed
+                val recovered = recoveredMap[mediaId] ?: return@forEachIndexed
                 historyIndex.upsert(
                     WatchedEntry(
                         id         = mediaId,
-                        title      = recovered.first.title,
-                        poster     = recovered.first.thumbnail,
+                        title      = recovered.title,
+                        poster     = recovered.thumbnail,
                         episode    = prog.episodeNumber,
                         positionMs = prog.positionMs,
                         durationMs = prog.durationMs,
-                        updatedAt  = recovered.second.takeIf { it > 0L } ?: (baseline - i),
+                        updatedAt  = baseline - i,
                         serviceKey = if (simklId != null) "simkl" else "anilist_mal",
                         anilistId  = anilistId,
                         malId      = malId,

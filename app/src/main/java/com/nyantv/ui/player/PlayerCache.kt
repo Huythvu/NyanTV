@@ -70,24 +70,31 @@ class PlayerCache(private val context: Context) {
     }
 
     /**
-     * Best-effort title/thumbnail for an anime we've played before, from any cached source result
-     * or probe entry. Used to back-fill the watch-history index from old resume data. Returns the
-     * result plus a probe timestamp (0 if unknown).
+     * Best-effort title/thumbnail for anime we've played before, resolved for many ids in a single
+     * DataStore read. Used to back-fill the watch-history index from old resume data. Prefers an
+     * explicitly selected source result over a probe match. Keys are "result_{sourceId}_{mediaId}"
+     * / "probe_{sourceId}_{mediaId}"; sourceId is numeric, so the id is everything after the first
+     * underscore (mediaIds may themselves contain underscores).
      */
-    suspend fun findCachedResult(mediaId: String): Pair<CachedAnimeResult, Long>? {
+    suspend fun findCachedResults(mediaIds: Set<String>): Map<String, CachedAnimeResult> {
+        if (mediaIds.isEmpty()) return emptyMap()
         val entries = context.playerDataStore.data.first().asMap()
-        // Prefer the explicitly selected result, then any probe match.
+        val out = HashMap<String, CachedAnimeResult>()
         entries.forEach { (k, v) ->
-            if (k.name.startsWith("result_") && k.name.endsWith("_$mediaId") && v is String) {
-                runCatching { json.decodeFromString<CachedAnimeResult>(v) }.getOrNull()?.let { return it to 0L }
+            if (v !is String || !k.name.startsWith("result_")) return@forEach
+            val mediaId = k.name.removePrefix("result_").substringAfter("_")
+            if (mediaId in mediaIds && mediaId !in out) {
+                runCatching { json.decodeFromString<CachedAnimeResult>(v) }.getOrNull()?.let { out[mediaId] = it }
             }
         }
         entries.forEach { (k, v) ->
-            if (k.name.startsWith("probe_") && k.name.endsWith("_$mediaId") && v is String) {
-                runCatching { json.decodeFromString<ProbeCacheEntry>(v) }.getOrNull()?.result?.let { return it to 0L }
+            if (v !is String || !k.name.startsWith("probe_")) return@forEach
+            val mediaId = k.name.removePrefix("probe_").substringAfter("_")
+            if (mediaId in mediaIds && mediaId !in out) {
+                runCatching { json.decodeFromString<ProbeCacheEntry>(v) }.getOrNull()?.result?.let { out[mediaId] = it }
             }
         }
-        return null
+        return out
     }
 
     suspend fun saveQueryOverride(mediaId: String, query: String) {
@@ -114,6 +121,29 @@ class PlayerCache(private val context: Context) {
             score   = score,
         )
         context.playerDataStore.edit { it[probeKey(sourceId, mediaId)] = json.encodeToString(entry) }
+    }
+
+    /** One probe result, for batched persistence. */
+    data class ProbeWrite(val sourceId: Long, val matched: Boolean, val anime: SAnime?, val score: Double)
+
+    /**
+     * Persist many probe results in a single transaction. DataStore rewrites the whole file per
+     * edit, so writing all of a probe's results at once is one disk write instead of one per source.
+     */
+    suspend fun saveProbes(mediaId: String, writes: List<ProbeWrite>) {
+        if (writes.isEmpty()) return
+        val now = System.currentTimeMillis()
+        context.playerDataStore.edit { prefs ->
+            writes.forEach { w ->
+                val entry = ProbeCacheEntry(
+                    matched = w.matched,
+                    result  = w.anime?.let { CachedAnimeResult(it.url, it.title, it.thumbnail_url) },
+                    ts      = now,
+                    score   = w.score,
+                )
+                prefs[probeKey(w.sourceId, mediaId)] = json.encodeToString(entry)
+            }
+        }
     }
 
     suspend fun loadProbe(sourceId: Long, mediaId: String): ProbeCacheEntry? {

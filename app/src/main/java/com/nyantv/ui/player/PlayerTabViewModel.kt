@@ -274,6 +274,9 @@ class PlayerTabViewModel(
         probeJob = viewModelScope.launch {
             _state.update { it.copy(probing = true, matchedSources = emptySet(), matchScores = emptyMap()) }
             val gate = Semaphore(PROBE_CONCURRENCY)
+            // Freshly-probed results, persisted in one batched write at the end instead of one disk
+            // write per source (cache hits are already stored and don't need re-writing).
+            val pendingWrites = java.util.Collections.synchronizedList(mutableListOf<PlayerCache.ProbeWrite>())
             coroutineScope {
                 sources.forEach { source ->
                     launch(Dispatchers.IO) {
@@ -287,6 +290,11 @@ class PlayerTabViewModel(
                                     )
                                 }
                             }
+                            if (!outcome.fromCache) {
+                                pendingWrites.add(
+                                    PlayerCache.ProbeWrite(source.id, outcome.matched, outcome.anime, outcome.score)
+                                )
+                            }
                             // A borderline-sure hit is auto-selected immediately (see maybeAutoSelectMatched),
                             // so the player opens fast — but we let every source finish probing so all valid
                             // extensions still populate the picker and the user can switch servers by hand.
@@ -295,6 +303,7 @@ class PlayerTabViewModel(
                     }
                 }
             }
+            cache.saveProbes(mediaId, pendingWrites.toList())
             _state.update { it.copy(probing = false) }
             maybeAutoSelectMatched()
         }
@@ -333,12 +342,18 @@ class PlayerTabViewModel(
         }
     }
 
-    private data class ProbeOutcome(val matched: Boolean, val score: Double)
+    private data class ProbeOutcome(
+        val matched:   Boolean,
+        val score:     Double,
+        val anime:     SAnime? = null,
+        val fromCache: Boolean = false,   // already persisted; excluded from the batched write
+    )
 
     /**
      * Scores how well [source] matches the anime: across every title variant it searches the source
      * and keeps the best-scoring result. A source is accepted only if its best score clears the
-     * threshold; the best result is cached for selection. Uses the cache unless forced/stale.
+     * threshold. The caller persists fresh results in one batched write; cache hits are returned with
+     * [ProbeOutcome.fromCache] so they aren't re-written. Uses the cache unless forced/stale.
      */
     private suspend fun probeSource(source: SearchableSource, queries: List<String>, force: Boolean): ProbeOutcome {
         if (!force) {
@@ -346,7 +361,7 @@ class PlayerTabViewModel(
                 val fresh = System.currentTimeMillis() - cached.ts < PROBE_TTL_MS
                 // Ignore pre-scoring cache entries (matched with score 0) so they get re-scored once.
                 if (fresh && !(cached.matched && cached.score <= 0.0)) {
-                    return ProbeOutcome(cached.matched, cached.score)
+                    return ProbeOutcome(cached.matched, cached.score, fromCache = true)
                 }
             }
         }
@@ -372,8 +387,7 @@ class PlayerTabViewModel(
             if (bestScore >= MATCH_THRESHOLD) break   // good enough; don't keep searching variants
         }
         val matched = bestScore >= MATCH_THRESHOLD && bestAnime != null
-        cache.saveProbe(source.id, mediaId, matched = matched, anime = bestAnime, score = bestScore)
-        return ProbeOutcome(matched, bestScore)
+        return ProbeOutcome(matched, bestScore, anime = bestAnime, fromCache = false)
     }
 
     // ── Fuzzy title matching ────────────────────────────────────────────────────

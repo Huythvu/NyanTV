@@ -164,9 +164,32 @@ internal object ExtensionLoader {
             sources = sources,
             pkgFactory = appInfo.metaData.getString("${ANIME_PACKAGE}${XX_METADATA_SOURCE_FACTORY}"),
             isUnofficial = true,
-            iconUrl = context.getApplicationIcon(pkgName),
+            iconUrl = context.getApplicationIcon(pkgName, versionCode),
         )
         return AnimeLoadResult.Success(extension)
+    }
+
+    /**
+     * Cheap signature of the *set* of installed anime extensions (package name + version code).
+     * Used to skip the expensive full reload — which classloads and instantiates every source —
+     * when nothing about the installed extensions has actually changed. Only enumerates packages
+     * with GET_CONFIGURATIONS (needed for reqFeatures); no signatures/metadata/classloading.
+     */
+    fun installedExtensionFingerprint(context: Context): String {
+        val pkgManager = context.packageManager
+        val installedPackages = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pkgManager.getInstalledPackages(
+                PackageManager.PackageInfoFlags.of(PackageManager.GET_CONFIGURATIONS.toLong())
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            pkgManager.getInstalledPackages(PackageManager.GET_CONFIGURATIONS)
+        }
+        return installedPackages
+            .filter { isPackageAnExtension(MediaType.ANIME, it) }
+            .map { "${it.packageName}:${PackageInfoCompat.getLongVersionCode(it)}" }
+            .sorted()
+            .joinToString("|")
     }
 
     private fun isPackageAnExtension(type: MediaType, pkgInfo: PackageInfo): Boolean {
@@ -184,19 +207,34 @@ internal object ExtensionLoader {
     }
 }
 
-fun Context.getApplicationIcon(pkgName: String): String? {
+fun Context.getApplicationIcon(pkgName: String, versionCode: Long = 0L): String? {
     return try {
+        // Cache the rendered icon per (package, version). If we already wrote it, reuse the file
+        // instead of re-decoding and re-encoding a PNG on every extension load.
+        val file = File(cacheDir, "${pkgName}_${versionCode}_icon.png")
+        if (file.exists() && file.length() > 0L) return file.absolutePath
+
         val drawable = packageManager.getApplicationIcon(pkgName)
-        val bitmap = (drawable as BitmapDrawable).bitmap
-        val file = File(cacheDir, "${pkgName}_icon.png")
-        val output = FileOutputStream(file)
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
-        output.close()
+        val bitmap = drawable.toBitmapSafe()
+        FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         file.absolutePath
-    } catch (e: PackageManager.NameNotFoundException) {
+    } catch (e: Throwable) {
+        // Adaptive/vector icons, missing packages, etc. — never let an icon failure drop an extension.
         println("Error getting icon for $pkgName: ${e.message}")
         null
     }
+}
+
+/** Renders any drawable (BitmapDrawable, AdaptiveIconDrawable, VectorDrawable, …) to a bitmap. */
+private fun Drawable.toBitmapSafe(): Bitmap {
+    if (this is BitmapDrawable && bitmap != null) return bitmap
+    val width  = intrinsicWidth.takeIf  { it > 0 } ?: 108
+    val height = intrinsicHeight.takeIf { it > 0 } ?: 108
+    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bmp)
+    setBounds(0, 0, canvas.width, canvas.height)
+    draw(canvas)
+    return bmp
 }
 
 interface Type {

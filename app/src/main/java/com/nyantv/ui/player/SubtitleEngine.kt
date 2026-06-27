@@ -51,14 +51,34 @@ class SubtitleEngine {
         }
 
         val parsed = parse(raw.trim())
-        cues = if (translator != null) {
+        val translated = if (translator != null) {
             parsed.map { cue -> cue.copy(text = runCatching { translator.translate(cue.text) }.getOrDefault(cue.text)) }
         } else parsed
+        // Keep cues sorted by start time so the active cue can be found by binary search.
+        cues = translated.sortedBy { it.startMs }
     }
 
-    /** Returns the subtitle text active at [positionMs], or null if none. */
-    fun currentCue(positionMs: Long): String? =
-        cues.firstOrNull { positionMs in it.startMs..it.endMs }?.text
+    /**
+     * Returns the subtitle text active at [positionMs], or null if none. Runs on every playback tick,
+     * so it binary-searches the time-sorted cues instead of scanning the whole list each time.
+     */
+    fun currentCue(positionMs: Long): String? {
+        val list = cues
+        if (list.isEmpty()) return null
+        // Find the right-most cue whose start is <= positionMs.
+        var lo = 0
+        var hi = list.size - 1
+        var idx = -1
+        while (lo <= hi) {
+            val mid = (lo + hi) ushr 1
+            if (list[mid].startMs <= positionMs) { idx = mid; lo = mid + 1 } else hi = mid - 1
+        }
+        if (idx < 0) return null
+        // That candidate, or the one before it, may still contain the position (cues can overlap).
+        if (positionMs <= list[idx].endMs) return list[idx].text
+        if (idx > 0 && positionMs <= list[idx - 1].endMs) return list[idx - 1].text
+        return null
+    }
 
     fun clear() {
         cues = emptyList()
