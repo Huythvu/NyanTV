@@ -53,24 +53,8 @@ class NyanTVApp : Application() {
             }
         })
 
-        // Load images through the extension network client (device User-Agent + shared cookie jar
-        // incl. Cloudflare clearance), like Aniyomi does — many extension thumbnails 403 without it.
-        // A same-origin Referer fallback also fixes the common hotlink-protection case.
-        val imageClient = networkHelper.client.newBuilder()
-            .addInterceptor { chain ->
-                val req = chain.request()
-                if (req.header("Referer") != null) chain.proceed(req)
-                else chain.proceed(
-                    req.newBuilder()
-                        .header("Referer", "${req.url.scheme}://${req.url.host}/")
-                        .build()
-                )
-            }
-            .build()
-
         Coil.setImageLoader(
             ImageLoader.Builder(this)
-                .okHttpClient(imageClient)
                 .memoryCache {
                     MemoryCache.Builder(this)
                         .maxSizePercent(0.15)
