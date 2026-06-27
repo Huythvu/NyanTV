@@ -52,6 +52,14 @@ private val FORMATS = listOf(
     "SPECIAL"  to "Special",
     "TV_SHORT" to "Short",
 )
+private val STATUSES = listOf(
+    null               to "Any status",
+    "RELEASING"        to "Airing",
+    "FINISHED"         to "Finished",
+    "NOT_YET_RELEASED" to "Coming Soon",
+    "HIATUS"           to "Hiatus",
+    "CANCELLED"        to "Cancelled",
+)
 private val SEASONS = listOf(
     null     to "Any season",
     "WINTER" to "Winter",
@@ -123,6 +131,11 @@ fun BrowseScreen(navController: NavController, appVm: AppViewModel, onDetailClic
                     label    = SORTS.firstOrNull { it.first == state.filters.sort }?.second ?: "Sort",
                     options  = SORTS.map { it.second },
                     onSelect = { idx -> vm.setSort(SORTS[idx].first) },
+                )
+                FilterDropdown(
+                    label    = STATUSES.firstOrNull { it.first == state.filters.status }?.second ?: "Status",
+                    options  = STATUSES.map { it.second },
+                    onSelect = { idx -> vm.setStatus(STATUSES[idx].first) },
                 )
                 FilterDropdown(
                     label    = SEASONS.firstOrNull { it.first == state.filters.season }?.second ?: "Season",

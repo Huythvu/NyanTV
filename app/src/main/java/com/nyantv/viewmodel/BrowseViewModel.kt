@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 data class BrowseFilters(
     val genres: Set<String> = emptySet(),
     val format: String? = null,
+    val status: String? = null,
     val season: String? = null,
     val year: Int? = null,
     val sort: String = "POPULARITY_DESC",
@@ -104,6 +105,7 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setFormat(format: String?) = applyFilters(_state.value.filters.copy(format = format))
+    fun setStatus(status: String?) = applyFilters(_state.value.filters.copy(status = status))
     fun setSeason(season: String?) = applyFilters(_state.value.filters.copy(season = season))
     fun setYear(year: Int?)        = applyFilters(_state.value.filters.copy(year = year))
     fun setSort(sort: String)      = applyFilters(_state.value.filters.copy(sort = sort))
@@ -224,6 +226,7 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
                 page       = page,
                 genres     = s.filters.genres.toList(),
                 format     = s.filters.format,
+                status     = s.filters.status,
                 season     = s.filters.season,
                 seasonYear = s.filters.year,
                 sort       = s.filters.sort,
