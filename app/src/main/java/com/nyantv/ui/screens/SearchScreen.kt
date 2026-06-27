@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.nyantv.data.EXTERNAL_MEDIA_PREFIX
 import com.nyantv.data.Media
 import com.nyantv.data.ServiceType
 import com.nyantv.ui.MediaCard
@@ -82,6 +83,12 @@ fun SearchScreen(
     val serviceType by vm.serviceType.collectAsStateWithLifecycle()
     val apiResults  by vm.searchResults.collectAsStateWithLifecycle()
     val incognito   by vm.incognito.collectAsStateWithLifecycle()
+    val extResults  by vm.extSearchResults.collectAsStateWithLifecycle()
+
+    // API hits first, then extension hits that aren't already covered by a same-titled API result.
+    val combinedResults = remember(apiResults, extResults) {
+        apiResults + extResults.filter { e -> apiResults.none { it.title.equals(e.title, ignoreCase = true) } }
+    }
 
     val historyKey = remember(serviceType) { serviceType.historyKey() }
 
@@ -100,12 +107,14 @@ fun SearchScreen(
         // In incognito mode, run the search but don't record it in search history.
         if (!incognito) history = prefs.addHistory(historyKey, q.trim())
         vm.search(q.trim())
+        vm.searchExtensions(q.trim())   // no-op unless "search all extensions" is enabled
         focusManager.clearFocus()
     }
 
     fun clearQuery() {
         query = ""
         vm.search("")
+        vm.searchExtensions("")
         searchFocusReq.safeRequest()
     }
 
@@ -124,7 +133,7 @@ fun SearchScreen(
                     ) {
                         OutlinedTextField(
                             value         = query,
-                            onValueChange = { query = it; if (it.isBlank()) vm.search("") },
+                            onValueChange = { query = it; if (it.isBlank()) { vm.search(""); vm.searchExtensions("") } },
                             placeholder   = { Text("Search anime…") },
                             singleLine      = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -172,16 +181,23 @@ fun SearchScreen(
             }
 
             AnimatedVisibility(!showHistory, enter = fadeIn(), exit = fadeOut()) {
-                if (apiResults.isEmpty()) {
+                if (combinedResults.isEmpty()) {
                     EmptyState()
                 } else {
                     ResultsGrid(
-                        results         = apiResults,
+                        results         = combinedResults,
                         searchFocusReq  = searchFocusReq,
                         sidebarFocusReq = sidebarFocusReq,
                         onItemClick     = { id ->
                             focusManager.clearFocus(force = true)
-                            onDetailClick(id)
+                            // Extension hits have no tracking id — resolve them by title first.
+                            if (id.startsWith(EXTERNAL_MEDIA_PREFIX)) {
+                                combinedResults.firstOrNull { it.id == id }?.let { m ->
+                                    vm.resolveExtToDetail(m) { resolvedId -> onDetailClick(resolvedId) }
+                                }
+                            } else {
+                                onDetailClick(id)
+                            }
                         }
                     )
                 }

@@ -18,9 +18,16 @@ import com.nyantv.ui.theme.ActiveTheme
 import com.nyantv.ui.theme.CustomTheme
 import com.nyantv.ui.widgets.CarouselLogoResolver
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import com.nyantv.extensions.AniyomiExtensions
+import com.nyantv.extensions.ExtensionOrderStore
+import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -563,6 +570,69 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun search(query: String) = viewModelScope.launch {
         if (query.isBlank()) { _searchResults.value = emptyList(); return@launch }
         runCatching { _searchResults.value = _service.search(query) }
+    }
+
+    // ── Global search across installed extensions (opt-in) ───────────────────────
+
+    private val aniyomi       by lazy { AniyomiExtensions(getApplication()) }
+    private val extOrderStore by lazy { ExtensionOrderStore(getApplication()) }
+
+    private val _extSearchResults = MutableStateFlow<List<Media>>(emptyList())
+    val extSearchResults: StateFlow<List<Media>> = _extSearchResults.asStateFlow()
+    private val _extSearchLoading = MutableStateFlow(false)
+    val extSearchLoading: StateFlow<Boolean> = _extSearchLoading.asStateFlow()
+
+    /** Whether the "search all extensions" setting is enabled. */
+    fun globalSearchEnabled(): Boolean = prefs.getBoolean("global_search_extensions", false)
+
+    private var extSearchJob: Job? = null
+
+    /** Fan a query out to every installed extension source and collect their hits. */
+    fun searchExtensions(query: String) {
+        extSearchJob?.cancel()
+        if (query.isBlank() || !globalSearchEnabled()) {
+            _extSearchResults.value = emptyList()
+            return
+        }
+        extSearchJob = viewModelScope.launch(Dispatchers.IO) {
+            _extSearchLoading.value = true
+            _extSearchResults.value = emptyList()
+            val sources = extOrderStore.sort(aniyomi.installedExtensions.value)
+                .flatMap { it.sources.filterIsInstance<AnimeHttpSource>() }
+            val gate    = Semaphore(5)
+            val results = java.util.Collections.synchronizedList(mutableListOf<Media>())
+            coroutineScope {
+                sources.forEach { src ->
+                    launch {
+                        gate.withPermit {
+                            val page = runCatching {
+                                withTimeoutOrNull(8_000L) { src.getSearchAnime(1, query, src.getFilterList()) }
+                            }.getOrNull()
+                            page?.animes?.take(10)?.forEach { anime ->
+                                val media = Media(
+                                    id          = "$EXTERNAL_MEDIA_PREFIX${src.id}:${anime.url}",
+                                    title       = anime.title,
+                                    poster      = anime.thumbnail_url,
+                                    serviceType = ServiceType.ANILIST,
+                                )
+                                registerExternalMedia(media)
+                                results.add(media)
+                            }
+                        }
+                    }
+                }
+            }
+            _extSearchResults.value = results.toList().distinctBy { it.id }
+            _extSearchLoading.value = false
+        }
+    }
+
+    /** Resolve an extension search hit to a tracking entry by title, falling back to the raw ext id. */
+    fun resolveExtToDetail(media: Media, onResolved: (String) -> Unit) {
+        viewModelScope.launch {
+            val id = runCatching { _service.search(media.title) }.getOrNull()?.firstOrNull()?.id
+            onResolved(id ?: media.id)
+        }
     }
 
     /** Media opened straight from an extension catalog (no AniList/MAL entry); watchable, not tracked. */

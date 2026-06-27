@@ -195,6 +195,32 @@ fun ExtensionsScreen(
             )
         }
 
+        item {
+            val gPrefs = remember { context.getSharedPreferences("nyantv_prefs", Context.MODE_PRIVATE) }
+            var globalSearch by remember { mutableStateOf(gPrefs.getBoolean("global_search_extensions", false)) }
+            Column {
+                SectionHeader("Search")
+                Row(
+                    modifier              = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment     = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Search all extensions", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Include results from every installed extension in the Search tab",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Switch(
+                        checked         = globalSearch,
+                        onCheckedChange = { globalSearch = it; gPrefs.edit { putBoolean("global_search_extensions", it) } },
+                    )
+                }
+            }
+        }
+
         if (ordered.isNotEmpty()) {
             item { SectionHeader("Installed") }
             if (ordered.size > 1) {
