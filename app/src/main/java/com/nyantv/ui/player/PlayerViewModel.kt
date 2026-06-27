@@ -559,7 +559,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
 
-        selectStream(streamIndex)
+        applyStream(streamIndex)
         initialSubIdx?.let { loadSubtitleByIndex(it) } ?: run {
             subtitleEngine.clear()
             _currentCue.value = null
@@ -567,8 +567,18 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
 
-    /** Switch stream at runtime (e.g. from the in-player picker). Saves quality preference. */
+    /**
+     * Switch stream at runtime (e.g. from the in-player picker, or retry after an error). Keeps the
+     * current playback position so changing server/quality resumes where you were, not from 0.
+     */
     fun selectStream(index: Int) {
+        val pos = _state.value.positionMs
+        if (pos > 0L) { pendingResumeMs = pos; hasResumed = false }
+        applyStream(index)
+    }
+
+    /** Loads [index] from the current streams without preserving position (used for fresh loads). */
+    private fun applyStream(index: Int) {
         val streams = _state.value.streams
         if (index !in streams.indices) return
         _state.update { it.copy(selectedStreamIndex = index) }
@@ -576,7 +586,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         currentStreamHeaders = streams[index].headers
         loadUri(streams[index].url, streams[index].headers)
 
-        // Subtitle für die neue Stream-Domain neu laden
+        // Reload the subtitle for the new stream domain.
         _state.value.selectedSubtitleIndex?.let { subIdx ->
             loadSubtitleByIndex(subIdx)
         }
