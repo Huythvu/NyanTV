@@ -82,6 +82,8 @@ data class SubtitlePrefs(
     val autoPlayNext:  Boolean = false,
     /** Whether the playback-speed control is shown in the player HUD. */
     val showSpeedControl: Boolean = true,
+    /** On a playback error, silently try the next stream/server before surfacing the error. */
+    val autoFallback:  Boolean = false,
 )
 
 data class ActiveSkip(val label: String, val startSec: Int, val endSec: Int)
@@ -236,7 +238,11 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         override fun onBufferedChanged(bufferedMs: Long) = _state.update { it.copy(bufferedMs = bufferedMs) }
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean) = _state.update { it.copy(isPlaying = playWhenReady) }
         override fun onVideoSizeChanged(width: Int, height: Int)    = _state.update { it.copy(videoWidth = width, videoHeight = height) }
-        override fun onError(message: String) { Log.e(TAG, "onError: $message"); _state.update { it.copy(error = message) } }
+        override fun onError(message: String) {
+            Log.e(TAG, "onError: $message")
+            if (tryAutoFallback()) return   // swallow the error and switch to the next server
+            _state.update { it.copy(error = message) }
+        }
     }
 
     private val serviceConnection = object : ServiceConnection {
@@ -563,6 +569,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         pendingResumeMs          = 0L
         hasResumed               = false
         lastSavedPositionMs      = -1L
+        triedStreamIndices.clear()   // fresh fallback budget for the new episode
 
         val initialSubIdx = preferredSubtitleIndex(subs)
 
@@ -593,9 +600,35 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
      * current playback position so changing server/quality resumes where you were, not from 0.
      */
     fun selectStream(index: Int) {
+        triedStreamIndices.clear()   // a manual pick starts a fresh fallback budget
+        switchStreamKeepingPosition(index)
+    }
+
+    /** Switch stream while preserving the current position (shared by manual pick and auto-fallback). */
+    private fun switchStreamKeepingPosition(index: Int) {
         val pos = _state.value.positionMs
         if (pos > 0L) { pendingResumeMs = pos; hasResumed = false }
         applyStream(index)
+    }
+
+    // ── Auto-fallback to next server on error ────────────────────────────────────
+
+    /** Streams already tried for the current episode, so fallback doesn't loop. */
+    private val triedStreamIndices = mutableSetOf<Int>()
+
+    /**
+     * If auto-fallback is on and an untried stream exists, switch to it (keeping position) and
+     * return true so the error is swallowed. Returns false to let the error surface normally.
+     */
+    private fun tryAutoFallback(): Boolean {
+        if (!_subtitlePrefs.value.autoFallback) return false
+        val s = _state.value
+        if (s.streams.size <= 1) return false
+        triedStreamIndices.add(s.selectedStreamIndex)
+        val next = s.streams.indices.firstOrNull { it !in triedStreamIndices } ?: return false
+        Log.w(TAG, "Auto-fallback: stream ${s.selectedStreamIndex} failed, trying $next")
+        switchStreamKeepingPosition(next)
+        return true
     }
 
     /** Loads [index] from the current streams without preserving position (used for fresh loads). */
@@ -800,6 +833,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         seekStepSec   = prefs.getInt("seek_step_sec",     10),
         autoPlayNext  = prefs.getBoolean("autoplay_next", false),
         showSpeedControl = prefs.getBoolean("show_speed_control", true),
+        autoFallback  = prefs.getBoolean("auto_fallback",  false),
     )
 
     private fun saveSubtitlePrefs(p: SubtitlePrefs) {
@@ -814,6 +848,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             putInt("seek_step_sec",     p.seekStepSec)
             putBoolean("autoplay_next", p.autoPlayNext)
             putBoolean("show_speed_control", p.showSpeedControl)
+            putBoolean("auto_fallback", p.autoFallback)
             apply()
         }
     }

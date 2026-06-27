@@ -42,9 +42,10 @@ fun PlayerSettingsScreen(navController: NavController) {
     var watchedThreshold by remember { mutableIntStateOf(prefs.getInt("watched_threshold", 80)) }
     var advancedGrouping by remember { mutableStateOf(prefs.getBoolean("subtitle_advanced_grouping", false)) }
     var autoSelectServer by remember { mutableStateOf(prefs.getBoolean("auto_select_server", false)) }
+    var autoFallback by remember { mutableStateOf(prefs.getBoolean("auto_fallback", false)) }
 
     // Auto-save whenever any value changes
-    LaunchedEffect(qualityMode, subEnabled, fontSize, bold, translateTo, bigSkipSec, seekStepSec, showSpeedControl, watchedThreshold, playerEngine, advancedGrouping, autoSelectServer) {
+    LaunchedEffect(qualityMode, subEnabled, fontSize, bold, translateTo, bigSkipSec, seekStepSec, showSpeedControl, watchedThreshold, playerEngine, advancedGrouping, autoSelectServer, autoFallback) {
         prefs.edit {
             putString("quality_mode",      qualityMode)
             putBoolean("sub_enabled",      subEnabled)
@@ -58,6 +59,7 @@ fun PlayerSettingsScreen(navController: NavController) {
             putString("player_engine", playerEngine)
             putBoolean("subtitle_advanced_grouping", advancedGrouping)
             putBoolean("auto_select_server", autoSelectServer)
+            putBoolean("auto_fallback", autoFallback)
         }
     }
 
@@ -189,6 +191,15 @@ fun PlayerSettingsScreen(navController: NavController) {
                 subtitle = "Skip the stream picker and play the first 1080p stream (or the first available)",
                 checked  = autoSelectServer,
                 onToggle = { autoSelectServer = it }
+            )
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+
+            SettingsToggleRow(
+                label    = "Auto-fallback on error",
+                subtitle = "If a stream fails, silently try the next server before showing an error",
+                checked  = autoFallback,
+                onToggle = { autoFallback = it }
             )
         }
 
