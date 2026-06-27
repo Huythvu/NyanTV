@@ -29,10 +29,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 private const val PROBE_CONCURRENCY = 5
 private const val PROBE_TIMEOUT_MS  = 8_000L
 private const val PROBE_TTL_MS      = 7L * 24 * 60 * 60 * 1000  // re-check matches after 7 days
+private const val MATCH_THRESHOLD   = 0.60   // fuzzy title-match score needed to accept a source
+private const val MATCH_CONFIDENT   = 0.97   // near-exact match → stop probing more title variants
 
 data class PlayerTabUiState(
     val sources:        List<SearchableSource>          = emptyList(),
     val matchedSources: Set<Long>                       = emptySet(),   // sources confirmed to have this anime
+    val matchScores:    Map<Long, Double>               = emptyMap(),   // sourceId → fuzzy title-match score
     val probing:        Boolean                         = false,        // a source check is still in flight
     val selectedSource: SearchableSource?               = null,
     val searchQuery:    String                          = "",
@@ -268,15 +271,20 @@ class PlayerTabViewModel(
 
         probeJob?.cancel()
         probeJob = viewModelScope.launch {
-            _state.update { it.copy(probing = true, matchedSources = emptySet()) }
+            _state.update { it.copy(probing = true, matchedSources = emptySet(), matchScores = emptyMap()) }
             val gate = Semaphore(PROBE_CONCURRENCY)
             coroutineScope {
                 sources.forEach { source ->
                     launch(Dispatchers.IO) {
                         gate.withPermit {
-                            val matched = probeSource(source, queries, force)
-                            if (matched) {
-                                _state.update { it.copy(matchedSources = it.matchedSources + source.id) }
+                            val outcome = probeSource(source, queries, force)
+                            if (outcome.matched) {
+                                _state.update {
+                                    it.copy(
+                                        matchedSources = it.matchedSources + source.id,
+                                        matchScores    = it.matchScores + (source.id to outcome.score),
+                                    )
+                                }
                             }
                             onSourceProbed(source.id)
                         }
@@ -294,36 +302,44 @@ class PlayerTabViewModel(
     }
 
     /**
-     * Auto-select the first extension (in list order) confirmed to have this anime, as soon as
-     * every earlier extension has finished probing. No-op once the user has picked a source by
-     * hand, or when the current selection is already a confirmed match.
+     * Once every source has finished probing, auto-select the one with the closest (highest-scoring)
+     * title match among all that cleared the threshold — so we compare all servers rather than
+     * grabbing the first acceptable one. Extension order breaks ties. No-op once the user has picked
+     * a source by hand.
      */
     private fun maybeAutoSelectMatched() {
         synchronized(probeLock) {
             if (userSelectedSource) return
             val s = _state.value
-            val selected = s.selectedSource
-            if (selected != null && selected.id in s.matchedSources) return
-            for (src in s.sources) {
-                if (src.id in s.matchedSources) {
-                    if (selected?.id != src.id) applySource(src)
-                    return
-                }
-                // An earlier-listed source hasn't finished probing yet — wait so we never skip
-                // past it and pick a later match by mistake.
-                if (src.id !in probedSourceIds) return
-            }
+            // Wait until the probe has fully settled so the comparison covers every server.
+            if (s.probing) return
+            val best = s.sources
+                .filter { it.id in s.matchedSources }
+                .maxByOrNull { s.matchScores[it.id] ?: 0.0 }
+                ?: return
+            if (s.selectedSource?.id != best.id) applySource(best)
         }
     }
 
-    /** True if [source] has the anime under any of [queries]. Uses the cache unless forced/stale. */
-    private suspend fun probeSource(source: SearchableSource, queries: List<String>, force: Boolean): Boolean {
+    private data class ProbeOutcome(val matched: Boolean, val score: Double)
+
+    /**
+     * Scores how well [source] matches the anime: across every title variant it searches the source
+     * and keeps the best-scoring result. A source is accepted only if its best score clears the
+     * threshold; the best result is cached for selection. Uses the cache unless forced/stale.
+     */
+    private suspend fun probeSource(source: SearchableSource, queries: List<String>, force: Boolean): ProbeOutcome {
         if (!force) {
             cache.loadProbe(source.id, mediaId)?.let { cached ->
-                if (System.currentTimeMillis() - cached.ts < PROBE_TTL_MS) return cached.matched
+                val fresh = System.currentTimeMillis() - cached.ts < PROBE_TTL_MS
+                // Ignore pre-scoring cache entries (matched with score 0) so they get re-scored once.
+                if (fresh && !(cached.matched && cached.score <= 0.0)) {
+                    return ProbeOutcome(cached.matched, cached.score)
+                }
             }
         }
-        // Try each title variant; an extension may list the anime under a different name.
+        var bestAnime: SAnime? = null
+        var bestScore = 0.0
         for (q in queries) {
             val page = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
                 try {
@@ -334,14 +350,52 @@ class PlayerTabViewModel(
                     null
                 }
             }
-            val firstAnime = page?.animes?.firstOrNull()
-            if (firstAnime != null) {
-                cache.saveProbe(source.id, mediaId, matched = true, anime = firstAnime)
-                return true
+            page?.animes?.forEach { anime ->
+                val score = bestTitleScore(anime.title, queries)
+                if (score > bestScore) { bestScore = score; bestAnime = anime }
+            }
+            if (bestScore >= MATCH_CONFIDENT) break   // near-exact, no need to try more variants
+        }
+        val matched = bestScore >= MATCH_THRESHOLD && bestAnime != null
+        cache.saveProbe(source.id, mediaId, matched = matched, anime = bestAnime, score = bestScore)
+        return ProbeOutcome(matched, bestScore)
+    }
+
+    // ── Fuzzy title matching ────────────────────────────────────────────────────
+    private fun normalizeTitle(s: String): String =
+        s.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()
+
+    private fun bestTitleScore(candidate: String, knownTitles: List<String>): Double =
+        knownTitles.maxOfOrNull { titleSimilarity(candidate, it) } ?: 0.0
+
+    /** Combined similarity in 0..1 (max of edit-distance ratio, token overlap, containment). */
+    private fun titleSimilarity(a: String, b: String): Double {
+        val na = normalizeTitle(a)
+        val nb = normalizeTitle(b)
+        if (na.isEmpty() || nb.isEmpty()) return 0.0
+        if (na == nb) return 1.0
+        val maxLen  = maxOf(na.length, nb.length)
+        val lev     = 1.0 - levenshtein(na, nb).toDouble() / maxLen
+        val ta      = na.split(" ").toSet()
+        val tb      = nb.split(" ").toSet()
+        val jaccard = (ta intersect tb).size.toDouble() / (ta union tb).size
+        val contain = if (na.contains(nb) || nb.contains(na))
+            0.85 + 0.15 * (minOf(na.length, nb.length).toDouble() / maxLen) else 0.0
+        return maxOf(lev, jaccard, contain)
+    }
+
+    private fun levenshtein(a: String, b: String): Int {
+        val dp = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            var prev = dp[0]
+            dp[0] = i
+            for (j in 1..b.length) {
+                val tmp = dp[j]
+                dp[j] = if (a[i - 1] == b[j - 1]) prev else 1 + minOf(prev, dp[j], dp[j - 1])
+                prev = tmp
             }
         }
-        cache.saveProbe(source.id, mediaId, matched = false, anime = null)
-        return false
+        return dp[b.length]
     }
 
     fun updateMediaTitle(title: String) {

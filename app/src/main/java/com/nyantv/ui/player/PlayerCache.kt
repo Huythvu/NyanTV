@@ -26,6 +26,7 @@ data class ProbeCacheEntry(
     val matched: Boolean,
     val result:  CachedAnimeResult? = null,
     val ts:      Long = 0L,
+    val score:   Double = 0.0,   // fuzzy title-match score of [result] (0..1)
 )
 
 class PlayerCache(private val context: Context) {
@@ -105,11 +106,12 @@ class PlayerCache(private val context: Context) {
     private fun probeKey(sourceId: Long, mediaId: String) =
         stringPreferencesKey("probe_${sourceId}_$mediaId")
 
-    suspend fun saveProbe(sourceId: Long, mediaId: String, matched: Boolean, anime: SAnime?) {
+    suspend fun saveProbe(sourceId: Long, mediaId: String, matched: Boolean, anime: SAnime?, score: Double = 0.0) {
         val entry = ProbeCacheEntry(
             matched = matched,
             result  = anime?.let { CachedAnimeResult(it.url, it.title, it.thumbnail_url) },
             ts      = System.currentTimeMillis(),
+            score   = score,
         )
         context.playerDataStore.edit { it[probeKey(sourceId, mediaId)] = json.encodeToString(entry) }
     }
