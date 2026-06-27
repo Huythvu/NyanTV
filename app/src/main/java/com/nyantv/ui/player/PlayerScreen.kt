@@ -513,6 +513,37 @@ fun PlayerScreen(
             }
         }
 
+// ── Auto-play next countdown ────────────────────────────────────────────────────
+        state.autoPlayCountdownSec?.let { secs ->
+            val playNowFocus = remember { FocusRequester() }
+            LaunchedEffect(Unit) { runCatching { playNowFocus.requestFocus() } }
+            Surface(
+                color    = Color.Black.copy(alpha = 0.82f),
+                shape    = RoundedCornerShape(12.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp),
+            ) {
+                Column(Modifier.padding(20.dp)) {
+                    Text(
+                        "Next episode in ${secs}s",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { vm.cancelAutoPlay() },
+                            border  = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
+                            colors  = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                        ) { Text("Cancel") }
+                        Button(
+                            onClick  = { vm.playNextNow() },
+                            modifier = Modifier.focusRequester(playNowFocus),
+                        ) { Text("Play now") }
+                    }
+                }
+            }
+        }
+
 
         if (showTrackingConsentDialog) {
             val rememberAnswer = appVm.askOncePerSeries.value
@@ -660,10 +691,12 @@ private fun PlayerControls(
     onSubSettings:         () -> Unit,
     pauseForSettings:      () -> Unit
 ) {
+    val subPrefs    by vm.subtitlePrefs.collectAsStateWithLifecycle()
     val gradientTop = Color.Black.copy(alpha = 0.7f)
     val gradientBot = Color.Black.copy(alpha = 0.85f)
     val hasStreams   = state.streams.size > 1
     val hasSubs     = state.subtitleTracks.isNotEmpty()
+    val step        = subPrefs.seekStepSec
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -739,7 +772,13 @@ private fun PlayerControls(
                 }
 
                 TvIconButton(onClick = { vm.seekBackward() }) {
-                    Icon(Icons.Filled.Replay10, contentDescription = "−10 s", tint = Color.White, modifier = Modifier.size(28.dp))
+                    val backIcon = when (step) {
+                        5    -> Icons.Filled.Replay5
+                        10   -> Icons.Filled.Replay10
+                        30   -> Icons.Filled.Replay30
+                        else -> Icons.Filled.FastRewind
+                    }
+                    Icon(backIcon, contentDescription = "−$step s", tint = Color.White, modifier = Modifier.size(28.dp))
                 }
 
                 if (state.episodeNavigating) {
@@ -763,7 +802,13 @@ private fun PlayerControls(
                 }
 
                 TvIconButton(onClick = { vm.seekForward() }) {
-                    Icon(Icons.Filled.Forward10, contentDescription = "+10 s", tint = Color.White, modifier = Modifier.size(28.dp))
+                    val fwdIcon = when (step) {
+                        5    -> Icons.Filled.Forward5
+                        10   -> Icons.Filled.Forward10
+                        30   -> Icons.Filled.Forward30
+                        else -> Icons.Filled.FastForward
+                    }
+                    Icon(fwdIcon, contentDescription = "+$step s", tint = Color.White, modifier = Modifier.size(28.dp))
                 }
 
                 TvIconButton(
@@ -774,10 +819,23 @@ private fun PlayerControls(
                 }
 
                 Spacer(Modifier.weight(1f))
-                SpeedSelector(
-                    onSpeedSelected = { vm.setSpeed(it) },
-                    onOpened        = { pauseForSettings() }
-                )
+
+                // Auto-play next toggle: accent tint when on, dimmed when off.
+                TvIconButton(onClick = { vm.setAutoPlayNext(!subPrefs.autoPlayNext) }) {
+                    Icon(
+                        Icons.Filled.PlaylistPlay,
+                        contentDescription = if (subPrefs.autoPlayNext) "Auto-play on" else "Auto-play off",
+                        tint     = if (subPrefs.autoPlayNext) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+
+                if (subPrefs.showSpeedControl) {
+                    SpeedSelector(
+                        onSpeedSelected = { vm.setSpeed(it) },
+                        onOpened        = { pauseForSettings() }
+                    )
+                }
             }
         }
     }

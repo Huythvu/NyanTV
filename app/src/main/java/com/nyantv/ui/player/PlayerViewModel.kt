@@ -57,6 +57,8 @@ data class PlayerUiState(
     val selectedSubtitleIndex: Int?                = null,
     val skipTimes: EpisodeSkipTimes? = null,
     val activeSkip: ActiveSkip? = null,
+    /** Seconds left before auto-play advances to the next episode; null = no countdown running. */
+    val autoPlayCountdownSec: Int? = null,
 )
 
 data class FillerWarning(
@@ -74,6 +76,12 @@ data class SubtitlePrefs(
     val translateTo:   String? = null,
     val lingvaBaseUrl: String  = "https://lingva.ml",
     val bigSkipSec:    Int     = 75,
+    /** Small forward/back seek step in seconds (the ±N buttons). */
+    val seekStepSec:   Int     = 10,
+    /** Auto-advance to the next episode when one finishes. */
+    val autoPlayNext:  Boolean = false,
+    /** Whether the playback-speed control is shown in the player HUD. */
+    val showSpeedControl: Boolean = true,
 )
 
 data class ActiveSkip(val label: String, val startSec: Int, val endSec: Int)
@@ -90,6 +98,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         private const val PREF_QUALITY  = "preferred_quality_name"
         private const val PREF_SUBTITLE = "preferred_subtitle_name"
         private const val SUBTITLE_OFF  = "__off__"
+        private const val AUTO_PLAY_SECONDS = 10
     }
 
     private val prefs = app.getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE)
@@ -162,6 +171,18 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 val ms = pendingResumeMs
                 pendingResumeMs = 0L
                 service?.seekTo(ms)
+            }
+            // Episode finished → start the auto-play countdown if enabled and there's a next episode.
+            // Guard on actually reaching the end: the mpv backend also reports STATE_ENDED when a
+            // stream fails to load, and we must not auto-skip a broken episode.
+            if (state == androidx.media3.common.Player.STATE_ENDED &&
+                _subtitlePrefs.value.autoPlayNext &&
+                _state.value.hasNextEpisode &&
+                !_state.value.episodeNavigating
+            ) {
+                val s = _state.value
+                val reachedEnd = s.durationMs > 0L && s.positionMs >= (s.durationMs * 0.85).toLong()
+                if (reachedEnd) startAutoPlayCountdown()
             }
         }
 
@@ -660,10 +681,56 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         service?.stop()
     }
     fun seekTo(ms: Long)           = service?.seekTo(ms)
-    fun seekForward()              = service?.seekForward()
-    fun seekBackward()             = service?.seekBackward()
+    fun seekForward()              = seekRelative(+_subtitlePrefs.value.seekStepSec * 1000L)
+    fun seekBackward()             = seekRelative(-_subtitlePrefs.value.seekStepSec * 1000L)
     fun setSpeed(speed: Float)     = service?.setPlaybackSpeed(speed)
     fun togglePlayPause()          { if (_state.value.isPlaying) pause() else play() }
+
+    /** Seek by the configurable step, clamped to the episode bounds. */
+    private fun seekRelative(deltaMs: Long) {
+        val s = _state.value
+        val max = if (s.durationMs > 0L) s.durationMs else Long.MAX_VALUE
+        service?.seekTo((s.positionMs + deltaMs).coerceIn(0L, max))
+    }
+
+    // ── Auto-play next episode ───────────────────────────────────────────────────
+
+    private var autoPlayJob: kotlinx.coroutines.Job? = null
+
+    /** Toggle (and persist) auto-play. Turning it off cancels any running countdown. */
+    fun setAutoPlayNext(enabled: Boolean) {
+        val new = _subtitlePrefs.value.copy(autoPlayNext = enabled)
+        _subtitlePrefs.value = new
+        saveSubtitlePrefs(new)
+        if (!enabled) cancelAutoPlay()
+    }
+
+    private fun startAutoPlayCountdown() {
+        if (autoPlayJob?.isActive == true) return
+        autoPlayJob = viewModelScope.launch {
+            var remaining = AUTO_PLAY_SECONDS
+            while (remaining > 0) {
+                _state.update { it.copy(autoPlayCountdownSec = remaining) }
+                kotlinx.coroutines.delay(1_000L)
+                remaining--
+            }
+            _state.update { it.copy(autoPlayCountdownSec = null) }
+            navigateEpisode(1)
+        }
+    }
+
+    /** Dismiss the auto-play countdown without advancing. */
+    fun cancelAutoPlay() {
+        autoPlayJob?.cancel()
+        autoPlayJob = null
+        _state.update { it.copy(autoPlayCountdownSec = null) }
+    }
+
+    /** Skip the countdown and go to the next episode immediately. */
+    fun playNextNow() {
+        cancelAutoPlay()
+        navigateEpisode(1)
+    }
 
     // ── Surface management ─────────────────────────────────────────────────────
 
@@ -730,6 +797,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         translateTo   = prefs.getString("sub_translate",  null),
         lingvaBaseUrl = prefs.getString("sub_lingva_url", "https://lingva.ml") ?: "https://lingva.ml",
         bigSkipSec    = prefs.getInt("big_skip_sec",      75),
+        seekStepSec   = prefs.getInt("seek_step_sec",     10),
+        autoPlayNext  = prefs.getBoolean("autoplay_next", false),
+        showSpeedControl = prefs.getBoolean("show_speed_control", true),
     )
 
     private fun saveSubtitlePrefs(p: SubtitlePrefs) {
@@ -741,6 +811,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             putString("sub_translate",  p.translateTo)
             putString("sub_lingva_url", p.lingvaBaseUrl)
             putInt("big_skip_sec",      p.bigSkipSec)
+            putInt("seek_step_sec",     p.seekStepSec)
+            putBoolean("autoplay_next", p.autoPlayNext)
+            putBoolean("show_speed_control", p.showSpeedControl)
             apply()
         }
     }

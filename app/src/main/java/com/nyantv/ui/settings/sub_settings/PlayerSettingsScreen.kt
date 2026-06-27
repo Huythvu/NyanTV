@@ -37,12 +37,14 @@ fun PlayerSettingsScreen(navController: NavController) {
     var bold          by remember { mutableStateOf(prefs.getBoolean("sub_bold",     false)) }
     var translateTo   by remember { mutableStateOf<String?>(prefs.getString("sub_translate", null)) }
     var bigSkipSec by remember { mutableIntStateOf(prefs.getInt("big_skip_sec", 75)) }
+    var seekStepSec by remember { mutableIntStateOf(prefs.getInt("seek_step_sec", 10)) }
+    var showSpeedControl by remember { mutableStateOf(prefs.getBoolean("show_speed_control", true)) }
     var watchedThreshold by remember { mutableIntStateOf(prefs.getInt("watched_threshold", 80)) }
     var advancedGrouping by remember { mutableStateOf(prefs.getBoolean("subtitle_advanced_grouping", false)) }
     var autoSelectServer by remember { mutableStateOf(prefs.getBoolean("auto_select_server", false)) }
 
     // Auto-save whenever any value changes
-    LaunchedEffect(qualityMode, subEnabled, fontSize, bold, translateTo, bigSkipSec, watchedThreshold, playerEngine, advancedGrouping, autoSelectServer) {
+    LaunchedEffect(qualityMode, subEnabled, fontSize, bold, translateTo, bigSkipSec, seekStepSec, showSpeedControl, watchedThreshold, playerEngine, advancedGrouping, autoSelectServer) {
         prefs.edit {
             putString("quality_mode",      qualityMode)
             putBoolean("sub_enabled",      subEnabled)
@@ -50,6 +52,8 @@ fun PlayerSettingsScreen(navController: NavController) {
             putBoolean("sub_bold",         bold)
             putString("sub_translate",     translateTo)
             putInt("big_skip_sec",         bigSkipSec)
+            putInt("seek_step_sec",        seekStepSec)
+            putBoolean("show_speed_control", showSpeedControl)
             putInt("watched_threshold",    watchedThreshold)
             putString("player_engine", playerEngine)
             putBoolean("subtitle_advanced_grouping", advancedGrouping)
@@ -258,6 +262,53 @@ fun PlayerSettingsScreen(navController: NavController) {
                     modifier      = Modifier.fillMaxWidth(),
                 )
             }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+
+            // Small seek step (the ±X-second buttons)
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Row(
+                    modifier              = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment     = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Seek step",
+                            style      = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            "How far the ± skip buttons jump",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Text(
+                        "${seekStepSec}s",
+                        style      = MaterialTheme.typography.labelMedium,
+                        color      = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Slider(
+                    value         = seekStepSec.toFloat(),
+                    onValueChange = { seekStepSec = it.toInt() },
+                    valueRange    = 5f..30f,
+                    steps         = 4,   // 5 / 10 / 15 / 20 / 25 / 30
+                    modifier      = Modifier.fillMaxWidth(),
+                )
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+
+            // Show the playback-speed control in the player HUD
+            SettingsToggleRow(
+                label    = "Playback speed control",
+                subtitle = "Show the speed selector in the player",
+                checked  = showSpeedControl,
+                onToggle = { showSpeedControl = it },
+            )
         }
 
         // ── Subtitles ──────────────────────────────────────────────────────────
