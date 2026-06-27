@@ -20,6 +20,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+
+private const val EXT_FETCH_TIMEOUT_MS = 15_000L
 
 data class BrowseFilters(
     val genres: Set<String> = emptySet(),
@@ -242,16 +245,25 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
             val src = extSourceMap[sourceId] ?: return@withContext FetchResult(emptyList(), false)
             val filters = currentFilterList
             val query   = extQuery
-            runCatching {
-                // A query or touched filter searches the source; otherwise show its Latest feed
-                // (if requested and supported) or its popular catalog as the default landing view.
-                val ap = when {
-                    query.isNotBlank() || extFiltersModified -> src.getSearchAnime(page, query, filters ?: AnimeFilterList())
-                    extLatest && src.supportsLatest          -> src.getLatestUpdates(page)
-                    else                                     -> src.getPopularAnime(page)
-                }
-                FetchResult(ap.animes.map { it.toBrowseMedia(sourceId) }, ap.hasNextPage)
-            }.getOrElse { FetchResult(emptyList(), false) }
+            // Bound each fetch so a slow/hung source can't spin the grid forever.
+            withTimeoutOrNull(EXT_FETCH_TIMEOUT_MS) {
+                runCatching {
+                    // A query or touched filter searches the source; otherwise show its Latest feed
+                    // (if requested and supported) or its popular catalog as the default landing view.
+                    val searching = query.isNotBlank() || extFiltersModified
+                    var ap = when {
+                        searching                       -> src.getSearchAnime(page, query, filters ?: AnimeFilterList())
+                        extLatest && src.supportsLatest -> src.getLatestUpdates(page)
+                        else                            -> src.getPopularAnime(page)
+                    }
+                    // Some sources don't implement a popular feed — fall back to Latest so the grid
+                    // isn't blank for them.
+                    if (ap.animes.isEmpty() && !searching && !extLatest && src.supportsLatest) {
+                        runCatching { src.getLatestUpdates(page) }.getOrNull()?.let { ap = it }
+                    }
+                    FetchResult(ap.animes.map { it.toBrowseMedia(sourceId) }, ap.hasNextPage)
+                }.getOrElse { FetchResult(emptyList(), false) }
+            } ?: FetchResult(emptyList(), false)
         }
 
     private fun SAnime.toBrowseMedia(sourceId: Long): Media = Media(

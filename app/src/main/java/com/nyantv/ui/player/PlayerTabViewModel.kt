@@ -27,10 +27,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 private const val PROBE_CONCURRENCY = 5
-private const val PROBE_TIMEOUT_MS  = 8_000L
+private const val PROBE_TIMEOUT_MS  = 6_000L
 private const val PROBE_TTL_MS      = 7L * 24 * 60 * 60 * 1000  // re-check matches after 7 days
 private const val MATCH_THRESHOLD   = 0.60   // fuzzy title-match score needed to accept a source
-private const val MATCH_CONFIDENT   = 0.97   // near-exact match → stop probing more title variants
+private const val MATCH_CONFIDENT   = 0.85   // borderline-sure match → select now, don't wait for the rest
+private const val PROBE_MAX_QUERIES = 2      // title variants to try per source before giving up (speed)
 
 data class PlayerTabUiState(
     val sources:        List<SearchableSource>          = emptyList(),
@@ -302,22 +303,30 @@ class PlayerTabViewModel(
     }
 
     /**
-     * Once every source has finished probing, auto-select the one with the closest (highest-scoring)
-     * title match among all that cleared the threshold — so we compare all servers rather than
-     * grabbing the first acceptable one. Extension order breaks ties. No-op once the user has picked
-     * a source by hand.
+     * Auto-select a source as the probe runs:
+     *  • A borderline-sure match (score ≥ confident) is picked immediately, so a clear hit shows in
+     *    a second or two instead of waiting on slow/unmatched sources.
+     *  • Otherwise, once the probe fully settles, the highest-scoring accepted source wins (extension
+     *    order breaks ties) — so ambiguous cases still compare all servers.
+     * No-op once the user has picked a source by hand.
      */
     private fun maybeAutoSelectMatched() {
         synchronized(probeLock) {
             if (userSelectedSource) return
             val s = _state.value
-            // Wait until the probe has fully settled so the comparison covers every server.
+            fun scoreOf(id: Long) = s.matchScores[id] ?: 0.0
+            val selected = s.selectedSource
+            // Keep an already-confident selection.
+            if (selected != null && scoreOf(selected.id) >= MATCH_CONFIDENT) return
+
+            val best = s.sources.filter { it.id in s.matchedSources }.maxByOrNull { scoreOf(it.id) } ?: return
+            if (scoreOf(best.id) >= MATCH_CONFIDENT) {
+                if (selected?.id != best.id) applySource(best)   // sure enough → go now
+                return
+            }
+            // Only weak matches so far → wait for the probe to settle, then take the best available.
             if (s.probing) return
-            val best = s.sources
-                .filter { it.id in s.matchedSources }
-                .maxByOrNull { s.matchScores[it.id] ?: 0.0 }
-                ?: return
-            if (s.selectedSource?.id != best.id) applySource(best)
+            if (selected?.id != best.id) applySource(best)
         }
     }
 
@@ -340,7 +349,10 @@ class PlayerTabViewModel(
         }
         var bestAnime: SAnime? = null
         var bestScore = 0.0
-        for (q in queries) {
+        // Try the primary title first, then a fallback variant only if needed (alternate naming).
+        // Stop as soon as we have an acceptable hit — searching every variant for every source is
+        // what made probing crawl.
+        for (q in queries.take(PROBE_MAX_QUERIES)) {
             val page = withTimeoutOrNull(PROBE_TIMEOUT_MS) {
                 try {
                     source.search(q)
@@ -354,7 +366,7 @@ class PlayerTabViewModel(
                 val score = bestTitleScore(anime.title, queries)
                 if (score > bestScore) { bestScore = score; bestAnime = anime }
             }
-            if (bestScore >= MATCH_CONFIDENT) break   // near-exact, no need to try more variants
+            if (bestScore >= MATCH_THRESHOLD) break   // good enough; don't keep searching variants
         }
         val matched = bestScore >= MATCH_THRESHOLD && bestAnime != null
         cache.saveProbe(source.id, mediaId, matched = matched, anime = bestAnime, score = bestScore)
