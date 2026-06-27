@@ -41,6 +41,10 @@ data class BrowseState(
     val extFilters: List<AnimeFilter<*>> = emptyList(),
     /** Free-text search within the selected extension (blank = its popular catalog). */
     val extQuery: String = "",
+    /** Browse the extension's "Latest" feed instead of its popular catalog. */
+    val extLatest: Boolean = false,
+    /** Whether the selected extension actually offers a Latest feed. */
+    val extSupportsLatest: Boolean = false,
     /** Bumped whenever an extension filter's state is mutated, to force a UI refresh. */
     val filterVersion: Int = 0,
     val results: List<Media> = emptyList(),
@@ -69,6 +73,8 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
     private var extFiltersModified = false
     /** Current free-text query within the selected extension. */
     private var extQuery = ""
+    /** Browse the selected extension's Latest feed instead of Popular. */
+    private var extLatest = false
 
     private var page = 1
     private var loadJob: Job? = null
@@ -109,19 +115,33 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
         page = 1
         extFiltersModified = false
         extQuery = ""
+        extLatest = false
         currentFilterList = sourceId?.let { id -> runCatching { extSourceMap[id]?.getFilterList() }.getOrNull() }
         val extFilters = currentFilterList?.toList() ?: emptyList()
+        val supportsLatest = sourceId?.let { id -> runCatching { extSourceMap[id]?.supportsLatest }.getOrNull() } ?: false
         _state.update {
             it.copy(
-                selectedSourceId = sourceId,
-                extFilters       = extFilters,
-                extQuery         = "",
-                filterVersion    = it.filterVersion + 1,
-                results          = emptyList(),
-                loading          = true,
-                endReached       = false,
+                selectedSourceId  = sourceId,
+                extFilters        = extFilters,
+                extQuery          = "",
+                extLatest         = false,
+                extSupportsLatest = supportsLatest,
+                filterVersion     = it.filterVersion + 1,
+                results           = emptyList(),
+                loading           = true,
+                endReached        = false,
             )
         }
+        reload()
+    }
+
+    /** Toggle the selected extension's Latest feed vs its popular catalog. */
+    fun setExtensionLatest(latest: Boolean) {
+        if (latest == extLatest) return
+        extLatest = latest
+        loadJob?.cancel()
+        page = 1
+        _state.update { it.copy(extLatest = latest, results = emptyList(), loading = true, endReached = false) }
         reload()
     }
 
@@ -220,12 +240,12 @@ class BrowseViewModel(app: Application) : AndroidViewModel(app) {
             val filters = currentFilterList
             val query   = extQuery
             runCatching {
-                // Search the source once the user types a query or touches its filters;
-                // otherwise show its popular catalog as the default landing view.
-                val ap = if (query.isNotBlank() || extFiltersModified) {
-                    src.getSearchAnime(page, query, filters ?: AnimeFilterList())
-                } else {
-                    src.getPopularAnime(page)
+                // A query or touched filter searches the source; otherwise show its Latest feed
+                // (if requested and supported) or its popular catalog as the default landing view.
+                val ap = when {
+                    query.isNotBlank() || extFiltersModified -> src.getSearchAnime(page, query, filters ?: AnimeFilterList())
+                    extLatest && src.supportsLatest          -> src.getLatestUpdates(page)
+                    else                                     -> src.getPopularAnime(page)
                 }
                 FetchResult(ap.animes.map { it.toBrowseMedia(sourceId) }, ap.hasNextPage)
             }.getOrElse { FetchResult(emptyList(), false) }

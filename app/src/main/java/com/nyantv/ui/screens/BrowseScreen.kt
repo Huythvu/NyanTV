@@ -145,6 +145,14 @@ fun BrowseScreen(navController: NavController, appVm: AppViewModel, onDetailClic
                 options  = sourceLabels,
                 onSelect = { idx -> vm.selectSource(if (idx == 0) null else state.extSources[idx - 1].id) },
             )
+            // Popular vs Latest (most recent) — only for extensions that offer a Latest feed.
+            if (extensionMode && state.extSupportsLatest) {
+                FilterDropdown(
+                    label    = if (state.extLatest) "Latest" else "Popular",
+                    options  = listOf("Popular", "Latest"),
+                    onSelect = { idx -> vm.setExtensionLatest(idx == 1) },
+                )
+            }
         }
 
         Spacer(Modifier.height(8.dp))
