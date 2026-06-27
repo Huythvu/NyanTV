@@ -18,7 +18,6 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -27,7 +26,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-private const val PROBE_CONCURRENCY = 3      // keep the blast radius small so we don't trip site rate-limits
+private const val PROBE_CONCURRENCY = 5      // probe sources in parallel so the picker fills in quickly
 private const val PROBE_TIMEOUT_MS  = 6_000L
 private const val PROBE_TTL_MS      = 7L * 24 * 60 * 60 * 1000  // re-check matches after 7 days
 private const val MATCH_THRESHOLD   = 0.60   // fuzzy title-match score needed to accept a source
@@ -276,7 +275,6 @@ class PlayerTabViewModel(
             _state.update { it.copy(probing = true, matchedSources = emptySet(), matchScores = emptyMap()) }
             val gate = Semaphore(PROBE_CONCURRENCY)
             coroutineScope {
-                val probeScope = this
                 sources.forEach { source ->
                     launch(Dispatchers.IO) {
                         gate.withPermit {
@@ -289,13 +287,10 @@ class PlayerTabViewModel(
                                     )
                                 }
                             }
+                            // A borderline-sure hit is auto-selected immediately (see maybeAutoSelectMatched),
+                            // so the player opens fast — but we let every source finish probing so all valid
+                            // extensions still populate the picker and the user can switch servers by hand.
                             onSourceProbed(source.id)
-                            // A borderline-sure hit is auto-selected immediately, so there's no need to
-                            // keep searching the rest — stop now to avoid hammering other sources' sites
-                            // (whose shared rate-limit/Cloudflare state would later break catalog browse).
-                            if (!userSelectedSource && outcome.matched && outcome.score >= MATCH_CONFIDENT) {
-                                probeScope.coroutineContext.cancelChildren()
-                            }
                         }
                     }
                 }
