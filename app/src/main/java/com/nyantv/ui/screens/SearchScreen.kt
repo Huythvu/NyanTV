@@ -81,6 +81,7 @@ fun SearchScreen(
     val prefs       = remember { context.getSharedPreferences("nyantv_prefs", Context.MODE_PRIVATE) }
     val serviceType by vm.serviceType.collectAsStateWithLifecycle()
     val apiResults  by vm.searchResults.collectAsStateWithLifecycle()
+    val incognito   by vm.incognito.collectAsStateWithLifecycle()
 
     val historyKey = remember(serviceType) { serviceType.historyKey() }
 
@@ -96,7 +97,8 @@ fun SearchScreen(
 
     fun doSearch(q: String = query) {
         if (q.isBlank()) return
-        history = prefs.addHistory(historyKey, q.trim())
+        // In incognito mode, run the search but don't record it in search history.
+        if (!incognito) history = prefs.addHistory(historyKey, q.trim())
         vm.search(q.trim())
         focusManager.clearFocus()
     }
