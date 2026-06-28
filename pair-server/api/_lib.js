@@ -70,7 +70,18 @@ export const PROVIDERS = {
     async exchangeCode(code) {
       const resp = await fetch(this.tokenUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        // AniList's token endpoint sits behind Cloudflare, which serves a "Just a moment..."
+        // managed challenge (HTTP 403) to requests from datacenter IPs that lack a browser-like
+        // User-Agent. Vercel's fetch sends none by default, so we present a real browser UA (plus
+        // Accept-Language) to clear the challenge.
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+            '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+        },
         body: JSON.stringify({
           grant_type: 'authorization_code',
           client_id: this.clientId(),
