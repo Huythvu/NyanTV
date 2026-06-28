@@ -667,19 +667,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Tracked shows still airing, soonest next-episode first. Strongest for AniList (others lack data). */
     val airingThisWeek: StateFlow<List<AiringItem>> = animeList
         .map { list ->
-            val active = setOf("CURRENT", "WATCHING", "REPEATING")
+            val watching = setOf("CURRENT", "WATCHING", "REPEATING")
+            val included = watching + setOf("PLANNING", "PLAN TO WATCH")
             list.mapNotNull { tm ->
                 val next = tm.nextAiringEpisode ?: return@mapNotNull null
-                if (tm.watchingStatus != null && tm.watchingStatus !in active) return@mapNotNull null
-                val latestAired = (next.episode - 1).coerceAtLeast(0)
-                val watched     = tm.episodeCount ?: 0
+                if (tm.watchingStatus != null && tm.watchingStatus !in included) return@mapNotNull null
+                // "New episodes" only makes sense for shows you're actually watching; for planned
+                // shows you haven't started, leave it at 0 (the row just flags they're airing).
+                val newEps = if (tm.watchingStatus in watching) {
+                    ((next.episode - 1).coerceAtLeast(0) - (tm.episodeCount ?: 0)).coerceAtLeast(0)
+                } else 0
                 AiringItem(
                     id          = tm.id,
                     title       = tm.title,
                     poster      = tm.poster,
                     episode     = next.episode,
                     airingAtSec = next.airingAt,
-                    newEpisodes = (latestAired - watched).coerceAtLeast(0),
+                    newEpisodes = newEps,
                 )
             }.sortedBy { it.airingAtSec }
         }
