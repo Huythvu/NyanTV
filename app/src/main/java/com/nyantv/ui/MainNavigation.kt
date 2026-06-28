@@ -158,8 +158,12 @@ fun MainNavigation(
                     vm              = vm,
                     sidebarFocusReq = sidebarFocusReq,
                     onLogin         = {
-                        if (vm.serviceType.value == ServiceType.ANILIST) navController.navigate("pair/anilist")
-                        else vm.login()
+                        // QR/phone pairing for both trackers; Simkl still uses the in-app browser.
+                        when (vm.serviceType.value) {
+                            ServiceType.ANILIST -> navController.navigate("pair/anilist")
+                            ServiceType.MAL     -> navController.navigate("pair/mal")
+                            else                -> vm.login()
+                        }
                     },
                     onStats         = { navController.navigate("settings/stats") },
                     onNavigate      = { screen ->
@@ -358,8 +362,6 @@ private fun Sidebar(
                 onLogout        = { showMenu = false; vm.logout() },
                 onStats         = { showMenu = false; onStats() },
                 onDismiss       = { showMenu = false },
-                devLoginAvailable = vm.devLoginAvailable,
-                onDevLogin      = { showMenu = false; vm.devSignInAnilist() },
             )
         }
 
@@ -391,8 +393,6 @@ private fun ProfileMenuDialog(
     onLogout:        () -> Unit,
     onStats:         () -> Unit = {},
     onDismiss:       () -> Unit,
-    devLoginAvailable: Boolean = false,
-    onDevLogin:      () -> Unit = {},
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -450,13 +450,7 @@ private fun ProfileMenuDialog(
             if (loggedIn) {
                 TextButton(onClick = onLogout) { Text("Log out", color = MaterialTheme.colorScheme.error) }
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    // Debug-only quick sign-in via the local.properties token; QR login stays the default.
-                    if (devLoginAvailable) {
-                        TextButton(onClick = onDevLogin) { Text("Dev sign-in") }
-                    }
-                    TextButton(onClick = onLogin) { Text("Log in") }
-                }
+                TextButton(onClick = onLogin) { Text("Log in") }
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },

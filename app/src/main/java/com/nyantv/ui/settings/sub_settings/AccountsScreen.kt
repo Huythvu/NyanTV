@@ -43,13 +43,16 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
     ) {
         SubScreenHeader(title = "Accounts & Services", navController = navController)
 
-        // AniList logs in via phone/PC pairing (TV-friendly, no Cloudflare); the others use the
-        // in-app WebView. [fresh] forces a signed-out login so a different account can be used.
+        // AniList and MAL both log in via phone/PC QR pairing (TV-friendly); Simkl uses the in-app
+        // WebView. [fresh] forces a signed-out WebView login so a different account can be used.
         fun beginLogin(fresh: Boolean) {
-            when {
-                service == ServiceType.ANILIST -> navController.navigate("pair/anilist")
-                fresh                          -> vm.loginWithDifferentAccount()
-                else                           -> vm.login()
+            when (service) {
+                ServiceType.ANILIST -> navController.navigate("pair/anilist")
+                ServiceType.MAL     -> navController.navigate("pair/mal")
+                // Original MAL on-screen-browser login — HIDDEN during the QR beta. Kept as a
+                // fallback in case QR proves unstable. TODO: remove once MAL QR is confirmed stable:
+                //   if (fresh) vm.loginWithDifferentAccount() else vm.login()
+                else                -> if (fresh) vm.loginWithDifferentAccount() else vm.login()  // Simkl
             }
         }
 
@@ -106,26 +109,26 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
             }
         }
 
-        // ── MyAnimeList QR Login (beta) ──────────────────────────────────────────
-        // Beta: an alternative to the on-screen-browser MAL login — sign in on your phone via QR,
-        // same flow AniList uses. The browser login above still works; this runs alongside it.
-        if (service == ServiceType.MAL) {
-            SectionCard(title = "MyAnimeList QR Login (beta)") {
+        // ── Developer sign-in (debug builds only) ────────────────────────────────
+        // Moved here out of the profile menu. Instant AniList sign-in via the local.properties dev
+        // token — no QR, no Cloudflare — for development. Hidden entirely in release builds.
+        if (vm.devLoginAvailable) {
+            SectionCard(title = "Developer") {
                 Row(
                     modifier              = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment     = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Sign in with your phone", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                        Text("Scan a QR code instead of typing on the on-screen browser.",
+                        Text("Dev sign-in (AniList)", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text("Instant sign-in with the baked-in dev token. Debug builds only.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                     }
                     OutlinedButton(
-                        onClick  = { navController.navigate("pair/mal") },
+                        onClick  = { vm.devSignInAnilist() },
                         modifier = Modifier.focusBorder(MaterialTheme.shapes.small)
-                    ) { Text("QR login") }
+                    ) { Text("Sign in") }
                 }
             }
         }
