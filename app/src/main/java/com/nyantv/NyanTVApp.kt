@@ -23,6 +23,21 @@ class NyanTVApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // The player runs in its own process (":player"), and Application.onCreate runs once per
+        // process. WebView can't be used from two processes that share the same data directory, so
+        // any WebView touch in the non-main process (e.g. reading the UA below) throws and falls
+        // back to a generic UA — which then mismatches the main process's cf_clearance cookies.
+        // Give each non-main process its own WebView data dir. Must run before any WebView use.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            val proc = getProcessName()
+            if (proc != packageName) {
+                runCatching {
+                    android.webkit.WebView.setDataDirectorySuffix(proc.substringAfter(':', "alt"))
+                }
+            }
+        }
+
         initializeApplicationContext(this)
 
         // Derive the network User-Agent from the device's real WebView so it matches the
