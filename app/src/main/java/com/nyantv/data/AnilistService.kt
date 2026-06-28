@@ -358,6 +358,34 @@ class AnilistService(context: Context) : MediaService {
         }.getOrNull() ?: emptyList()
     }
 
+    /**
+     * Every episode airing between [startSec] and [endSec] (epoch seconds), across all anime — the
+     * public AniList airing schedule (no auth needed). Paged, NSFW filtered out.
+     */
+    suspend fun fetchAiringSchedule(startSec: Long, endSec: Long): List<AiringScheduleEntry> = withContext(Dispatchers.IO) {
+        val out = mutableListOf<AiringScheduleEntry>()
+        var page = 1
+        while (page <= 10) {
+            val vars = buildJsonObject { put("start", startSec); put("end", endSec); put("page", page) }
+            val pageObj = runCatching {
+                gql(AIRING_QUERY, emptyMap(), vars)["data"]?.jsonObject?.get("Page")?.jsonObject
+            }.getOrNull() ?: break
+            val schedules = pageObj["airingSchedules"]?.jsonArray ?: break
+            schedules.forEach { s ->
+                val o  = s.jsonObject
+                val at = o["airingAt"]?.jsonPrimitive?.longOrNull ?: return@forEach
+                val ep = o["episode"]?.jsonPrimitive?.intOrNull ?: 0
+                val m  = o["media"]?.takeIf { it !is JsonNull }?.jsonObject ?: return@forEach
+                if (m["isAdult"]?.jsonPrimitive?.booleanOrNull == true) return@forEach
+                out.add(AiringScheduleEntry(m.toMedia(ServiceType.ANILIST), at, ep))
+            }
+            val hasNext = pageObj["pageInfo"]?.jsonObject?.get("hasNextPage")?.jsonPrimitive?.booleanOrNull ?: false
+            if (!hasNext) break
+            page++
+        }
+        out
+    }
+
     // ── GraphQL helper ─────────────────────────────────────────────────────────
 
     private suspend fun gql(
@@ -499,6 +527,18 @@ class AnilistService(context: Context) : MediaService {
         val MEDIA_LIST_ID_QUERY = $$"""
         query($userId:Int, $mediaId:Int) {
           MediaList(userId:$userId, mediaId:$mediaId) { id }
+        }
+        """.trimIndent()
+
+        val AIRING_QUERY = $$"""
+        query($start:Int, $end:Int, $page:Int) {
+          Page(page:$page, perPage:50) {
+            pageInfo { hasNextPage }
+            airingSchedules(airingAt_greater:$start, airingAt_lesser:$end, sort:TIME) {
+              airingAt episode
+              media { id idMal title { romaji english } coverImage { large color } averageScore episodes status format popularity isAdult }
+            }
+          }
         }
         """.trimIndent()
 

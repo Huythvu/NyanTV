@@ -43,6 +43,9 @@ data class Media(
 
 data class AiringEpisode(val airingAt: Long, val episode: Int)
 
+/** One scheduled episode airing (for the Schedule tab): which media, when, and which episode. */
+data class AiringScheduleEntry(val media: Media, val airingAtSec: Long, val episode: Int)
+
 data class TrackedMedia(
     val id: String = "",
     val title: String = "",

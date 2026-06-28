@@ -61,10 +61,11 @@ import kotlinx.coroutines.launch
 // ─── Routes ────────────────────────────────────────────────────────────────────
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
-    object Home     : Screen("home",     "Home",    Icons.Filled.Home)
-    object Anime    : Screen("anime",    "Anime",   Icons.Filled.Movie)
-    object Library  : Screen("library",  "Library", Icons.Filled.VideoLibrary)
-    object Settings : Screen("settings", "Settings",Icons.Filled.Settings)
+    object Home     : Screen("home",     "Home",     Icons.Filled.Home)
+    object Anime    : Screen("anime",    "Anime",    Icons.Filled.Movie)
+    object Schedule : Screen("schedule", "Schedule", Icons.Filled.CalendarMonth)
+    object Library  : Screen("library",  "Library",  Icons.Filled.VideoLibrary)
+    object Settings : Screen("settings", "Settings", Icons.Filled.Settings)
 }
 
 fun Screen.displayLabel(serviceType: ServiceType) = when {
@@ -72,7 +73,7 @@ fun Screen.displayLabel(serviceType: ServiceType) = when {
     else -> label
 }
 
-private val navItems = listOf(Screen.Home, Screen.Anime, Screen.Library, Screen.Settings)
+private val navItems = listOf(Screen.Home, Screen.Anime, Screen.Schedule, Screen.Library, Screen.Settings)
 
 
 // ─── Root composable ───────────────────────────────────────────────────────────
@@ -196,6 +197,7 @@ fun MainNavigation(
                         AnimeScreen(vm, navController) { openDetail(it) }
                     }
                 }
+                composable(Screen.Schedule.route)   { com.nyantv.ui.screens.ScheduleScreen { openDetail(it) } }
                 composable(Screen.Library.route)    { LibraryScreen(vm, navController) { openDetail(it) } }
                 composable("search")                { SearchScreen(vm, navController, sidebarFocusReq) { openDetail(it) } }
                 composable(Screen.Settings.route)   { SettingsScreen(vm, navController) }
