@@ -216,6 +216,15 @@ fun MainNavigation(
                         vm        = vm,
                         onBack    = { navController.popBackStack() },
                         onSuccess = { navController.popBackStack() },
+                        provider  = "anilist",
+                    )
+                }
+                composable("pair/mal") {
+                    com.nyantv.ui.auth.PairLoginScreen(
+                        vm        = vm,
+                        onBack    = { navController.popBackStack() },
+                        onSuccess = { navController.popBackStack() },
+                        provider  = "mal",
                     )
                 }
             }

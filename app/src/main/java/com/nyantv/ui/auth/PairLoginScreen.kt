@@ -48,7 +48,13 @@ private fun qrBitmap(text: String, size: Int = 512): ImageBitmap {
  * past Cloudflare), and the TV polls the relay until the token arrives.
  */
 @Composable
-fun PairLoginScreen(vm: AppViewModel, onBack: () -> Unit, onSuccess: () -> Unit) {
+fun PairLoginScreen(
+    vm: AppViewModel,
+    onBack: () -> Unit,
+    onSuccess: () -> Unit,
+    provider: String = "anilist",
+) {
+    val serviceName = if (provider == "mal") "MyAnimeList" else "AniList"
     val client  = remember { PairingClient() }
     var session by remember { mutableStateOf<PairSession?>(null) }
     var status  by remember { mutableStateOf("Requesting a code…") }
@@ -61,7 +67,7 @@ fun PairLoginScreen(vm: AppViewModel, onBack: () -> Unit, onSuccess: () -> Unit)
         error = null
         session = null
         status = "Requesting a code…"
-        val s = client.newSession("anilist")
+        val s = client.newSession(provider)
         if (s == null) {
             val detail = client.lastError
             // A TLS/certificate failure on this flow is almost always a wrong device clock (the
@@ -91,7 +97,11 @@ fun PairLoginScreen(vm: AppViewModel, onBack: () -> Unit, onSuccess: () -> Unit)
             when (val r = client.poll(s.code)) {
                 is PollResult.Code -> {
                     status = "Finishing sign-in…"
-                    if (vm.exchangePairedAnilistCode(r.authCode, r.redirectUri)) {
+                    val ok = when (provider) {
+                        "mal"  -> vm.exchangePairedMalCode(r.authCode, r.codeVerifier.orEmpty(), r.redirectUri)
+                        else   -> vm.exchangePairedAnilistCode(r.authCode, r.redirectUri)
+                    }
+                    if (ok) {
                         status = "Signed in!"
                         onSuccess()
                     } else {
@@ -121,13 +131,13 @@ fun PairLoginScreen(vm: AppViewModel, onBack: () -> Unit, onSuccess: () -> Unit)
             verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         ) {
             Text(
-                "Sign in with AniList",
+                "Sign in with $serviceName",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
-                "Scan the code with your phone — or open the link on any device — log in to AniList there, and this screen continues automatically.",
+                "Scan the code with your phone — or open the link on any device — log in to $serviceName there, and this screen continues automatically.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,

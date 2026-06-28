@@ -30,6 +30,7 @@ export default async function handler(req, res) {
     provider: entry.provider,
     code: entry.code ?? null,
     redirectUri: entry.redirectUri ?? null,
+    codeVerifier: entry.codeVerifier ?? null,
     accessToken: entry.accessToken ?? null,
     refreshToken: entry.refreshToken ?? null,
     expiresIn: entry.expiresIn ?? null,

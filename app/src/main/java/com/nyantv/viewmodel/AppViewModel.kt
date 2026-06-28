@@ -765,6 +765,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return svc.exchangePairedCode(code, redirectUri)
     }
 
+    /**
+     * Finish a paired MAL login by exchanging the auth code on-device with the PKCE [verifier] the
+     * relay minted (switches to MAL). MAL isn't behind Cloudflare, so this is a plain exchange.
+     */
+    suspend fun exchangePairedMalCode(code: String, verifier: String, redirectUri: String): Boolean {
+        if (_serviceType.value != ServiceType.MAL) switchService(ServiceType.MAL)
+        val svc = (_service as? MalService) ?: (sideService as? MalService) ?: return false
+        return svc.exchangePairedCode(code, verifier, redirectUri)
+    }
+
     fun updateEntry(id: String, status: String?, progress: Int?, score: Float?) =
         viewModelScope.launch {
             // Extension-only anime have no tracking entry; skip remote writes (watch

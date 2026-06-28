@@ -47,6 +47,13 @@ export function generateCode(length = 8) {
   return out;
 }
 
+/** A PKCE code_verifier (base64url, 43–128 chars). Used by providers that require PKCE (MAL). */
+export function generateVerifier(bytes = 64) {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Buffer.from(arr).toString('base64url');
+}
+
 export const pairKey = (code) => `pair:${String(code || '').toUpperCase()}`;
 
 /**
@@ -59,7 +66,7 @@ export const PROVIDERS = {
     tokenUrl: 'https://anilist.co/api/v2/oauth/token',
     clientId: () => process.env.ANILIST_CLIENT_ID,
     redirectUri: () => process.env.ANILIST_REDIRECT_URI,
-    buildAuthorizeUrl(state) {
+    buildAuthorizeUrl(state, _opts = {}) {
       const u = new URL(this.authorizeUrl);
       u.searchParams.set('client_id', this.clientId());
       u.searchParams.set('redirect_uri', this.redirectUri());
@@ -106,6 +113,33 @@ export const PROVIDERS = {
       }
       throw new Error(`token exchange failed ${lastErr}`);
     },
+  },
+
+  mal: {
+    authorizeUrl: 'https://myanimelist.net/v1/oauth2/authorize',
+    tokenUrl: 'https://myanimelist.net/v1/oauth2/token',
+    // MAL requires PKCE on the authorization-code grant. The relay mints the verifier per session
+    // and hands it back to the TV alongside the code; the TV does the token exchange itself, so the
+    // MAL client secret never has to live on the relay (it stays in the app's local.properties).
+    usesPkce: true,
+    clientId: () => process.env.MAL_CLIENT_ID,
+    // The callback is provider-agnostic, so MAL reuses the same registered relay redirect URL as
+    // AniList. The user just adds that URL as an extra redirect on their MAL app.
+    redirectUri: () => process.env.MAL_REDIRECT_URI || process.env.ANILIST_REDIRECT_URI,
+    buildAuthorizeUrl(state, opts = {}) {
+      const u = new URL(this.authorizeUrl);
+      u.searchParams.set('client_id', this.clientId());
+      u.searchParams.set('redirect_uri', this.redirectUri());
+      u.searchParams.set('response_type', 'code');
+      u.searchParams.set('state', state);
+      // MAL only supports the "plain" PKCE method (code_challenge == code_verifier).
+      if (opts.codeChallenge) {
+        u.searchParams.set('code_challenge', opts.codeChallenge);
+        u.searchParams.set('code_challenge_method', 'plain');
+      }
+      return u.toString();
+    },
+    // No exchangeCode: MAL tokens are exchanged on the TV (see MalService.exchangePairedCode).
   },
 };
 

@@ -72,9 +72,12 @@ class MalService(context: Context) : MediaService {
 
         prefs.edit { putString("code_verifier", verifier) }
 
+        // Send redirect_uri explicitly: once a second redirect URL (the pairing relay) is registered
+        // on the MAL app, MAL can no longer assume which one to use, so the request must name it.
         return "$MAL_AUTH/authorize" +
                 "?response_type=code" +
                 "&client_id=$clientId" +
+                "&redirect_uri=${enc(BuildConfig.REDIRECT_URI)}" +
                 "&code_challenge=$verifier" +
                 "&code_challenge_method=plain"
     }
@@ -91,7 +94,8 @@ class MalService(context: Context) : MediaService {
                 "&client_id=${BuildConfig.MAL_CLIENT_ID}" +
                 "&client_secret=${BuildConfig.MAL_CLIENT_SECRET}" +
                 "&code=$code" +
-                "&code_verifier=$verifier"
+                "&code_verifier=$verifier" +
+                "&redirect_uri=${enc(BuildConfig.REDIRECT_URI)}"
 
         val tokens = postForm("$MAL_AUTH/token", body) ?: return@withContext
 
@@ -104,6 +108,27 @@ class MalService(context: Context) : MediaService {
         fetchUserProfile()
         refreshUserLists()
     }
+
+    /**
+     * Finish a QR/phone-paired MAL login. The relay handed back the auth [code], the [redirectUri]
+     * it was issued for, and the PKCE [verifier] it minted; we exchange them for a token on-device,
+     * so the MAL client secret (from local.properties) never has to touch the relay.
+     */
+    suspend fun exchangePairedCode(code: String, verifier: String, redirectUri: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val body = "grant_type=authorization_code" +
+                    "&client_id=${BuildConfig.MAL_CLIENT_ID}" +
+                    "&client_secret=${BuildConfig.MAL_CLIENT_SECRET}" +
+                    "&code=$code" +
+                    "&code_verifier=$verifier" +
+                    "&redirect_uri=${enc(redirectUri)}"
+            val tokens = postForm("$MAL_AUTH/token", body) ?: return@withContext false
+            val access = tokens["access_token"]?.jsonPrimitive?.contentOrNull ?: return@withContext false
+            saveTokens(access, tokens["refresh_token"]?.jsonPrimitive?.contentOrNull)
+            fetchUserProfile()
+            refreshUserLists()
+            true
+        }
 
     private suspend fun refreshAccessToken() = withContext(Dispatchers.IO) {
         val rt = refreshToken ?: return@withContext
@@ -316,6 +341,7 @@ class MalService(context: Context) : MediaService {
 
     // ── HTTP helpers ───────────────────────────────────────────────────────────
 
+    private fun enc(s: String): String = java.net.URLEncoder.encode(s, "UTF-8")
 
     private suspend fun get(url: String, retryOnUnauth: Boolean = true): JsonObject? =
         withContext(Dispatchers.IO) {

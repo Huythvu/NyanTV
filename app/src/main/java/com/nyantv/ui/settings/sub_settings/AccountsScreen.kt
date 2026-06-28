@@ -106,6 +106,30 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
             }
         }
 
+        // ── MyAnimeList QR Login (beta) ──────────────────────────────────────────
+        // Beta: an alternative to the on-screen-browser MAL login — sign in on your phone via QR,
+        // same flow AniList uses. The browser login above still works; this runs alongside it.
+        if (service == ServiceType.MAL) {
+            SectionCard(title = "MyAnimeList QR Login (beta)") {
+                Row(
+                    modifier              = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment     = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Sign in with your phone", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        Text("Scan a QR code instead of typing on the on-screen browser.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    }
+                    OutlinedButton(
+                        onClick  = { navController.navigate("pair/mal") },
+                        modifier = Modifier.focusBorder(MaterialTheme.shapes.small)
+                    ) { Text("QR login") }
+                }
+            }
+        }
+
         // ── Tracking Service ───────────────────────────────────────────────────
         SectionCard(title = "Tracking Service") {
             Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

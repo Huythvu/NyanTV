@@ -20,6 +20,9 @@ export default async function handler(req, res) {
     return;
   }
 
-  res.writeHead(302, { Location: provider.buildAuthorizeUrl(code) });
+  // For PKCE providers the "plain" code_challenge is the verifier we minted in /new.
+  res.writeHead(302, {
+    Location: provider.buildAuthorizeUrl(code, { codeChallenge: entry.codeVerifier }),
+  });
   res.end();
 }

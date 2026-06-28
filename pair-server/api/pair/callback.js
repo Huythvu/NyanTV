@@ -33,7 +33,14 @@ export default async function handler(req, res) {
   // network client first, which a datacenter request here can't do — so the exchange runs there.
   await kv.set(
     pairKey(pairCode),
-    { status: 'done', provider: entry.provider, code: authCode, redirectUri: provider.redirectUri() },
+    {
+      status: 'done',
+      provider: entry.provider,
+      code: authCode,
+      redirectUri: provider.redirectUri(),
+      // PKCE providers (MAL) need the verifier at exchange time; pass it through to the TV.
+      codeVerifier: entry.codeVerifier ?? null,
+    },
     { ex: PAIR_TTL_SECONDS },
   );
   res.status(200).send(page("You're signed in ✅", 'Return to your TV — it will continue automatically. You can close this tab.'));

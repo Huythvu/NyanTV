@@ -15,7 +15,8 @@ data class PairSession(val code: String, val verifyUrl: String, val expiresIn: I
 sealed interface PollResult {
     data object Pending : PollResult
     data class  Done(val accessToken: String) : PollResult                 // legacy: relay exchanged the token
-    data class  Code(val authCode: String, val redirectUri: String) : PollResult  // app exchanges the code
+    // app exchanges the code; codeVerifier is set for PKCE providers (MAL)
+    data class  Code(val authCode: String, val redirectUri: String, val codeVerifier: String? = null) : PollResult
     data object Expired : PollResult
 }
 
@@ -68,9 +69,10 @@ class PairingClient(private val baseUrl: String = BuildConfig.PAIR_BASE_URL) {
                     "done" -> {
                         val code     = o["code"]?.jsonPrimitive?.contentOrNull
                         val redirect = o["redirectUri"]?.jsonPrimitive?.contentOrNull
+                        val verifier = o["codeVerifier"]?.jsonPrimitive?.contentOrNull
                         val token    = o["accessToken"]?.jsonPrimitive?.contentOrNull
                         when {
-                            code != null && redirect != null -> PollResult.Code(code, redirect)
+                            code != null && redirect != null -> PollResult.Code(code, redirect, verifier)
                             token != null                    -> PollResult.Done(token)
                             else                             -> PollResult.Pending
                         }
