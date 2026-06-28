@@ -63,7 +63,9 @@ export const PROVIDERS = {
       const u = new URL(this.authorizeUrl);
       u.searchParams.set('client_id', this.clientId());
       u.searchParams.set('redirect_uri', this.redirectUri());
-      u.searchParams.set('response_type', 'code');
+      // Implicit grant: the token comes back in the phone browser's URL fragment, so we never hit
+      // AniList's Cloudflare-protected /token endpoint (which blocks both the relay and the TV).
+      u.searchParams.set('response_type', 'token');
       u.searchParams.set('state', state);
       return u.toString();
     },

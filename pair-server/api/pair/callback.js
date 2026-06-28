@@ -1,40 +1,40 @@
-// GET /api/pair/callback?code=<authCode>&state=<pairingCode>
-// The provider redirects the phone/PC browser here after a successful login. We exchange the
-// authorization code for a token (server-side, with the client secret) and stash it against the
-// pairing code so the waiting TV can pick it up via /api/pair/poll.
-import { kv, pairKey, getProvider, page, PAIR_TTL_SECONDS } from '../_lib.js';
-
-export default async function handler(req, res) {
+// GET /api/pair/callback  (the AniList implicit-grant redirect target)
+// Implicit grant returns the access token in the URL *fragment* (#access_token=...), which the
+// browser never sends to the server. So we serve a tiny page that reads the fragment client-side
+// and POSTs the token back to /api/pair/store, keyed by the pairing code carried in `state`.
+export default function handler(req, res) {
   res.setHeader('Content-Type', 'text/html');
-
-  const authCode = (req.query.code || '').toString();
-  const pairCode = (req.query.state || '').toString().toUpperCase();
-  const error = (req.query.error || '').toString();
-
-  if (error) {
-    res.status(400).send(page('Login cancelled', 'You can close this tab and try again on your TV.'));
-    return;
+  res.status(200).send(`<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Finishing sign-in · NyanTV</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#14101a; color:#ede0e4;
+         font-family:-apple-system,Segoe UI,Roboto,sans-serif; text-align:center; padding:24px; }
+  .card { max-width:420px; } h1 { font-size:1.5rem; margin:0 0 12px; } p { color:#cbb8be; line-height:1.5; }
+</style></head>
+<body><div class="card"><h1 id="t">Finishing sign-in…</h1><p id="m">One moment.</p></div>
+<script>
+(async function () {
+  function show(t, m) { document.getElementById('t').textContent = t; document.getElementById('m').textContent = m; }
+  var hash  = new URLSearchParams(location.hash.slice(1));
+  var query = new URLSearchParams(location.search);
+  var token = hash.get('access_token');
+  var state = hash.get('state') || query.get('state');
+  var err   = hash.get('error')  || query.get('error');
+  if (err)            { show('Login cancelled', 'You can close this tab and try again on your TV.'); return; }
+  if (!token || !state) { show('Login failed', 'No token was returned. Close this tab and retry on your TV.'); return; }
+  try {
+    var r = await fetch('/api/pair/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state: state, accessToken: token, expiresIn: hash.get('expires_in') }),
+    });
+    if (!r.ok) throw new Error('store ' + r.status);
+    show("You're signed in ✅", 'Return to your TV — it will continue automatically. You can close this tab.');
+  } catch (e) {
+    show('Almost there', 'Could not hand the token to your TV (' + e.message + '). Retry on your TV.');
   }
-
-  const entry = await kv.get(pairKey(pairCode));
-  if (!entry) {
-    res.status(400).send(page('Pairing expired', 'Too much time passed. Start pairing again on your TV.'));
-    return;
-  }
-
-  const provider = getProvider(entry.provider);
-  if (!provider) {
-    res.status(400).send(page('Unknown provider', 'The pairing session referenced an unsupported provider.'));
-    return;
-  }
-
-  // Hand the raw auth code (plus the redirect_uri it was issued for) back to the TV, which finishes
-  // the code->token exchange itself. The TV runs on a residential IP with a Cloudflare-aware client,
-  // so it clears AniList's Cloudflare challenge that a datacenter exchange here cannot reliably pass.
-  await kv.set(
-    pairKey(pairCode),
-    { status: 'done', provider: entry.provider, code: authCode, redirectUri: provider.redirectUri() },
-    { ex: PAIR_TTL_SECONDS },
-  );
-  res.status(200).send(page("You're signed in ✅", 'Return to your TV — it will continue automatically. You can close this tab.'));
+})();
+</script></body></html>`);
 }
