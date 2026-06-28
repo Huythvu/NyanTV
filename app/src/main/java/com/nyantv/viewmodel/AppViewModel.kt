@@ -718,6 +718,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Debug-only quick sign-in: a dev AniList token is baked in via local.properties. */
+    val devLoginAvailable: Boolean =
+        com.nyantv.BuildConfig.DEBUG && com.nyantv.BuildConfig.ANILIST_DEV_TOKEN.isNotBlank()
+
+    /** Sign in instantly with the local.properties dev token (no QR, no Cloudflare). */
+    fun devSignInAnilist() {
+        if (devLoginAvailable) applyPairedAnilistToken(com.nyantv.BuildConfig.ANILIST_DEV_TOKEN)
+    }
+
     /** Apply an AniList access token obtained via the device-pairing flow (switches to AniList). */
     fun applyPairedAnilistToken(token: String) = viewModelScope.launch {
         if (_serviceType.value != ServiceType.ANILIST) switchService(ServiceType.ANILIST)

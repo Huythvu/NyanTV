@@ -344,6 +344,8 @@ private fun Sidebar(
                 onLogin         = { showMenu = false; onLogin() },
                 onLogout        = { showMenu = false; vm.logout() },
                 onDismiss       = { showMenu = false },
+                devLoginAvailable = vm.devLoginAvailable,
+                onDevLogin      = { showMenu = false; vm.devSignInAnilist() },
             )
         }
 
@@ -374,6 +376,8 @@ private fun ProfileMenuDialog(
     onLogin:         () -> Unit,
     onLogout:        () -> Unit,
     onDismiss:       () -> Unit,
+    devLoginAvailable: Boolean = false,
+    onDevLogin:      () -> Unit = {},
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -414,8 +418,17 @@ private fun ProfileMenuDialog(
             }
         },
         confirmButton = {
-            if (loggedIn) TextButton(onClick = onLogout) { Text("Log out", color = MaterialTheme.colorScheme.error) }
-            else          TextButton(onClick = onLogin)  { Text("Log in") }
+            if (loggedIn) {
+                TextButton(onClick = onLogout) { Text("Log out", color = MaterialTheme.colorScheme.error) }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // Debug-only quick sign-in via the local.properties token; QR login stays the default.
+                    if (devLoginAvailable) {
+                        TextButton(onClick = onDevLogin) { Text("Dev sign-in") }
+                    }
+                    TextButton(onClick = onLogin) { Text("Log in") }
+                }
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
     )
