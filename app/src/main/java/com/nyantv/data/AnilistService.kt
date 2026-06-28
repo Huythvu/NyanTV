@@ -33,7 +33,10 @@ class AnilistService(context: Context) : MediaService {
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    // Fall back to a dev token from local.properties (debug only) so reinstalls stay logged in
+    // without re-running the QR login. A real saved login always takes precedence.
     private var token: String? = prefs.getString(TOKEN_KEY, null)
+        ?: BuildConfig.ANILIST_DEV_TOKEN.takeIf { BuildConfig.DEBUG && it.isNotBlank() }
 
     // ── State flows ────────────────────────────────────────────────────────────
     private val _isLoggedIn       = MutableStateFlow(token != null)

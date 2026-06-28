@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NyanTV — get an AniList dev token</title>
+  <style>
+    body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 680px;
+           margin: 40px auto; padding: 0 16px; line-height: 1.55; color: #222; }
+    h1 { font-size: 1.5rem; } h3 { margin-top: 28px; }
+    label { font-size: 13px; color: #555; display: block; margin-top: 10px; }
+    input { width: 100%; padding: 9px; margin: 4px 0; font-size: 14px; box-sizing: border-box; }
+    button { padding: 10px 18px; font-size: 15px; margin-top: 8px; cursor: pointer; }
+    code, pre { background: #f1f1f1; padding: 2px 5px; border-radius: 4px; }
+    pre { padding: 10px; overflow-x: auto; }
+    .note { color: #666; font-size: 14px; }
+    a { color: #6c4ad6; }
+  </style>
+</head>
+<body>
+  <h1>Get your AniList dev token</h1>
+  <p class="note">
+    Run this on your <b>computer</b> — a real desktop browser already clears AniList's Cloudflare,
+    which is the part the TV and the relay can't do. The token you get goes into
+    <code>local.properties</code> as <code>ANILIST_DEV_TOKEN</code>, and the app auto-signs-in with it
+    on every build. AniList tokens last ~1 year, so you do this rarely.
+  </p>
+
+  <h3>Step 1 — log in &amp; copy the code</h3>
+  <p><a id="authLink" target="_blank" rel="noopener">Open the AniList login →</a></p>
+  <p class="note">
+    After you approve, your browser lands on the pairing callback (it'll show a "token exchange
+    failed" message — <b>ignore that, it's expected</b>). Look at the browser <b>address bar</b>:
+    it now contains <code>?code=XXXXXXXX…</code>. Copy that <code>code</code> value.
+  </p>
+
+  <h3>Step 2 — exchange the code (in this browser)</h3>
+  <p class="note">
+    This submits straight to AniList from your browser, riding the Cloudflare clearance it already
+    has. AniList replies with JSON containing <code>access_token</code>.
+  </p>
+  <form method="POST" action="https://anilist.co/api/v2/oauth/token">
+    <input type="hidden" name="grant_type" value="authorization_code">
+    <input type="hidden" name="client_id" value="44379">
+    <input type="hidden" name="redirect_uri" value="https://nyan-tv.vercel.app/api/pair/callback">
+    <label>Client secret (the ANILIST_CLIENT_SECRET from your local.properties)</label>
+    <input name="client_secret" placeholder="paste your client secret" autocomplete="off">
+    <label>Code (from the address bar in Step 1)</label>
+    <input name="code" placeholder="paste the code" autocomplete="off">
+    <button type="submit">Exchange →</button>
+  </form>
+
+  <h3>Step 3 — save it</h3>
+  <p class="note">From AniList's JSON response, copy the <code>access_token</code> value into your
+    <code>local.properties</code>, then rebuild:</p>
+  <pre>ANILIST_DEV_TOKEN=eyJ0eXAiOiJKV1QiLCJhbGci...</pre>
+  <p class="note">That's it — every debug build will now start already signed in to AniList, no QR,
+    no typing, no Cloudflare. Remove the line (and rebuild) to go back to normal login.</p>
+
+  <script>
+    // client_id 44379 + the relay callback are your registered values (same as the QR URL).
+    document.getElementById('authLink').href =
+      'https://anilist.co/api/v2/oauth/authorize?client_id=44379&redirect_uri=' +
+      encodeURIComponent('https://nyan-tv.vercel.app/api/pair/callback') +
+      '&response_type=code';
+  </script>
+</body>
+</html>

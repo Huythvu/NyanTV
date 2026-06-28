@@ -34,6 +34,9 @@ android {
         buildConfigField("String", "SIMKL_CLIENT_ID",       "\"${secret("SIMKL_CLIENT_ID")}\"")
         buildConfigField("String", "SIMKL_CLIENT_SECRET",   "\"${secret("SIMKL_CLIENT_SECRET")}\"")
         buildConfigField("String", "TMDB_API_KEY",          "\"${secret("TMDB_API_KEY")}\"")
+        // Optional dev convenience: a pre-obtained AniList access token. When set in local.properties
+        // (debug builds only), the app auto-signs-in with it, so reinstalls don't need the QR login.
+        buildConfigField("String", "ANILIST_DEV_TOKEN",     "\"${secret("ANILIST_DEV_TOKEN")}\"")
         buildConfigField("String", "REDIRECT_URI",          "\"nyantv://callback\"")
         buildConfigField("String", "PAIR_BASE_URL",         "\"${secret("PAIR_BASE_URL").ifBlank { "https://nyan-tv.vercel.app" }}\"")
 
