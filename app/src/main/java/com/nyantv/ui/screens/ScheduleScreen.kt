@@ -31,6 +31,14 @@ fun ScheduleScreen(onDetailClick: (String) -> Unit) {
     val vm: ScheduleViewModel = viewModel()
     val state by vm.state.collectAsStateWithLifecycle()
     var selectedDay by remember { mutableIntStateOf(0) }
+    var dayInitialized by remember { mutableStateOf(false) }
+    // Start on "today" once the week has loaded; don't override the user's later choice.
+    LaunchedEffect(state.days, state.todayIndex) {
+        if (!dayInitialized && state.days.isNotEmpty()) {
+            selectedDay = state.todayIndex
+            dayInitialized = true
+        }
+    }
     val timeFmt = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
     Column(Modifier.fillMaxSize().padding(top = 16.dp)) {
@@ -38,6 +46,7 @@ fun ScheduleScreen(onDetailClick: (String) -> Unit) {
             "Schedule",
             style      = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
+            color      = MaterialTheme.colorScheme.onBackground,
             modifier   = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
 

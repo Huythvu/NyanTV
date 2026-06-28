@@ -23,9 +23,10 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
     data class Day(val label: String, val date: String, val entries: List<AiringScheduleEntry>)
 
     data class ScheduleState(
-        val loading: Boolean = true,
-        val error:   Boolean = false,
-        val days:    List<Day> = emptyList(),
+        val loading:    Boolean = true,
+        val error:      Boolean = false,
+        val days:       List<Day> = emptyList(),
+        val todayIndex: Int = 0,   // which day in [days] is "today"
     )
 
     private val _state = MutableStateFlow(ScheduleState())
@@ -36,30 +37,37 @@ class ScheduleViewModel(app: Application) : AndroidViewModel(app) {
     fun load() {
         _state.value = ScheduleState(loading = true)
         viewModelScope.launch {
-            val now = System.currentTimeMillis() / 1000L
-            val end = now + 7L * 24 * 3600
-            val entries = runCatching { anilist.fetchAiringSchedule(now, end) }.getOrNull()
+            // A few days back (to see what already aired) through the coming week.
+            val start = startOfDaySec(-PREV_DAYS)
+            val end   = startOfDaySec(NEXT_DAYS + 1)   // exclusive: midnight after the last day
+            val entries = runCatching { anilist.fetchAiringSchedule(start, end) }.getOrNull()
             if (entries == null) {
                 _state.value = ScheduleState(loading = false, error = true)
                 return@launch
             }
             val weekday = SimpleDateFormat("EEEE", Locale.getDefault())
             val dateFmt = SimpleDateFormat("MMM d", Locale.getDefault())
-            val days = (0 until 7).map { offset ->
-                val start = startOfDaySec(offset)
-                val dayEnd = start + 24 * 3600
+            val days = (-PREV_DAYS..NEXT_DAYS).map { offset ->
+                val dayStart = startOfDaySec(offset)
+                val dayEnd   = dayStart + 24 * 3600
                 val dayEntries = entries
-                    .filter { it.airingAtSec in start until dayEnd }
+                    .filter { it.airingAtSec in dayStart until dayEnd }
                     .sortedBy { it.airingAtSec }
                 val label = when (offset) {
-                    0 -> "Today"
-                    1 -> "Tomorrow"
-                    else -> weekday.format(Date(start * 1000L))
+                    -1   -> "Yesterday"
+                    0    -> "Today"
+                    1    -> "Tomorrow"
+                    else -> weekday.format(Date(dayStart * 1000L))
                 }
-                Day(label = label, date = dateFmt.format(Date(start * 1000L)), entries = dayEntries)
+                Day(label = label, date = dateFmt.format(Date(dayStart * 1000L)), entries = dayEntries)
             }
-            _state.value = ScheduleState(loading = false, days = days)
+            _state.value = ScheduleState(loading = false, days = days, todayIndex = PREV_DAYS)
         }
+    }
+
+    private companion object {
+        const val PREV_DAYS = 3   // days of history
+        const val NEXT_DAYS = 6   // days ahead (so 10 days total, today at index PREV_DAYS)
     }
 
     /** Local midnight, [offset] days from today, as epoch seconds. */
