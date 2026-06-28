@@ -113,12 +113,17 @@ class AnilistService(context: Context) : MediaService {
             .header("Accept", "application/json")
             .post(payload.toRequestBody("application/json".toMediaType()))
             .build()
+        android.util.Log.d("AnilistService", "paired exchange: client_id=${BuildConfig.ANILIST_CLIENT_ID}, redirect_uri=$redirectUri")
         val accessToken = runCatching {
             NetworkHelper.requireInstance().client.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@use null
-                json.parseToJsonElement(resp.body.string()).jsonObject["access_token"]?.jsonPrimitive?.contentOrNull
+                val bodyText = resp.body.string()
+                if (!resp.isSuccessful) {
+                    android.util.Log.e("AnilistService", "paired exchange HTTP ${resp.code}: ${bodyText.take(300)}")
+                    return@use null
+                }
+                json.parseToJsonElement(bodyText).jsonObject["access_token"]?.jsonPrimitive?.contentOrNull
             }
-        }.getOrElse { e -> android.util.Log.e("AnilistService", "paired exchange failed", e); null }
+        }.getOrElse { e -> android.util.Log.e("AnilistService", "paired exchange threw", e); null }
         if (accessToken == null) return@withContext false
         token = accessToken
         prefs.edit { putString(TOKEN_KEY, token) }
