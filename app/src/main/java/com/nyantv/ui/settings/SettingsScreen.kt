@@ -60,12 +60,6 @@ fun SettingsScreen(vm: AppViewModel, navController: NavController) {
                 onClick     = { navController.navigate("settings/tracking") }
             )
             SettingsTile(
-                icon        = Icons.Filled.BarChart,
-                title       = "Statistics",
-                description = "Your watch counts and list breakdown",
-                onClick     = { navController.navigate("settings/stats") }
-            )
-            SettingsTile(
                 icon        = Icons.Filled.Palette,
                 title       = "Theme",
                 description = "Personalize the look and make it yours",

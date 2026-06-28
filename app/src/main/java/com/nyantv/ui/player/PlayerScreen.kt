@@ -830,12 +830,10 @@ private fun PlayerControls(
                     )
                 }
 
-                if (subPrefs.showSpeedControl) {
-                    SpeedSelector(
-                        onSpeedSelected = { vm.setSpeed(it) },
-                        onOpened        = { pauseForSettings() }
-                    )
-                }
+                SpeedSelector(
+                    onSpeedSelected = { vm.setSpeed(it) },
+                    onOpened        = { pauseForSettings() }
+                )
             }
         }
     }

@@ -38,14 +38,13 @@ fun PlayerSettingsScreen(navController: NavController) {
     var translateTo   by remember { mutableStateOf<String?>(prefs.getString("sub_translate", null)) }
     var bigSkipSec by remember { mutableIntStateOf(prefs.getInt("big_skip_sec", 75)) }
     var seekStepSec by remember { mutableIntStateOf(prefs.getInt("seek_step_sec", 10)) }
-    var showSpeedControl by remember { mutableStateOf(prefs.getBoolean("show_speed_control", true)) }
     var watchedThreshold by remember { mutableIntStateOf(prefs.getInt("watched_threshold", 80)) }
     var advancedGrouping by remember { mutableStateOf(prefs.getBoolean("subtitle_advanced_grouping", false)) }
     var autoSelectServer by remember { mutableStateOf(prefs.getBoolean("auto_select_server", false)) }
     var autoFallback by remember { mutableStateOf(prefs.getBoolean("auto_fallback", false)) }
 
     // Auto-save whenever any value changes
-    LaunchedEffect(qualityMode, subEnabled, fontSize, bold, translateTo, bigSkipSec, seekStepSec, showSpeedControl, watchedThreshold, playerEngine, advancedGrouping, autoSelectServer, autoFallback) {
+    LaunchedEffect(qualityMode, subEnabled, fontSize, bold, translateTo, bigSkipSec, seekStepSec, watchedThreshold, playerEngine, advancedGrouping, autoSelectServer, autoFallback) {
         prefs.edit {
             putString("quality_mode",      qualityMode)
             putBoolean("sub_enabled",      subEnabled)
@@ -54,7 +53,6 @@ fun PlayerSettingsScreen(navController: NavController) {
             putString("sub_translate",     translateTo)
             putInt("big_skip_sec",         bigSkipSec)
             putInt("seek_step_sec",        seekStepSec)
-            putBoolean("show_speed_control", showSpeedControl)
             putInt("watched_threshold",    watchedThreshold)
             putString("player_engine", playerEngine)
             putBoolean("subtitle_advanced_grouping", advancedGrouping)
@@ -311,15 +309,6 @@ fun PlayerSettingsScreen(navController: NavController) {
                 )
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-
-            // Show the playback-speed control in the player HUD
-            SettingsToggleRow(
-                label    = "Playback speed control",
-                subtitle = "Show the speed selector in the player",
-                checked  = showSpeedControl,
-                onToggle = { showSpeedControl = it },
-            )
         }
 
         // ── Subtitles ──────────────────────────────────────────────────────────

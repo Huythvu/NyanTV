@@ -160,6 +160,7 @@ fun MainNavigation(
                         if (vm.serviceType.value == ServiceType.ANILIST) navController.navigate("pair/anilist")
                         else vm.login()
                     },
+                    onStats         = { navController.navigate("settings/stats") },
                     onNavigate      = { screen ->
                         if (currentRoute == "search") navController.popBackStack()
                         navController.navigate(screen.route) {
@@ -286,6 +287,7 @@ private fun Sidebar(
     vm:              AppViewModel,
     sidebarFocusReq: FocusRequester,
     onLogin:         () -> Unit,
+    onStats:         () -> Unit,
     onNavigate:      (Screen) -> Unit
 ) {
     val profile   by vm.profile.collectAsStateWithLifecycle()
@@ -343,6 +345,7 @@ private fun Sidebar(
                 onSetIncognito  = { vm.setIncognito(it) },
                 onLogin         = { showMenu = false; onLogin() },
                 onLogout        = { showMenu = false; vm.logout() },
+                onStats         = { showMenu = false; onStats() },
                 onDismiss       = { showMenu = false },
                 devLoginAvailable = vm.devLoginAvailable,
                 onDevLogin      = { showMenu = false; vm.devSignInAnilist() },
@@ -375,6 +378,7 @@ private fun ProfileMenuDialog(
     onSetIncognito:  (Boolean) -> Unit,
     onLogin:         () -> Unit,
     onLogout:        () -> Unit,
+    onStats:         () -> Unit = {},
     onDismiss:       () -> Unit,
     devLoginAvailable: Boolean = false,
     onDevLogin:      () -> Unit = {},
@@ -414,6 +418,20 @@ private fun ProfileMenuDialog(
                         onCheckedChange = onSetIncognito,
                         modifier        = Modifier.focusBorder(androidx.compose.foundation.shape.RoundedCornerShape(50)),
                     )
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.small)
+                        .focusBorder(MaterialTheme.shapes.small, inset = true)
+                        .clickable { onStats() }
+                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(Icons.Filled.BarChart, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text("Statistics", style = MaterialTheme.typography.bodyMedium)
                 }
             }
         },

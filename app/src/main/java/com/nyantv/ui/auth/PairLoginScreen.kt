@@ -171,8 +171,12 @@ fun PairLoginScreen(vm: AppViewModel, onBack: () -> Unit, onSuccess: () -> Unit)
                 }
             }
 
-            OutlinedButton(onClick = onBack, modifier = Modifier.focusBorder(RoundedCornerShape(50))) {
-                Text("Cancel")
+            OutlinedButton(
+                onClick  = onBack,
+                modifier = Modifier.focusBorder(RoundedCornerShape(50)),
+                colors   = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onBackground),
+            ) {
+                Text("Cancel", color = MaterialTheme.colorScheme.onBackground)
             }
         }
     }
