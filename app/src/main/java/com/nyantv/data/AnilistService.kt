@@ -100,7 +100,21 @@ class AnilistService(context: Context) : MediaService {
      * client (browser UA + challenge interceptor) from the user's residential IP. Returns true on
      * success. Mirrors the relay's old JSON request body.
      */
+    /**
+     * Warm up a Cloudflare clearance cookie: a GET to a normal AniList page lets the WebView-backed
+     * interceptor solve the challenge and bank a cf_clearance cookie in the shared jar. The token
+     * endpoint is POST-only and can't be solved directly, but once the jar has clearance the POST
+     * rides through without a challenge.
+     */
+    private suspend fun warmUpCloudflare() {
+        runCatching {
+            val warm = Request.Builder().url("https://anilist.co/").get().build()
+            NetworkHelper.requireInstance().client.newCall(warm).execute().use { it.body.string() }
+        }.onFailure { android.util.Log.w("AnilistService", "Cloudflare warm-up failed (continuing): ${it.message}") }
+    }
+
     suspend fun exchangePairedCode(code: String, redirectUri: String): Boolean = withContext(Dispatchers.IO) {
+        warmUpCloudflare()   // bank a cf_clearance cookie before the POST-only /token request
         val payload = buildJsonObject {
             put("grant_type", "authorization_code")
             put("client_id", BuildConfig.ANILIST_CLIENT_ID)

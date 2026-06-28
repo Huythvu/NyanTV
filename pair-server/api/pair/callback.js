@@ -28,17 +28,13 @@ export default async function handler(req, res) {
     return;
   }
 
-  try {
-    const token = await provider.exchangeCode(authCode);
-    await kv.set(
-      pairKey(pairCode),
-      { status: 'done', provider: entry.provider, ...token },
-      { ex: PAIR_TTL_SECONDS },
-    );
-    res.status(200).send(page("You're signed in ✅", 'Return to your TV — it will continue automatically. You can close this tab.'));
-  } catch (e) {
-    console.error('callback exchange error:', e);
-    const detail = String(e?.message || e).replace(/[<>&]/g, '');
-    res.status(502).send(page('Login failed', `Token exchange failed.<br><br><small>${detail.slice(0, 300)}</small>`));
-  }
+  // Hand the raw auth code (and the redirect_uri it was issued for) back to the TV. The TV does the
+  // code->token exchange itself: it warms up a Cloudflare clearance cookie via its WebView-backed
+  // network client first, which a datacenter request here can't do — so the exchange runs there.
+  await kv.set(
+    pairKey(pairCode),
+    { status: 'done', provider: entry.provider, code: authCode, redirectUri: provider.redirectUri() },
+    { ex: PAIR_TTL_SECONDS },
+  );
+  res.status(200).send(page("You're signed in ✅", 'Return to your TV — it will continue automatically. You can close this tab.'));
 }
