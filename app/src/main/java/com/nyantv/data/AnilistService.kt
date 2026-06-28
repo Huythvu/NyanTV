@@ -107,10 +107,15 @@ class AnilistService(context: Context) : MediaService {
      * rides through without a challenge.
      */
     private suspend fun warmUpCloudflare() {
+        android.util.Log.d("AnilistService", "Cloudflare warm-up: start")
         runCatching {
             val warm = Request.Builder().url("https://anilist.co/").get().build()
-            NetworkHelper.requireInstance().client.newCall(warm).execute().use { it.body.string() }
+            NetworkHelper.requireInstance().client.newCall(warm).execute().use {
+                android.util.Log.d("AnilistService", "Cloudflare warm-up: HTTP ${it.code}")
+                it.body.string()
+            }
         }.onFailure { android.util.Log.w("AnilistService", "Cloudflare warm-up failed (continuing): ${it.message}") }
+        android.util.Log.d("AnilistService", "Cloudflare warm-up: done")
     }
 
     suspend fun exchangePairedCode(code: String, redirectUri: String): Boolean = withContext(Dispatchers.IO) {
@@ -139,6 +144,7 @@ class AnilistService(context: Context) : MediaService {
             }
         }.getOrElse { e -> android.util.Log.e("AnilistService", "paired exchange threw", e); null }
         if (accessToken == null) return@withContext false
+        android.util.Log.d("AnilistService", "paired exchange: SUCCESS")
         token = accessToken
         prefs.edit { putString(TOKEN_KEY, token) }
         _isLoggedIn.value = true
