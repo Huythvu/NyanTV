@@ -111,6 +111,8 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     val anilistTrending by vm.anilistShowTrending.collectAsStateWithLifecycle()
     val anilistPopular  by vm.anilistShowPopular.collectAsStateWithLifecycle()
     val anilistUpcoming by vm.anilistShowUpcoming.collectAsStateWithLifecycle()
+    val anilistAiring   by vm.anilistShowAiring.collectAsStateWithLifecycle()
+    val anilistSeasonal by vm.anilistShowSeasonal.collectAsStateWithLifecycle()
     val anilistOrder    by vm.anilistHomeOrder.collectAsStateWithLifecycle()
     val anilistLocalCont by vm.anilistShowLocalContinue.collectAsStateWithLifecycle()
     val malLocalCont    by vm.malShowLocalContinue.collectAsStateWithLifecycle()
@@ -145,20 +147,6 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     fun List<TrackedMedia>.toMedia() = map { it.toMedia() }
     fun navigate(id: String) = onDetailClick(id)
 
-    // Airing This Week: tracked shows still releasing, soonest episode first, with a "new" count.
-    if (airing.isNotEmpty()) {
-        val airingMedia = airing.map { Media(id = it.id, title = it.title, poster = it.poster, serviceType = service) }
-        val newShows    = airing.count { it.newEpisodes > 0 }
-        SectionRow(
-            title       = "Airing This Week",
-            items       = airingMedia,
-            onItemClick = { navigate(it.id) },
-            trackedMap  = trackedMap,
-            count       = airing.size,
-            header      = { AiringHeader(newShows) },
-        )
-    }
-
     when (service) {
         ServiceType.ANILIST -> {
             val watching = animeList.filter { it.watchingStatus == "CURRENT" }
@@ -181,8 +169,33 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
                     "planned"  -> if (anilistPlanned && planned.isNotEmpty()) {
                         SectionRow(title = "Planned Anime", items = planned.toMedia(), onItemClick = { navigate(it.id) }, trackedMap = trackedMap, count = planned.size)
                     }
+                    "airing" -> if (anilistAiring && airing.isNotEmpty()) {
+                        val airingMedia = airing.map { Media(id = it.id, title = it.title, poster = it.poster, serviceType = service) }
+                        SectionRow(
+                            title       = "Airing This Week",
+                            items       = airingMedia,
+                            onItemClick = { navigate(it.id) },
+                            trackedMap  = trackedMap,
+                            count       = airing.size,
+                            header      = { AiringHeader(airing.count { a -> a.newEpisodes > 0 }) },
+                        )
+                    }
                     "trending" -> if (anilistTrending) SectionRow(title = "Trending Now",  items = trending, onItemClick = { navigate(it.id) })
                     "popular"  -> if (anilistPopular)  SectionRow(title = "Popular Anime", items = popular,  onItemClick = { navigate(it.id) })
+                    "seasonal" -> if (anilistSeasonal) {
+                        SectionRow(
+                            title       = "Seasonal Anime",
+                            items       = seasonal,
+                            onItemClick = { navigate(it.id) },
+                            header      = {
+                                SeasonSwitcherHeader(
+                                    label  = seasonLabel.ifBlank { "Seasonal Anime" },
+                                    onPrev = { vm.seasonShift(-1) },
+                                    onNext = { vm.seasonShift(1) },
+                                )
+                            },
+                        )
+                    }
                     "upcoming" -> if (anilistUpcoming) SectionRow(title = "Upcoming",      items = upcoming, onItemClick = { navigate(it.id) })
                 }
             }

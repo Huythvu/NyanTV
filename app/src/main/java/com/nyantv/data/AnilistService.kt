@@ -202,6 +202,60 @@ class AnilistService(context: Context) : MediaService {
             ?.jsonArray?.map { it.jsonObject.toMedia() }?.distinctBy { it.id } ?: emptyList()
         _recentlyUpdated.value = data["recent"]?.jsonObject?.get("media")
             ?.jsonArray?.map { it.jsonObject.toMedia()}?.distinctBy { it.id } ?: emptyList()
+        // Reset the Seasonal row to the current season on every home (re)load.
+        val (y, s) = currentSeason()
+        selSeasonYear = y; selSeasonName = s
+        loadSeason()
+    }
+
+    // ── Seasonal ─────────────────────────────────────────────────────────────────
+    private val _seasonal    = MutableStateFlow<List<Media>>(emptyList())
+    val seasonal: StateFlow<List<Media>> = _seasonal.asStateFlow()
+    private val _seasonLabel = MutableStateFlow("")
+    val seasonLabel: StateFlow<String> = _seasonLabel.asStateFlow()
+
+    private val seasonOrder  = listOf("WINTER", "SPRING", "SUMMER", "FALL")
+    private var selSeasonYear = 0
+    private var selSeasonName  = "WINTER"
+
+    private fun currentSeason(): Pair<Int, String> {
+        val cal = java.util.Calendar.getInstance()
+        val season = when (cal.get(java.util.Calendar.MONTH)) {  // 0-based
+            in 0..2 -> "WINTER"
+            in 3..5 -> "SPRING"
+            in 6..8 -> "SUMMER"
+            else    -> "FALL"
+        }
+        return cal.get(java.util.Calendar.YEAR) to season
+    }
+
+    private fun seasonLabelOf(year: Int, season: String) =
+        season.lowercase().replaceFirstChar { it.uppercase() } + " " + year
+
+    private suspend fun fetchSeasonalFor(year: Int, season: String): List<Media> =
+        runCatching { browse(page = 1, season = season, seasonYear = year, sort = "POPULARITY_DESC") }.getOrDefault(emptyList())
+
+    private suspend fun loadSeason() {
+        _seasonLabel.value = seasonLabelOf(selSeasonYear, selSeasonName)
+        _seasonal.value    = fetchSeasonalFor(selSeasonYear, selSeasonName)
+    }
+
+    /** Step the Seasonal row to an older (-1) or newer (+1) season; at most 4 seasons ahead. */
+    suspend fun shiftSeason(delta: Int) {
+        var idx  = seasonOrder.indexOf(selSeasonName).coerceAtLeast(0) + delta
+        var year = selSeasonYear
+        while (idx > 3) { idx -= 4; year += 1 }
+        while (idx < 0) { idx += 4; year -= 1 }
+        val (cy, cs) = currentSeason()
+        val curAbs = cy * 4 + seasonOrder.indexOf(cs)
+        val target = (year * 4 + idx).coerceIn(1960 * 4, curAbs + 4)
+        year = target / 4; idx = target % 4
+        val season = seasonOrder[idx]
+        val list = fetchSeasonalFor(year, season)
+        if (target > curAbs && list.isEmpty()) return   // don't wander into empty future seasons
+        selSeasonYear = year; selSeasonName = season
+        _seasonLabel.value = seasonLabelOf(year, season)
+        _seasonal.value = list
     }
 
     // ── Details ────────────────────────────────────────────────────────────────

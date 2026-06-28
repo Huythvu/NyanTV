@@ -188,6 +188,8 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
         val malUpcoming      by vm.malShowUpcoming.collectAsStateWithLifecycle()
         val malOrder         by vm.malHomeOrder.collectAsStateWithLifecycle()
         val anilistUpcoming  by vm.anilistShowUpcoming.collectAsStateWithLifecycle()
+        val anilistAiring    by vm.anilistShowAiring.collectAsStateWithLifecycle()
+        val anilistSeasonal  by vm.anilistShowSeasonal.collectAsStateWithLifecycle()
         val anilistOrder     by vm.anilistHomeOrder.collectAsStateWithLifecycle()
         val anilistLocalCont by vm.anilistShowLocalContinue.collectAsStateWithLifecycle()
         val malLocalCont     by vm.malShowLocalContinue.collectAsStateWithLifecycle()
@@ -205,8 +207,10 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                         "local_continue" -> "Continue Watching"
                         "continue"       -> "Watching Anime"
                         "planned"        -> "Planned Anime"
+                        "airing"         -> "Airing This Week"
                         "trending"       -> "Trending Now"
                         "popular"        -> "Popular Anime"
+                        "seasonal"       -> "Seasonal Anime"
                         "upcoming"       -> "Upcoming"
                         else             -> key
                     }
@@ -214,8 +218,10 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                         "local_continue" -> anilistLocalCont
                         "continue"       -> anilistContinue
                         "planned"        -> anilistPlanned
+                        "airing"         -> anilistAiring
                         "trending"       -> anilistTrending
                         "popular"        -> anilistPopular
+                        "seasonal"       -> anilistSeasonal
                         "upcoming"       -> anilistUpcoming
                         else             -> true
                     }
@@ -227,8 +233,10 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
                                 "local_continue" -> vm.setAnilistShowLocalContinue(v)
                                 "continue"       -> vm.setAnilistShowContinue(v)
                                 "planned"        -> vm.setAnilistShowPlanned(v)
+                                "airing"         -> vm.setAnilistShowAiring(v)
                                 "trending"       -> vm.setAnilistShowTrending(v)
                                 "popular"        -> vm.setAnilistShowPopular(v)
+                                "seasonal"       -> vm.setAnilistShowSeasonal(v)
                                 "upcoming"       -> vm.setAnilistShowUpcoming(v)
                             }
                         },

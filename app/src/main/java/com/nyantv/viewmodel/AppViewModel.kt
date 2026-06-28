@@ -329,19 +329,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _trendingMovies.value = emptyList()
             _trendingShows.value  = emptyList()
         }
-        val mal = _service as? MalService
-        if (mal != null) {
-            serviceJobs += viewModelScope.launch { mal.seasonal.collect    { _seasonal.value = it } }
-            serviceJobs += viewModelScope.launch { mal.seasonLabel.collect { _seasonLabel.value = it } }
-        } else {
-            _seasonal.value = emptyList()
-            _seasonLabel.value = ""
+        val mal     = _service as? MalService
+        val anilist = _service as? AnilistService
+        when {
+            mal != null -> {
+                serviceJobs += viewModelScope.launch { mal.seasonal.collect    { _seasonal.value = it } }
+                serviceJobs += viewModelScope.launch { mal.seasonLabel.collect { _seasonLabel.value = it } }
+            }
+            anilist != null -> {
+                serviceJobs += viewModelScope.launch { anilist.seasonal.collect    { _seasonal.value = it } }
+                serviceJobs += viewModelScope.launch { anilist.seasonLabel.collect { _seasonLabel.value = it } }
+            }
+            else -> {
+                _seasonal.value = emptyList()
+                _seasonLabel.value = ""
+            }
         }
     }
 
-    /** Steps the MAL Seasonal row to an older (-1) or newer (+1) season. */
+    /** Steps the Seasonal row to an older (-1) or newer (+1) season (AniList or MAL). */
     fun seasonShift(delta: Int) = viewModelScope.launch {
         runCatching { (_service as? MalService)?.shiftSeason(delta) }
+        runCatching { (_service as? AnilistService)?.shiftSeason(delta) }
     }
 
     // ── Tracking Automation ────────────────────────────────────────────────────
@@ -474,6 +483,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setMalShowLocalContinue(v: Boolean)     { _malShowLocalContinue.value     = v; prefs.edit { putBoolean("mal_show_local_continue",     v) } }
     fun setAnilistShowUpcoming(v: Boolean)      { _anilistShowUpcoming.value      = v; prefs.edit { putBoolean("anilist_show_upcoming",       v) } }
 
+    // AniList "Airing This Week" + "Seasonal" rows (new sections, default off).
+    private val _anilistShowAiring   = MutableStateFlow(prefs.getBoolean("anilist_show_airing",   false))
+    private val _anilistShowSeasonal = MutableStateFlow(prefs.getBoolean("anilist_show_seasonal", false))
+    val anilistShowAiring:   StateFlow<Boolean> = _anilistShowAiring.asStateFlow()
+    val anilistShowSeasonal: StateFlow<Boolean> = _anilistShowSeasonal.asStateFlow()
+    fun setAnilistShowAiring(v: Boolean)   { _anilistShowAiring.value   = v; prefs.edit { putBoolean("anilist_show_airing",   v) } }
+    fun setAnilistShowSeasonal(v: Boolean) { _anilistShowSeasonal.value = v; prefs.edit { putBoolean("anilist_show_seasonal", v) } }
+
     // ── Card airing-status badges ────────────────────────────────────────────────
     private val allCardStatusKeys = setOf("airing", "finished", "not_yet", "cancelled", "hiatus")
     private val _showCardStatus   = MutableStateFlow(prefs.getBoolean("show_card_status", true))
@@ -521,7 +538,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val malHomeOrder: StateFlow<List<String>> = _malHomeOrder.asStateFlow()
     fun moveMalSection(key: String, up: Boolean) = moveSection(_malHomeOrder, "mal_home_order", key, up)
 
-    private val defaultAnilistHomeOrder = listOf("local_continue", "continue", "planned", "trending", "popular", "upcoming")
+    private val defaultAnilistHomeOrder = listOf("local_continue", "continue", "planned", "airing", "trending", "popular", "seasonal", "upcoming")
     private val _anilistHomeOrder = MutableStateFlow(loadHomeOrder("anilist_home_order", defaultAnilistHomeOrder))
     val anilistHomeOrder: StateFlow<List<String>> = _anilistHomeOrder.asStateFlow()
     fun moveAnilistSection(key: String, up: Boolean) = moveSection(_anilistHomeOrder, "anilist_home_order", key, up)
