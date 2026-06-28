@@ -63,44 +63,48 @@ export const PROVIDERS = {
       const u = new URL(this.authorizeUrl);
       u.searchParams.set('client_id', this.clientId());
       u.searchParams.set('redirect_uri', this.redirectUri());
-      // Implicit grant: the token comes back in the phone browser's URL fragment, so we never hit
-      // AniList's Cloudflare-protected /token endpoint (which blocks both the relay and the TV).
-      u.searchParams.set('response_type', 'token');
+      // AniList only supports the authorization-code grant (implicit/response_type=token is
+      // rejected as unsupported_grant_type), so we get a code and exchange it server-side.
+      u.searchParams.set('response_type', 'code');
       u.searchParams.set('state', state);
       return u.toString();
     },
     async exchangeCode(code) {
-      const resp = await fetch(this.tokenUrl, {
-        method: 'POST',
-        // AniList's token endpoint sits behind Cloudflare, which serves a "Just a moment..."
-        // managed challenge (HTTP 403) to requests from datacenter IPs that lack a browser-like
-        // User-Agent. Vercel's fetch sends none by default, so we present a real browser UA (plus
-        // Accept-Language) to clear the challenge.
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-            '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-        },
-        body: JSON.stringify({
-          grant_type: 'authorization_code',
-          client_id: this.clientId(),
-          client_secret: process.env.ANILIST_CLIENT_SECRET,
-          redirect_uri: this.redirectUri(),
-          code,
-        }),
-      });
-      if (!resp.ok) {
-        throw new Error(`token exchange failed (${resp.status}): ${(await resp.text()).slice(0, 200)}`);
-      }
-      const data = await resp.json();
-      return {
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token ?? null,
-        expiresIn: data.expires_in ?? null,
+      // AniList's /token sits behind Cloudflare, which can serve a "Just a moment..." managed
+      // challenge (403) to requests that don't look like a browser. Present a full set of browser
+      // headers, and retry a few times since the challenge decision can vary between attempts.
+      const headers = {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+        Origin: 'https://anilist.co',
+        Referer: 'https://anilist.co/',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+          '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
       };
+      const payload = JSON.stringify({
+        grant_type: 'authorization_code',
+        client_id: this.clientId(),
+        client_secret: process.env.ANILIST_CLIENT_SECRET,
+        redirect_uri: this.redirectUri(),
+        code,
+      });
+      let lastErr = '';
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const resp = await fetch(this.tokenUrl, { method: 'POST', headers, body: payload });
+        if (resp.ok) {
+          const data = await resp.json();
+          return {
+            accessToken: data.access_token,
+            refreshToken: data.refresh_token ?? null,
+            expiresIn: data.expires_in ?? null,
+          };
+        }
+        lastErr = `(${resp.status}): ${(await resp.text()).slice(0, 160)}`;
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      throw new Error(`token exchange failed ${lastErr}`);
     },
   },
 };
