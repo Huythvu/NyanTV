@@ -724,6 +724,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         (_service as? AnilistService)?.applyAccessToken(token)
     }
 
+    /**
+     * Finish a paired AniList login by exchanging the auth code on-device (switches to AniList).
+     * Returns true on success. The exchange runs through the Cloudflare-aware client; see
+     * [AnilistService.exchangePairedCode].
+     */
+    suspend fun exchangePairedAnilistCode(code: String, redirectUri: String): Boolean {
+        if (_serviceType.value != ServiceType.ANILIST) switchService(ServiceType.ANILIST)
+        val svc = (_service as? AnilistService) ?: (sideService as? AnilistService) ?: return false
+        return svc.exchangePairedCode(code, redirectUri)
+    }
+
     fun updateEntry(id: String, status: String?, progress: Int?, score: Float?) =
         viewModelScope.launch {
             // Extension-only anime have no tracking entry; skip remote writes (watch

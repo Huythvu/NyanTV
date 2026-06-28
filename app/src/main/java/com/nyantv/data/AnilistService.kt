@@ -2,6 +2,7 @@ package com.nyantv.data
 
 import android.content.Context
 import com.nyantv.BuildConfig
+import eu.kanade.tachiyomi.network.NetworkHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -90,6 +91,41 @@ class AnilistService(context: Context) : MediaService {
             fetchUserProfile()
             refreshUserLists()
         }
+    }
+
+    /**
+     * Exchange a paired auth code for an access token on-device. The relay hands back the code (and
+     * the redirect_uri it was issued for, which must match) instead of exchanging it, because this
+     * request must clear AniList's Cloudflare: it goes out through the Cloudflare-aware NetworkHelper
+     * client (browser UA + challenge interceptor) from the user's residential IP. Returns true on
+     * success. Mirrors the relay's old JSON request body.
+     */
+    suspend fun exchangePairedCode(code: String, redirectUri: String): Boolean = withContext(Dispatchers.IO) {
+        val payload = buildJsonObject {
+            put("grant_type", "authorization_code")
+            put("client_id", BuildConfig.ANILIST_CLIENT_ID)
+            put("client_secret", BuildConfig.ANILIST_CLIENT_SECRET)
+            put("redirect_uri", redirectUri)
+            put("code", code)
+        }.toString()
+        val req = Request.Builder()
+            .url("https://anilist.co/api/v2/oauth/token")
+            .header("Accept", "application/json")
+            .post(payload.toRequestBody("application/json".toMediaType()))
+            .build()
+        val accessToken = runCatching {
+            NetworkHelper.requireInstance().client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@use null
+                json.parseToJsonElement(resp.body.string()).jsonObject["access_token"]?.jsonPrimitive?.contentOrNull
+            }
+        }.getOrElse { e -> android.util.Log.e("AnilistService", "paired exchange failed", e); null }
+        if (accessToken == null) return@withContext false
+        token = accessToken
+        prefs.edit { putString(TOKEN_KEY, token) }
+        _isLoggedIn.value = true
+        fetchUserProfile()
+        refreshUserLists()
+        true
     }
 
     /** Apply an access token obtained out-of-band (e.g. from the device-pairing relay). */

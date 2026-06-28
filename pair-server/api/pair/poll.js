@@ -22,12 +22,15 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Hand the token over exactly once.
+  // Hand the result over exactly once. New flow returns the auth code + redirect_uri for the TV to
+  // exchange; the accessToken fields stay for backward compatibility with any older payload.
   await kv.del(pairKey(code));
   res.status(200).json({
     status: 'done',
     provider: entry.provider,
-    accessToken: entry.accessToken,
+    code: entry.code ?? null,
+    redirectUri: entry.redirectUri ?? null,
+    accessToken: entry.accessToken ?? null,
     refreshToken: entry.refreshToken ?? null,
     expiresIn: entry.expiresIn ?? null,
   });

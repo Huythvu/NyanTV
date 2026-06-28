@@ -14,7 +14,8 @@ data class PairSession(val code: String, val verifyUrl: String, val expiresIn: I
 
 sealed interface PollResult {
     data object Pending : PollResult
-    data class  Done(val accessToken: String) : PollResult
+    data class  Done(val accessToken: String) : PollResult                 // legacy: relay exchanged the token
+    data class  Code(val authCode: String, val redirectUri: String) : PollResult  // app exchanges the code
     data object Expired : PollResult
 }
 
@@ -64,8 +65,16 @@ class PairingClient(private val baseUrl: String = BuildConfig.PAIR_BASE_URL) {
                 // The relay returns the body even on the 404 "expired" case, so parse regardless.
                 val o = json.parseToJsonElement(resp.body.string()).jsonObject
                 when (o["status"]?.jsonPrimitive?.contentOrNull) {
-                    "done"    -> o["accessToken"]?.jsonPrimitive?.contentOrNull
-                        ?.let { PollResult.Done(it) } ?: PollResult.Pending
+                    "done" -> {
+                        val code     = o["code"]?.jsonPrimitive?.contentOrNull
+                        val redirect = o["redirectUri"]?.jsonPrimitive?.contentOrNull
+                        val token    = o["accessToken"]?.jsonPrimitive?.contentOrNull
+                        when {
+                            code != null && redirect != null -> PollResult.Code(code, redirect)
+                            token != null                    -> PollResult.Done(token)
+                            else                             -> PollResult.Pending
+                        }
+                    }
                     "expired" -> PollResult.Expired
                     else      -> PollResult.Pending
                 }

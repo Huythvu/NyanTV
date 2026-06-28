@@ -28,17 +28,13 @@ export default async function handler(req, res) {
     return;
   }
 
-  try {
-    const token = await provider.exchangeCode(authCode);
-    await kv.set(
-      pairKey(pairCode),
-      { status: 'done', provider: entry.provider, ...token },
-      { ex: PAIR_TTL_SECONDS },
-    );
-    res.status(200).send(page("You're signed in ✅", 'Return to your TV — it will continue automatically. You can close this tab.'));
-  } catch (e) {
-    console.error('callback exchange error:', e);
-    const detail = String(e?.message || e).replace(/[<>&]/g, '');
-    res.status(502).send(page('Login failed', `Token exchange failed.<br><br><small>${detail.slice(0, 300)}</small>`));
-  }
+  // Hand the raw auth code (plus the redirect_uri it was issued for) back to the TV, which finishes
+  // the code->token exchange itself. The TV runs on a residential IP with a Cloudflare-aware client,
+  // so it clears AniList's Cloudflare challenge that a datacenter exchange here cannot reliably pass.
+  await kv.set(
+    pairKey(pairCode),
+    { status: 'done', provider: entry.provider, code: authCode, redirectUri: provider.redirectUri() },
+    { ex: PAIR_TTL_SECONDS },
+  );
+  res.status(200).send(page("You're signed in ✅", 'Return to your TV — it will continue automatically. You can close this tab.'));
 }

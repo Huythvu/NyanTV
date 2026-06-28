@@ -89,6 +89,16 @@ fun PairLoginScreen(vm: AppViewModel, onBack: () -> Unit, onSuccess: () -> Unit)
         while (System.currentTimeMillis() < deadline) {
             delay(2500)
             when (val r = client.poll(s.code)) {
+                is PollResult.Code -> {
+                    status = "Finishing sign-in…"
+                    if (vm.exchangePairedAnilistCode(r.authCode, r.redirectUri)) {
+                        status = "Signed in!"
+                        onSuccess()
+                    } else {
+                        error = "Signed in, but finishing on the device failed. Tap retry."
+                    }
+                    return@LaunchedEffect
+                }
                 is PollResult.Done -> {
                     status = "Signed in!"
                     vm.applyPairedAnilistToken(r.accessToken)
