@@ -230,12 +230,20 @@ fun BrowseScreen(navController: NavController, appVm: AppViewModel, onDetailClic
                             media   = media,
                             onClick = {
                                 if (extensionMode) {
+                                    // Carry the exact source+entry so the player opens it directly
+                                    // (media.id is "ext:<sourceId>:<url>") instead of re-probing.
+                                    val rest = media.id.removePrefix("ext:")
+                                    val sid  = rest.substringBefore(":").toLongOrNull()
+                                    val url  = rest.substringAfter(":", "")
                                     vm.resolveAndOpen(
                                         media      = media,
-                                        // Matched on AniList → rich detail page.
-                                        onResolved = { onDetailClick(it) },
+                                        // Matched on AniList → rich detail page; keep the source hint.
+                                        onResolved = { resolvedId ->
+                                            if (sid != null && url.isNotBlank()) appVm.putSourceHint(resolvedId, sid, url)
+                                            onDetailClick(resolvedId)
+                                        },
                                         // No AniList match → still watchable from the extension,
-                                        // just with sparse metadata.
+                                        // just with sparse metadata (player parses the ext id itself).
                                         onFailed   = {
                                             appVm.registerExternalMedia(media)
                                             onDetailClick(media.id)

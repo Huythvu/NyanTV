@@ -848,6 +848,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun registerExternalMedia(media: Media) { externalMedia[media.id] = media }
 
+    // When an entry is opened from a specific extension filter, we resolve it to an AniList detail
+    // for metadata but must not lose which source+entry it came from. Stash it here keyed by the id
+    // we navigate to, so the player can open that exact source instead of re-probing by title.
+    private val pendingSourceHints = mutableMapOf<String, Pair<Long, String>>()
+    fun putSourceHint(navId: String, sourceId: Long, url: String) {
+        pendingSourceHints[navId] = sourceId to url
+    }
+    fun consumeSourceHint(navId: String): Pair<Long, String>? = pendingSourceHints.remove(navId)
+
     suspend fun fetchDetails(id: String): Media {
         externalMedia[id]?.let { return it }
         // Extension-only anime (e.g. opened cold from the TV "Play Next" row) must never hit a

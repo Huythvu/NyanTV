@@ -57,6 +57,7 @@ class PlayerTabViewModel(
     val serviceKey:   String,
     private val serviceType:  ServiceType,
     private val malId:        String?,
+    preferredSourceArg: Pair<Long, String>? = null,   // (sourceId, url) when opened from an extension filter
 ) : AndroidViewModel(app) {
 
     private val cache             = PlayerCache(app)
@@ -142,7 +143,8 @@ class PlayerTabViewModel(
 
     // When opened straight from an extension catalog, the mediaId encodes the exact source + entry
     // (ext:<sourceId>:<url>). We open that entry directly instead of re-probing every source by title.
-    private val preferredSource: Pair<Long, String>? = run {
+    private val preferredSource: Pair<Long, String>? = preferredSourceArg ?: run {
+        // Fallback: an entry opened straight as an external id (ext:<sourceId>:<url>).
         if (!mediaId.startsWith("ext:")) return@run null
         val rest = mediaId.removePrefix("ext:")
         val sourceId = rest.substringBefore(":").toLongOrNull() ?: return@run null   // e.g. AnimePahe ext ids aren't numeric
@@ -725,9 +727,10 @@ class PlayerTabViewModel(
         private val serviceKey:  String,
         private val serviceType: ServiceType,
         private val malId:       String? = null,
+        private val preferredSource: Pair<Long, String>? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T =
-            PlayerTabViewModel(app, mediaId, mediaTitle, serviceKey, serviceType, malId) as T
+            PlayerTabViewModel(app, mediaId, mediaTitle, serviceKey, serviceType, malId, preferredSource) as T
     }
 }

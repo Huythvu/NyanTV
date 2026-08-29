@@ -95,15 +95,19 @@ fun DetailScreen(
         ServiceType.SIMKL   -> null
     }
 
+    // Source+entry to open directly, if this detail was reached from a specific extension filter.
+    val preferredSource = remember(id) { vm.consumeSourceHint(id) }
+
     val playerVm: PlayerTabViewModel = viewModel(
         key     = "player_tab_$id",
         factory = PlayerTabViewModel.Factory(
-            app         = context.applicationContext as android.app.Application,
-            mediaId     = id,
-            mediaTitle  = media?.title ?: "",
-            serviceKey  = serviceKey,
-            serviceType = serviceType,
-            malId       = malId,
+            app             = context.applicationContext as android.app.Application,
+            mediaId         = id,
+            mediaTitle      = media?.title ?: "",
+            serviceKey      = serviceKey,
+            serviceType     = serviceType,
+            malId           = malId,
+            preferredSource = preferredSource,
         )
     )
 
