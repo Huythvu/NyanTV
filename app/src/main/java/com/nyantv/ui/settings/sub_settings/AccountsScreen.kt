@@ -228,6 +228,30 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
             }
         }
 
+        // ── Extensions ───────────────────────────────────────────────────────────────────
+        val searchAllExt by vm.searchAllExtensions.collectAsStateWithLifecycle()
+
+        SectionCard(title = "Extensions") {
+            Row(
+                modifier              = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Search all extensions", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    Text("When off, opening an entry from a specific extension filter uses only that extension (faster, exact). When on, every server is searched.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                    Switch(
+                        checked = searchAllExt,
+                        onCheckedChange = { vm.setSearchAllExtensions(it) },
+                        modifier = Modifier.focusBorder(RoundedCornerShape(50))
+                    )
+                }
+            }
+        }
+
         // ── MyAnimeList Titles ──────────────────────────────────────────────────────────
         val malEnglishTitles by vm.malEnglishTitles.collectAsStateWithLifecycle()
 

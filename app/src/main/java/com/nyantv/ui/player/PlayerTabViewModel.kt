@@ -140,6 +140,22 @@ class PlayerTabViewModel(
     private val probedSourceIds = mutableSetOf<Long>()   // sources whose probe has finished (matched or not)
     private var userSelectedSource = false               // true once the user picks a source by hand
 
+    // When opened straight from an extension catalog, the mediaId encodes the exact source + entry
+    // (ext:<sourceId>:<url>). We open that entry directly instead of re-probing every source by title.
+    private val preferredSource: Pair<Long, String>? = run {
+        if (!mediaId.startsWith("ext:")) return@run null
+        val rest = mediaId.removePrefix("ext:")
+        val sourceId = rest.substringBefore(":").toLongOrNull() ?: return@run null   // e.g. AnimePahe ext ids aren't numeric
+        val url = rest.substringAfter(":", "")
+        if (url.isNotBlank()) sourceId to url else null
+    }
+
+    /** When off (default), an entry opened from a specific extension uses only that extension. */
+    private val searchAllExtensions: Boolean
+        get() = getApplication<Application>()
+            .getSharedPreferences("nyantv_prefs", android.content.Context.MODE_PRIVATE)
+            .getBoolean("search_all_extensions", false)
+
     init {
         refreshWatchProgress()
         loadEpisodeMetadata()
@@ -172,7 +188,13 @@ class PlayerTabViewModel(
                         )
                     }
 
-                    startProbe()
+                    val pref = preferredSource
+                    if (pref != null) {
+                        openPreferredSource(newSources, pref)          // exact entry, no probe
+                        if (searchAllExtensions) startProbe()          // also offer other servers
+                    } else {
+                        startProbe()
+                    }
 
                 } else if (initialised) {
                     _state.update { s ->
@@ -195,6 +217,23 @@ class PlayerTabViewModel(
         if (malId != null) {
             loadEpisodeMetadata()
         }
+    }
+
+    /**
+     * Open the exact entry the extension catalog handed us (ext:<sourceId>:<url>) with no probe:
+     * select that source and load its episodes straight from the URL. Falls back to a normal probe
+     * if that extension is no longer installed.
+     */
+    private fun openPreferredSource(sources: List<SearchableSource>, pref: Pair<Long, String>) {
+        val (sourceId, url) = pref
+        val source = sources.firstOrNull { it.id == sourceId } ?: run { startProbe(); return }
+        userSelectedSource = true   // lock the exact entry; a background probe won't switch away from it
+        val anime = SAnime.create().apply {
+            this.url   = url
+            this.title = mediaTitle
+        }
+        _state.update { it.copy(selectedSource = source, selectedAnime = anime) }
+        loadEpisodes(source, anime)
     }
 
     private fun applySource(source: SearchableSource) {

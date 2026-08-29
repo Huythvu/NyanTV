@@ -204,6 +204,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun isValidSyncPhrase(value: String): Boolean = AnimePaheSyncKey.isValid(value)
 
+    // When off (default), opening an entry from a specific extension filter uses only that
+    // extension; when on, every source is probed as before.
+    private val _searchAllExtensions = MutableStateFlow(prefs.getBoolean("search_all_extensions", false))
+    val searchAllExtensions: StateFlow<Boolean> = _searchAllExtensions.asStateFlow()
+    fun setSearchAllExtensions(v: Boolean) {
+        _searchAllExtensions.value = v
+        prefs.edit { putBoolean("search_all_extensions", v) }
+    }
+
     /** Load the cached watchlist immediately, then refresh from Firestore when configured. */
     fun refreshAnimePahe() {
         if (!animePaheStore.isConfigured) {
