@@ -289,7 +289,29 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun applyAnimePahe(items: List<AnimePaheEntry>) {
         animePaheEntries = items
         rebuildAnimePaheFlows()                                   // instant, from cached resolutions
-        if (items.isNotEmpty()) viewModelScope.launch { enrichAnimePahe(items) }
+        if (items.isNotEmpty()) {
+            viewModelScope.launch { enrichAnimePahe(items) }
+            viewModelScope.launch(Dispatchers.IO) { applyAnimePaheProgress(items) }
+        }
+    }
+
+    /**
+     * Reflect an entry's AniList-numbering episode ([AnimePaheEntry.anilistEpisode]) into NyanTV's
+     * local watch progress, so a show watched elsewhere resumes at the right episode. Marks episodes
+     * up to (episode - 1) watched — only ever extending forward, never regressing local progress.
+     */
+    private fun applyAnimePaheProgress(items: List<AnimePaheEntry>) {
+        for (e in items) {
+            val alId = e.anilistId ?: continue
+            val ep   = e.anilistEpisode ?: continue
+            if (ep <= 1) continue
+            val id = alId.toString()
+            val maxWatched = watchHistoryStore.getWatchedAnilistMal(id, null).maxOrNull() ?: 0
+            if (ep - 1 <= maxWatched) continue                   // already at/ahead of this point
+            for (n in (maxWatched + 1) until ep) {
+                watchHistoryStore.markWatchedAnilistMal(id, null, n)
+            }
+        }
     }
 
     private fun rebuildAnimePaheFlows() {
