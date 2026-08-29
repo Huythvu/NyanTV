@@ -42,6 +42,11 @@ android {
         buildConfigField("String", "ANILIST_DEV_TOKEN",     "\"$anilistDevToken\"")
         buildConfigField("String", "REDIRECT_URI",          "\"nyantv://callback\"")
         buildConfigField("String", "PAIR_BASE_URL",         "\"${secret("PAIR_BASE_URL").ifBlank { "https://nyan-tv.vercel.app" }}\"")
+        // AnimePahe Watchlist sync (companion Chrome extension, Firebase/Firestore backed).
+        // These are the extension's PUBLIC web client config — safe to embed; overridable via
+        // local.properties. Reads are a plain key-only Firestore REST GET (rules allow get by id).
+        buildConfigField("String", "ANIMEPAHE_FIREBASE_API_KEY", "\"${secret("ANIMEPAHE_FIREBASE_API_KEY").ifBlank { "AIzaSyAI7cZ9FRoMfuFF0lR6dd7JPdsM4sS9kI4" }}\"")
+        buildConfigField("String", "ANIMEPAHE_FIREBASE_PROJECT", "\"${secret("ANIMEPAHE_FIREBASE_PROJECT").ifBlank { "animepahe-watchlist" }}\"")
 
         val abiFilter = secret("ABI_FILTER").ifBlank { null }
         if (abiFilter != null) {
