@@ -176,16 +176,15 @@ class PlayerTabViewModel(
                 if (!initialised && newSources.isNotEmpty()) {
                     initialised = true
 
-                    val savedQuery = cache.loadQueryOverride(mediaId)
-
                     // Start with NO source selected. The probe decides which extension to open:
                     // the first one (in list order) confirmed to actually have this anime. This
                     // avoids sticking on a previously-used extension that has no entry for the
-                    // current title.
+                    // current title. The search query starts from the app's default (the title);
+                    // a manually typed query is session-only and not restored on reopen.
                     _state.update {
                         it.copy(
                             sources        = newSources,
-                            searchQuery    = savedQuery ?: mediaTitle,
+                            searchQuery    = mediaTitle,
                             selectedSource = null,
                         )
                     }
@@ -603,7 +602,8 @@ class PlayerTabViewModel(
         if (query.isEmpty()) return
         _state.update { it.copy(isEditingQuery = false) }
         viewModelScope.launch {
-            cache.saveQueryOverride(mediaId, query)
+            // The typed query is session-only: it lives in state while you're in this entry and
+            // resets to the app's default (the title) once you leave, rather than being saved.
             cache.clearResult(source.id, mediaId)
             _state.update { it.copy(selectedAnime = null, episodeState = EpisodeState.Idle) }
             doSearch(source, query)
