@@ -278,9 +278,12 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     }
 
     if (showManage) {
+        val managePlan = showPlanTab && animePahePlan.isNotEmpty()
         ManageWatchListDialog(
-            items     = localContinue,
-            onRemove  = { vm.removeFromLocalWatch(it) },
+            items     = if (managePlan) animePahePlan else continueWatching,
+            isPlanTab = managePlan,
+            onMove    = { if (managePlan) vm.animePaheMoveToWatching(it) else vm.animePaheMoveToPlan(it) },
+            onRemove  = { vm.animePaheRemove(it) },
             onDismiss = { showManage = false },
         )
     }
@@ -428,12 +431,15 @@ private fun HeaderTab(text: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun ManageWatchListDialog(
     items:     List<Media>,
-    onRemove:  (String) -> Unit,
+    isPlanTab: Boolean,
+    onMove:    (Media) -> Unit,
+    onRemove:  (Media) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val moveLabel = if (isPlanTab) "To Watching" else "To Plan"
     AlertDialog(
         onDismissRequest = onDismiss,
-        title            = { Text("Continue Watching") },
+        title            = { Text(if (isPlanTab) "Plan to Watch" else "Continue Watching") },
         text = {
             if (items.isEmpty()) {
                 Text("Nothing here yet.", style = MaterialTheme.typography.bodySmall)
@@ -444,15 +450,21 @@ private fun ManageWatchListDialog(
                         Row(
                             modifier              = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             verticalAlignment     = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             Text(
                                 media.title,
                                 style    = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.weight(1f),
                             )
+                            TextButton(
+                                onClick  = { onMove(media) },
+                                modifier = Modifier.focusBorder(RoundedCornerShape(6.dp)),
+                            ) {
+                                Text(moveLabel, style = MaterialTheme.typography.labelMedium)
+                            }
                             IconButton(
-                                onClick  = { onRemove(media.id) },
+                                onClick  = { onRemove(media) },
                                 modifier = Modifier.focusBorder(CircleShape, inset = true),
                             ) {
                                 Icon(

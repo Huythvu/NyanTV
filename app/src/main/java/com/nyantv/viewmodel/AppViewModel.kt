@@ -258,6 +258,34 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Manage-dialog actions. Media.id is the AniList id for matched entries (else an ext: id). */
+    fun animePaheMoveToPlan(media: Media) {
+        removeFromLocalWatch(media.id)   // leave the Continue Watching row
+        val alId = media.id.toIntOrNull()
+        if (alId != null && animePaheStore.isConfigured) viewModelScope.launch {
+            runCatching { animePaheService.setStatus(animePaheStore.syncPhrase, alId, media.title, media.poster, AnimePaheEntry.STATUS_PLAN) }
+            refreshAnimePahe()
+        } else refreshLocalContinue()
+    }
+
+    fun animePaheMoveToWatching(media: Media) {
+        val alId = media.id.toIntOrNull() ?: return
+        if (!animePaheStore.isConfigured) return
+        viewModelScope.launch {
+            runCatching { animePaheService.setStatus(animePaheStore.syncPhrase, alId, media.title, media.poster, AnimePaheEntry.STATUS_WATCHING) }
+            refreshAnimePahe()
+        }
+    }
+
+    fun animePaheRemove(media: Media) {
+        removeFromLocalWatch(media.id)
+        val alId = media.id.toIntOrNull()
+        if (alId != null && animePaheStore.isConfigured) viewModelScope.launch {
+            runCatching { animePaheService.remove(animePaheStore.syncPhrase, alId, media.title) }
+            refreshAnimePahe()
+        } else refreshLocalContinue()
+    }
+
     private fun applyAnimePahe(items: List<AnimePaheEntry>) {
         animePaheEntries = items
         rebuildAnimePaheFlows()                                   // instant, from cached resolutions

@@ -92,6 +92,45 @@ class AnimePaheWatchlistService {
      * AnimePahe link) or append minimal ones, cap at 70, and PATCH items back. No episode number is
      * pushed (Stage 2a). Skips the write entirely when nothing changed.
      */
+    /** Set an entry's status ("watching"/"plan") in the shared list, adding it if missing. */
+    suspend fun setStatus(phrase: String, anilistId: Int, title: String, thumb: String?, status: String): Result =
+        withContext(Dispatchers.IO) {
+            if (!AnimePaheSyncKey.isValid(phrase)) return@withContext Result.Error("Sync phrase must be 5 valid words")
+            val current = when (val r = fetch(phrase)) {
+                is Result.Ok -> r.items; is Result.NotFound -> emptyList(); is Result.Error -> return@withContext r
+            }
+            val now = System.currentTimeMillis()
+            val list = current.toMutableList()
+            var idx = list.indexOfFirst { it.anilistId == anilistId }
+            if (idx < 0) idx = list.indexOfFirst { it.anilistId == null && normTitle(it.title) == normTitle(title) }
+            if (idx >= 0) {
+                val e = list[idx]
+                val updated = e.copy(
+                    anilistId = anilistId, status = status, statusTs = now,
+                    title = e.title.ifBlank { title },
+                    thumb = if (e.thumb.isBlank() && thumb != null) thumb else e.thumb,
+                )
+                if (updated == e) return@withContext Result.Ok(current)
+                list[idx] = updated
+            } else {
+                list.add(AnimePaheEntry(title = title, thumb = thumb ?: "", status = status, ts = now, statusTs = now, anilistId = anilistId))
+            }
+            writeItems(phrase, list.sortedByDescending { it.sortTs }.take(70))
+        }
+
+    /** Remove an entry (by AniList id, or a normalized-title match for id-less legacy entries). */
+    suspend fun remove(phrase: String, anilistId: Int, title: String): Result = withContext(Dispatchers.IO) {
+        if (!AnimePaheSyncKey.isValid(phrase)) return@withContext Result.Error("Sync phrase must be 5 valid words")
+        val current = when (val r = fetch(phrase)) {
+            is Result.Ok -> r.items; is Result.NotFound -> return@withContext Result.Ok(emptyList()); is Result.Error -> return@withContext r
+        }
+        val filtered = current.filterNot {
+            it.anilistId == anilistId || (it.anilistId == null && normTitle(it.title) == normTitle(title))
+        }
+        if (filtered.size == current.size) return@withContext Result.Ok(current)
+        writeItems(phrase, filtered)
+    }
+
     private suspend fun upsert(
         phrase: String,
         updates: List<WatchUpdate>,
