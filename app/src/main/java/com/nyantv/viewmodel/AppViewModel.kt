@@ -305,12 +305,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun mediaFor(entry: AnimePaheEntry): Media {
         val res = animePaheResolutions[entry.animeUrl]
-        val anilistId = res?.anilistId
+        // Prefer the entry's own AniList id (entries pushed from a TV have no animeUrl, so the
+        // by-animeUrl resolution misses) — this keeps the id consistent with the local Continue
+        // Watching card so they dedup instead of showing a second, image-less duplicate.
+        val anilistId = entry.anilistId ?: res?.anilistId
         return if (anilistId != null) {
             Media(
                 id          = anilistId.toString(),
-                title       = res.title.ifBlank { entry.title },
-                poster      = res.poster,
+                title       = res?.title?.ifBlank { entry.title } ?: entry.title,
+                poster      = res?.poster,
                 serviceType = ServiceType.ANILIST,
             )
         } else {
