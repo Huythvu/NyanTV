@@ -230,6 +230,9 @@ fun BrowseScreen(navController: NavController, appVm: AppViewModel, onDetailClic
                             media   = media,
                             onClick = {
                                 if (extensionMode) {
+                                    // Opening from a filtered extension → prioritise that source in
+                                    // the anime's in-app episode/source search.
+                                    appVm.preferredExtSourceId = state.selectedSourceId
                                     vm.resolveAndOpen(
                                         media      = media,
                                         // Matched on AniList → rich detail page.

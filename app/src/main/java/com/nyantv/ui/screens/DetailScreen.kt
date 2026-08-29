@@ -97,6 +97,10 @@ fun DetailScreen(
         ServiceType.SIMKL   -> null
     }
 
+    // Consumed once: the extension the user filtered to in Browse when opening this anime. Read into
+    // the (per-id) VM factory below, then cleared in a LaunchedEffect so later opens from other
+    // screens don't inherit a stale filter.
+    val preferredSourceId = remember(id) { vm.preferredExtSourceId }
     val playerVm: PlayerTabViewModel = viewModel(
         key     = "player_tab_$id",
         factory = PlayerTabViewModel.Factory(
@@ -106,8 +110,10 @@ fun DetailScreen(
             serviceKey  = serviceKey,
             serviceType = serviceType,
             malId       = malId,
+            preferredSourceId = preferredSourceId,
         )
     )
+    LaunchedEffect(id) { vm.preferredExtSourceId = null }
 
     val scope = rememberCoroutineScope()
 

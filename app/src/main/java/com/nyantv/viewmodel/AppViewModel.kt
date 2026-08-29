@@ -589,6 +589,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         runCatching { _searchResults.value = _service.search(query) }
     }
 
+    /**
+     * The extension the user was filtered to in Browse, handed to the next DetailScreen so its
+     * in-anime source search prioritises that extension. Set by BrowseScreen right before opening an
+     * anime; consumed (and cleared) by DetailScreen so it doesn't leak to opens from other screens.
+     */
+    var preferredExtSourceId: Long? = null
+
     // ── Global search across installed extensions (opt-in) ───────────────────────
 
     private val aniyomi       by lazy { AniyomiExtensions(getApplication()) }

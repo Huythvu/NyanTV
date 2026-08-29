@@ -31,7 +31,9 @@ private const val PROBE_TIMEOUT_MS  = 6_000L
 private const val PROBE_TTL_MS      = 7L * 24 * 60 * 60 * 1000  // re-check matches after 7 days
 private const val MATCH_THRESHOLD   = 0.60   // fuzzy title-match score needed to accept a source
 private const val MATCH_CONFIDENT   = 0.85   // borderline-sure match → select now, don't wait for the rest
-private const val PROBE_MAX_QUERIES = 2      // title variants to try per source before giving up (speed)
+private const val PROBE_MAX_QUERIES = 4      // title variants to try per source before giving up (a
+                                             // near-miss primary title often matches on romaji/English/
+                                             // a synonym; early-break keeps confident hits fast)
 
 data class PlayerTabUiState(
     val sources:        List<SearchableSource>          = emptyList(),
@@ -57,6 +59,9 @@ class PlayerTabViewModel(
     val serviceKey:   String,
     private val serviceType:  ServiceType,
     private val malId:        String?,
+    // The extension the user was filtered to in Browse when they opened this anime, if any — it's
+    // probed/selected first so the in-anime search prioritises the source they were just using.
+    private val preferredSourceId: Long? = null,
 ) : AndroidViewModel(app) {
 
     private val cache             = PlayerCache(app)
@@ -232,12 +237,16 @@ class PlayerTabViewModel(
     }
 
     private fun buildSources(): List<SearchableSource> {
-        return orderStore.sort(aniyomi.installedExtensions.value)
+        val sorted = orderStore.sort(aniyomi.installedExtensions.value)
             .flatMap { ext ->
                 ext.sources.filterIsInstance<AnimeHttpSource>().map { httpSource ->
                     AniyomiSearchableSource(httpSource = httpSource, iconUrl = ext.iconUrl)
                 }
             }
+        val preferred = preferredSourceId ?: return sorted
+        // Stable move-to-front: the filtered extension leads, everything else keeps its order.
+        // Auto-select already breaks score ties by list order, so leading it also makes it win ties.
+        return sorted.sortedByDescending { it.id == preferred }
     }
 
     /** Extra title variants (romaji / English / synonyms) to widen the source probe. */
@@ -569,7 +578,14 @@ class PlayerTabViewModel(
                     }
                     _state.update { it.copy(searchState = SearchState.Results(page.animes)) }
                     if (_state.value.selectedAnime == null) {
-                        selectAnimeResult(page.animes.first(), autoSelected = true)
+                        // Pick the best title match, not blindly the first result — sources often
+                        // return a near-miss first (wrong season/spin-off) while the real match sits
+                        // a row or two down, which is why some anime "showed no episodes".
+                        val known = (searchTitles + query + mediaTitle)
+                            .map { it.trim() }.filter { it.isNotBlank() }.distinct()
+                        val best = page.animes.maxByOrNull { bestTitleScore(it.title, known) }
+                            ?: page.animes.first()
+                        selectAnimeResult(best, autoSelected = true)
                     }
                 }
                 .onFailure { e ->
@@ -671,9 +687,10 @@ class PlayerTabViewModel(
         private val serviceKey:  String,
         private val serviceType: ServiceType,
         private val malId:       String? = null,
+        private val preferredSourceId: Long? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T =
-            PlayerTabViewModel(app, mediaId, mediaTitle, serviceKey, serviceType, malId) as T
+            PlayerTabViewModel(app, mediaId, mediaTitle, serviceKey, serviceType, malId, preferredSourceId) as T
     }
 }
