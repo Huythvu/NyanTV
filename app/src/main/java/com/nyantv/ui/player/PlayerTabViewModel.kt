@@ -187,7 +187,9 @@ class PlayerTabViewModel(
                     _state.update {
                         it.copy(
                             sources        = newSources,
-                            searchQuery    = mediaTitle,
+                            // Prefer titles already supplied by the screen (setSearchTitles), so this
+                            // doesn't clobber the current anime's title when the two race.
+                            searchQuery    = searchTitles.firstOrNull() ?: mediaTitle,
                             selectedSource = null,
                         )
                     }
@@ -291,6 +293,17 @@ class PlayerTabViewModel(
         val cleaned = titles.map { it.trim() }.filter { it.isNotBlank() }.distinct()
         if (cleaned == searchTitles) return
         searchTitles = cleaned
+        // Keep the "change result" box in sync with the current anime. The VM can be built with a
+        // stale title (e.g. when navigating between related shows), so refresh it here for normal
+        // (probe) entries — but never override a direct-opened entry's source title, a query the
+        // user is editing, or an active manual search.
+        val primary = cleaned.firstOrNull()
+        if (primary != null && preferredSource == null &&
+            !_state.value.isEditingQuery && _state.value.searchState is SearchState.Idle
+        ) {
+            defaultQuery = primary
+            _state.update { it.copy(searchQuery = primary) }
+        }
         if (_state.value.sources.isNotEmpty()) startProbe()
     }
 

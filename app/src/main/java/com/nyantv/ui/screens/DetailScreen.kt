@@ -72,7 +72,7 @@ fun DetailScreen(
     val containerFocusReq = remember { FocusRequester() }
     val playerTabFocusReq = remember { FocusRequester() }
 
-    var media    by remember { mutableStateOf<Media?>(null) }
+    var media    by remember(id) { mutableStateOf<Media?>(null) }   // reset when navigating to a related anime
     var netState by remember { mutableStateOf(NetworkState.LOADING) }
     var showEdit by remember { mutableStateOf(false) }
     var retryKey by remember { mutableIntStateOf(0) }
