@@ -261,8 +261,10 @@ class PlayerTabViewModel(
     private fun startProbe(force: Boolean = false) {
         val sources = _state.value.sources
         val primary = _state.value.searchQuery.ifBlank { mediaTitle }.trim()
+        // Send sources a punctuation-cleaned query (":", "!", "-" break many site searches), like a
+        // human would type — scoring still runs against the real titles via normalizeTitle.
         val queries = (listOf(primary) + searchTitles)
-            .map { it.trim() }.filter { it.isNotBlank() }.distinct()
+            .map { cleanQuery(it) }.filter { it.isNotBlank() }.distinct()
         if (sources.isEmpty() || queries.isEmpty()) return
         val key = queries.joinToString("|")
         if (!force && probeStartedQuery == key) return
@@ -403,6 +405,15 @@ class PlayerTabViewModel(
     }
 
     // ── Fuzzy title matching ────────────────────────────────────────────────────
+
+    /**
+     * Query cleaner for the search REQUEST sent to a source. Strips punctuation that trips up site
+     * search (":", "!", "'", "-", …) while keeping words and non-latin (CJK) characters. Case is
+     * preserved; scoring is unaffected since [normalizeTitle] re-normalizes both sides.
+     */
+    private fun cleanQuery(s: String): String =
+        s.replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+
     private fun normalizeTitle(s: String): String =
         s.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()
 
@@ -573,7 +584,7 @@ class PlayerTabViewModel(
         searchJob?.cancel()
         val job = viewModelScope.launch {
             _state.update { it.copy(searchState = SearchState.Loading) }
-            runCatching { withContext(Dispatchers.IO) { source.search(query) } }
+            runCatching { withContext(Dispatchers.IO) { source.search(cleanQuery(query).ifBlank { query }) } }
                 .onSuccess { page ->
                     if (page.animes.isEmpty()) {
                         _state.update { it.copy(searchState = SearchState.Error("No results found")) }
