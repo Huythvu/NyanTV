@@ -232,6 +232,12 @@ fun PlayerScreen(
         }
     }
 
+    // Finish prompt (auto-complete "Prompt with score" mode): shown when the last episode is watched.
+    var finishPrompt by remember { mutableStateOf<AppViewModel.FinishPrompt?>(null) }
+    LaunchedEffect("finishPrompt") {
+        appVm.finishPrompt.collect { finishPrompt = it }
+    }
+
     LaunchedEffect(subSettingsState.isIdle, streamPickerState.isIdle, subPickerState.isIdle) {
         val allIdle   = subSettingsState.isIdle && streamPickerState.isIdle && subPickerState.isIdle
         val allClosed = !subSettingsState.currentState && !streamPickerState.currentState && !subPickerState.currentState
@@ -549,7 +555,7 @@ fun PlayerScreen(
             val rememberAnswer = appVm.askOncePerSeries.value
             fun answer(granted: Boolean) {
                 vm.setSessionTracking(granted)
-                if (rememberAnswer) appVm.rememberSeriesConsent(vm.currentMediaId, granted)
+                if (rememberAnswer) appVm.rememberSeriesConsent(vm.currentMediaId, granted, vm.currentSeriesTitle)
                 showTrackingConsentDialog = false
             }
             AlertDialog(
@@ -563,6 +569,33 @@ fun PlayerScreen(
                 },
                 confirmButton = { TextButton(onClick = { answer(true) })  { Text("Yes") } },
                 dismissButton = { TextButton(onClick = { answer(false) }) { Text("No") } },
+            )
+        }
+
+        finishPrompt?.let { fp ->
+            var score by remember(fp.mediaId) { mutableIntStateOf(fp.currentScore?.toInt() ?: 0) }
+            AlertDialog(
+                onDismissRequest = { finishPrompt = null },
+                title = { Text("Mark as finished?") },
+                text  = {
+                    Column {
+                        Text("You finished the last episode of ${fp.title.ifBlank { "this series" }}.")
+                        Spacer(Modifier.height(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Score", modifier = Modifier.weight(1f))
+                            OutlinedButton(onClick = { score = (score - 1).coerceAtLeast(0) }) { Text("–") }
+                            Text(if (score == 0) "–" else "$score / 10", modifier = Modifier.widthIn(min = 48.dp), textAlign = TextAlign.Center)
+                            OutlinedButton(onClick = { score = (score + 1).coerceAtMost(10) }) { Text("+") }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = { appVm.applyCompletion(fp.mediaId, fp.episode, null); finishPrompt = null }) { Text("Finish") }
+                        TextButton(onClick = { appVm.applyCompletion(fp.mediaId, fp.episode, score.takeIf { it > 0 }?.toFloat()); finishPrompt = null }) { Text("Finish + score") }
+                    }
+                },
+                dismissButton = { TextButton(onClick = { finishPrompt = null }) { Text("Not now") } },
             )
         }
 

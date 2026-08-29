@@ -372,17 +372,33 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setIncognito(v: Boolean) { _incognito.value = v; prefs.edit { putBoolean("incognito", v) } }
 
     // ── Extra tracking options ───────────────────────────────────────────────────
-    private val _autoCompleteTracking = MutableStateFlow(prefs.getBoolean("track_auto_complete", false))
+    /** What happens when you finish the last episode. */
+    enum class AutoCompleteMode { OFF, AUTO, PROMPT }
+
+    private val _autoCompleteMode = MutableStateFlow(
+        prefs.getString("track_auto_complete_mode", null)?.let { AutoCompleteMode.valueOf(it) }
+            // Migrate the old on/off boolean: on -> AUTO (silent), off -> OFF.
+            ?: if (prefs.getBoolean("track_auto_complete", false)) AutoCompleteMode.AUTO else AutoCompleteMode.OFF
+    )
     private val _askOncePerSeries     = MutableStateFlow(prefs.getBoolean("track_ask_once",      false))
     private val _excludedTrackingExts = MutableStateFlow(
         prefs.getString("excluded_tracking_exts", "")?.split("\n")?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
     )
-    val autoCompleteTracking: StateFlow<Boolean>     = _autoCompleteTracking.asStateFlow()
+    val autoCompleteMode:     StateFlow<AutoCompleteMode> = _autoCompleteMode.asStateFlow()
     val askOncePerSeries:     StateFlow<Boolean>     = _askOncePerSeries.asStateFlow()
     val excludedTrackingExts: StateFlow<Set<String>> = _excludedTrackingExts.asStateFlow()
 
-    fun setAutoCompleteTracking(v: Boolean) { _autoCompleteTracking.value = v; prefs.edit { putBoolean("track_auto_complete", v) } }
+    fun setAutoCompleteMode(mode: AutoCompleteMode) { _autoCompleteMode.value = mode; prefs.edit { putString("track_auto_complete_mode", mode.name) } }
     fun setAskOncePerSeries(v: Boolean)     { _askOncePerSeries.value     = v; prefs.edit { putBoolean("track_ask_once",      v) } }
+
+    /** Emitted when finishing the last episode in PROMPT mode; the player shows a "mark finished?" dialog. */
+    data class FinishPrompt(val mediaId: String, val episode: Int, val title: String, val currentScore: Float?)
+    private val _finishPrompt = MutableSharedFlow<FinishPrompt>(extraBufferCapacity = 1)
+    val finishPrompt: SharedFlow<FinishPrompt> = _finishPrompt.asSharedFlow()
+
+    /** Confirm a paused finish-prompt: set the entry Completed, optionally with a score. */
+    fun applyCompletion(mediaId: String, episode: Int, score: Float?) =
+        updateEntry(mediaId, "COMPLETED", episode, score)
     fun setExtensionTrackingExcluded(pkg: String, excluded: Boolean) {
         val updated = if (excluded) _excludedTrackingExts.value + pkg else _excludedTrackingExts.value - pkg
         _excludedTrackingExts.value = updated
@@ -397,7 +413,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         in consentSet("tracking_consent_no")  -> false
         else                                  -> null
     }
-    fun rememberSeriesConsent(mediaId: String, granted: Boolean) {
+    fun rememberSeriesConsent(mediaId: String, granted: Boolean, title: String = "") {
         val yes = consentSet("tracking_consent_yes").toMutableSet()
         val no  = consentSet("tracking_consent_no").toMutableSet()
         if (granted) { yes += mediaId; no -= mediaId } else { no += mediaId; yes -= mediaId }
@@ -405,12 +421,58 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             putString("tracking_consent_yes", yes.joinToString("\n"))
             putString("tracking_consent_no",  no.joinToString("\n"))
         }
+        // Capture the title at write time so the management screen can label each choice (the id
+        // alone isn't human-readable, and a "No" answer never produces a watch-history entry).
+        if (title.isNotBlank()) { val t = consentTitles(); t[mediaId] = title; saveConsentTitles(t) }
+    }
+
+    // Titles remembered alongside consent choices, stored as "id\ttitle" per line.
+    private fun consentTitles(): MutableMap<String, String> =
+        (prefs.getString("tracking_consent_titles", "") ?: "").split("\n")
+            .filter { it.isNotBlank() }
+            .mapNotNull { val i = it.indexOf('\t'); if (i <= 0) null else it.substring(0, i) to it.substring(i + 1) }
+            .toMap(mutableMapOf())
+    private fun saveConsentTitles(map: Map<String, String>) =
+        prefs.edit { putString("tracking_consent_titles", map.entries.joinToString("\n") { "${it.key}\t${it.value}" }) }
+
+    /** One remembered "Always ask" choice, for the management screen. */
+    data class ConsentItem(val id: String, val title: String, val poster: String?, val granted: Boolean)
+
+    fun listSeriesConsents(): List<ConsentItem> {
+        val titles = consentTitles()
+        val hist   = historyIndex.list()
+        val list   = _animeList.value
+        fun resolve(id: String): Pair<String, String?> {
+            val h = hist.firstOrNull { it.id == id }
+            val a = list.firstOrNull { it.id == id }
+            return (titles[id] ?: h?.title ?: a?.title ?: id) to (h?.poster ?: a?.poster)
+        }
+        return (consentSet("tracking_consent_yes").map { it to true } +
+                consentSet("tracking_consent_no").map { it to false })
+            .map { (id, granted) -> val (t, p) = resolve(id); ConsentItem(id, t, p, granted) }
+            .sortedBy { it.title.lowercase() }
+    }
+
+    /** Flip a remembered choice Yes/No (keeps its stored title). */
+    fun setSeriesConsent(id: String, granted: Boolean) =
+        rememberSeriesConsent(id, granted, consentTitles()[id] ?: "")
+
+    /** Forget one series' choice so it prompts again next time. */
+    fun removeSeriesConsent(id: String) {
+        val yes = consentSet("tracking_consent_yes").toMutableSet().apply { remove(id) }
+        val no  = consentSet("tracking_consent_no").toMutableSet().apply { remove(id) }
+        prefs.edit {
+            putString("tracking_consent_yes", yes.joinToString("\n"))
+            putString("tracking_consent_no",  no.joinToString("\n"))
+        }
+        saveConsentTitles(consentTitles().apply { remove(id) })
     }
 
     /** Forget every remembered "Always ask" choice, so each series prompts again. */
     fun clearSeriesConsents() = prefs.edit {
         remove("tracking_consent_yes")
         remove("tracking_consent_no")
+        remove("tracking_consent_titles")
     }
 
     // ── Sync Tracking ──────────────────────────────────────────────────────────
@@ -819,15 +881,21 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun markEpisodeWatched(mediaId: String, episodeNumber: Int) {
-        // Auto-complete: if enabled and this is the final episode of a known total, set Completed.
-        val total = _animeList.value.firstOrNull { it.id == mediaId }?.totalEpisodes
-        val completed = _autoCompleteTracking.value && total != null && total > 0 && episodeNumber >= total
-        updateEntry(
-            id       = mediaId,
-            status   = if (completed) "COMPLETED" else "CURRENT",
-            progress = episodeNumber,
-            score    = null,
-        )
+        val entry  = _animeList.value.firstOrNull { it.id == mediaId }
+        val total  = entry?.totalEpisodes
+        val isLast = total != null && total > 0 && episodeNumber >= total
+        when {
+            // Silent auto-complete on the final episode.
+            isLast && _autoCompleteMode.value == AutoCompleteMode.AUTO ->
+                updateEntry(mediaId, "COMPLETED", episodeNumber, null)
+            // Prompt to finish (+ optional score). Record progress now; the player's dialog applies
+            // Completed on confirm. Skipped for extension-only anime (no tracker entry to complete).
+            isLast && _autoCompleteMode.value == AutoCompleteMode.PROMPT && !mediaId.isExternalMediaId() -> {
+                updateEntry(mediaId, "CURRENT", episodeNumber, null)
+                _finishPrompt.tryEmit(FinishPrompt(mediaId, episodeNumber, entry?.title ?: "", entry?.score))
+            }
+            else -> updateEntry(mediaId, "CURRENT", episodeNumber, null)
+        }
     }
 
     fun setCurrentMedia(id: String) = _service.setCurrentMedia(id)

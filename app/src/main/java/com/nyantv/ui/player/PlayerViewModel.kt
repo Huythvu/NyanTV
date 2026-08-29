@@ -150,6 +150,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var trackingExcluded = false
     val isTrackingExcluded: Boolean get() = trackingExcluded
     val currentMediaId: String get() = mediaId
+    val currentSeriesTitle: String get() = seriesTitle
 
     fun setSessionTracking(enabled: Boolean) {
         sessionTrackingEnabled = enabled && !trackingExcluded

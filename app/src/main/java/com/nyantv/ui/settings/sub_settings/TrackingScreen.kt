@@ -35,9 +35,9 @@ fun TrackingScreen(
     val context = LocalContext.current
     val playerPrefs = remember { context.getSharedPreferences("nyantv_player_prefs", Context.MODE_PRIVATE) }
 
-    val trackingMode  by vm.trackingMode.collectAsStateWithLifecycle()
-    val autoComplete  by vm.autoCompleteTracking.collectAsStateWithLifecycle()
-    val askOnce       by vm.askOncePerSeries.collectAsStateWithLifecycle()
+    val trackingMode     by vm.trackingMode.collectAsStateWithLifecycle()
+    val autoCompleteMode by vm.autoCompleteMode.collectAsStateWithLifecycle()
+    val askOnce          by vm.askOncePerSeries.collectAsStateWithLifecycle()
     val excluded      by vm.excludedTrackingExts.collectAsStateWithLifecycle()
     val installed     by extVm.installedExtensions.collectAsStateWithLifecycle()
 
@@ -84,11 +84,27 @@ fun TrackingScreen(
                     markEarlier,
                 ) { markEarlier = it; playerPrefs.edit { putBoolean("track_mark_earlier", it) } }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-                ToggleRow(
-                    "Auto-complete series",
-                    "Set status to Completed when you finish the last episode",
-                    autoComplete,
-                ) { vm.setAutoCompleteTracking(it) }
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text("When you finish the last episode", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    listOf(
+                        AppViewModel.AutoCompleteMode.OFF    to "Don't change status",
+                        AppViewModel.AutoCompleteMode.AUTO   to "Mark completed automatically",
+                        AppViewModel.AutoCompleteMode.PROMPT to "Ask to mark completed (with score)",
+                    ).forEach { (mode, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { vm.setAutoCompleteMode(mode) }
+                                .padding(vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment     = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = autoCompleteMode == mode, onClick = { vm.setAutoCompleteMode(mode) })
+                            Text(label, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
                 ToggleRow(
                     "Ask once per series",
@@ -100,11 +116,10 @@ fun TrackingScreen(
                         modifier              = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
                         horizontalArrangement = Arrangement.End,
                     ) {
-                        var reset by remember { mutableStateOf(false) }
                         TextButton(
-                            onClick  = { vm.clearSeriesConsents(); reset = true },
+                            onClick  = { navController.navigate("settings/tracking_consents") },
                             modifier = Modifier.focusBorder(RoundedCornerShape(50)),
-                        ) { Text(if (reset) "Choices reset" else "Reset remembered choices") }
+                        ) { Text("Manage remembered choices") }
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))

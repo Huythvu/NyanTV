@@ -214,6 +214,7 @@ fun MainNavigation(
                 composable("settings/extensions")   { ExtensionsScreen(navController) }
                 composable("settings/watch_history") { com.nyantv.ui.settings.sub_settings.WatchHistoryScreen(vm, navController) }
                 composable("settings/tracking")      { com.nyantv.ui.settings.sub_settings.TrackingScreen(vm, navController) }
+                composable("settings/tracking_consents") { com.nyantv.ui.settings.sub_settings.TrackingConsentsScreen(vm, navController) }
                 composable("settings/stats")         { com.nyantv.ui.settings.sub_settings.StatsScreen(vm, navController) }
                 composable("pair/anilist") {
                     com.nyantv.ui.auth.PairLoginScreen(
