@@ -239,7 +239,7 @@ fun BrowseScreen(navController: NavController, appVm: AppViewModel, onDetailClic
                                         media      = media,
                                         // Matched on AniList → rich detail page; keep the source hint.
                                         onResolved = { resolvedId ->
-                                            if (sid != null && url.isNotBlank()) appVm.putSourceHint(resolvedId, sid, url)
+                                            if (sid != null && url.isNotBlank()) appVm.putSourceHint(resolvedId, sid, url, media.title)
                                             onDetailClick(resolvedId)
                                         },
                                         // No AniList match → still watchable from the extension,

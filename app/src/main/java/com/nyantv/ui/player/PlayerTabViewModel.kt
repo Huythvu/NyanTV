@@ -57,7 +57,7 @@ class PlayerTabViewModel(
     val serviceKey:   String,
     private val serviceType:  ServiceType,
     private val malId:        String?,
-    preferredSourceArg: Pair<Long, String>? = null,   // (sourceId, url) when opened from an extension filter
+    preferredSourceArg: Triple<Long, String, String>? = null,  // (sourceId, url, source title) from an extension filter
 ) : AndroidViewModel(app) {
 
     private val cache             = PlayerCache(app)
@@ -143,13 +143,14 @@ class PlayerTabViewModel(
 
     // When opened straight from an extension catalog, the mediaId encodes the exact source + entry
     // (ext:<sourceId>:<url>). We open that entry directly instead of re-probing every source by title.
-    private val preferredSource: Pair<Long, String>? = preferredSourceArg ?: run {
-        // Fallback: an entry opened straight as an external id (ext:<sourceId>:<url>).
+    private val preferredSource: Triple<Long, String, String>? = preferredSourceArg ?: run {
+        // Fallback: an entry opened straight as an external id (ext:<sourceId>:<url>); here mediaTitle
+        // is already the source's own title (external media), so it's a fine search default.
         if (!mediaId.startsWith("ext:")) return@run null
         val rest = mediaId.removePrefix("ext:")
         val sourceId = rest.substringBefore(":").toLongOrNull() ?: return@run null   // e.g. AnimePahe ext ids aren't numeric
         val url = rest.substringAfter(":", "")
-        if (url.isNotBlank()) sourceId to url else null
+        if (url.isNotBlank()) Triple(sourceId, url, mediaTitle) else null
     }
 
     /** When off (default), an entry opened from a specific extension uses only that extension. */
@@ -158,7 +159,7 @@ class PlayerTabViewModel(
             .getSharedPreferences("nyantv_prefs", android.content.Context.MODE_PRIVATE)
             .getBoolean("search_all_extensions", false)
 
-    private val defaultQuery: String = mediaTitle   // what the "change" search box resets to
+    private var defaultQuery: String = mediaTitle   // what the "change" search box resets to (source title for direct opens)
 
     init {
         refreshWatchProgress()
@@ -227,15 +228,18 @@ class PlayerTabViewModel(
      * select that source and load its episodes straight from the URL. Falls back to a normal probe
      * if that extension is no longer installed.
      */
-    private fun openPreferredSource(sources: List<SearchableSource>, pref: Pair<Long, String>) {
-        val (sourceId, url) = pref
+    private fun openPreferredSource(sources: List<SearchableSource>, pref: Triple<Long, String, String>) {
+        val (sourceId, url, title) = pref
         val source = sources.firstOrNull { it.id == sourceId } ?: run { startProbe(); return }
         userSelectedSource = true   // lock the exact entry; a background probe won't switch away from it
+        // Use the source's own title so "change result" shows the right name and actually finds results
+        // (the AniList title often doesn't match how the source names the show).
+        if (title.isNotBlank()) defaultQuery = title
         val anime = SAnime.create().apply {
             this.url   = url
-            this.title = mediaTitle
+            this.title = title.ifBlank { mediaTitle }
         }
-        _state.update { it.copy(selectedSource = source, selectedAnime = anime) }
+        _state.update { it.copy(selectedSource = source, selectedAnime = anime, searchQuery = defaultQuery) }
         loadEpisodes(source, anime)
     }
 
@@ -738,7 +742,7 @@ class PlayerTabViewModel(
         private val serviceKey:  String,
         private val serviceType: ServiceType,
         private val malId:       String? = null,
-        private val preferredSource: Pair<Long, String>? = null,
+        private val preferredSource: Triple<Long, String, String>? = null,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T =

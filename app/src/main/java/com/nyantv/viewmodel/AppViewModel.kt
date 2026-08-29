@@ -851,11 +851,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // When an entry is opened from a specific extension filter, we resolve it to an AniList detail
     // for metadata but must not lose which source+entry it came from. Stash it here keyed by the id
     // we navigate to, so the player can open that exact source instead of re-probing by title.
-    private val pendingSourceHints = mutableMapOf<String, Pair<Long, String>>()
-    fun putSourceHint(navId: String, sourceId: Long, url: String) {
-        pendingSourceHints[navId] = sourceId to url
+    private val pendingSourceHints = mutableMapOf<String, Triple<Long, String, String>>()
+    fun putSourceHint(navId: String, sourceId: Long, url: String, title: String) {
+        pendingSourceHints[navId] = Triple(sourceId, url, title)
     }
-    fun consumeSourceHint(navId: String): Pair<Long, String>? = pendingSourceHints.remove(navId)
+    fun consumeSourceHint(navId: String): Triple<Long, String, String>? = pendingSourceHints.remove(navId)
 
     suspend fun fetchDetails(id: String): Media {
         externalMedia[id]?.let { return it }
