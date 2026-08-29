@@ -72,18 +72,32 @@ class AnimePaheWatchlistService {
         }
     }
 
+    /** One anime to mark as watching in the shared list. */
+    data class WatchUpdate(val anilistId: Int, val title: String, val thumb: String?)
+
+    /** Mark one anime watching from a real watch event (bumps recency). Presence + status only. */
+    suspend fun upsertWatching(phrase: String, anilistId: Int, title: String, thumb: String?): Result =
+        upsert(phrase, listOf(WatchUpdate(anilistId, title, thumb)), bumpExisting = true)
+
     /**
-     * Mark an anime as "watching" in the shared watchlist (two-way sync, presence + status).
-     * Read-merge-write, last-write-wins: pull the doc, update the entry matching [anilistId] in place
-     * (preserving any AnimePahe link) or append a minimal one, cap at 70, and PATCH items back. Native
-     * link/episode fields are left for the extension to fill; no episode number is pushed (Stage 2a).
+     * Ensure a batch of anime are present as "watching" (e.g. syncing existing local Continue
+     * Watching). Idempotent: adds missing ones and promotes plan->watching, but doesn't re-bump
+     * entries already watching, so repeated calls don't churn the list order or trigger writes.
      */
-    suspend fun upsertWatching(
+    suspend fun upsertWatchingBatch(phrase: String, updates: List<WatchUpdate>): Result =
+        upsert(phrase, updates, bumpExisting = false)
+
+    /**
+     * Read-merge-write, last-write-wins: pull the doc, update entries by anilistId (preserving any
+     * AnimePahe link) or append minimal ones, cap at 70, and PATCH items back. No episode number is
+     * pushed (Stage 2a). Skips the write entirely when nothing changed.
+     */
+    private suspend fun upsert(
         phrase: String,
-        anilistId: Int,
-        title: String,
-        thumb: String?,
+        updates: List<WatchUpdate>,
+        bumpExisting: Boolean,
     ): Result = withContext(Dispatchers.IO) {
+        if (updates.isEmpty()) return@withContext Result.Ok(emptyList())
         if (!AnimePaheSyncKey.isValid(phrase)) return@withContext Result.Error("Sync phrase must be 5 valid words")
 
         val current = when (val r = fetch(phrase)) {
@@ -94,30 +108,44 @@ class AnimePaheWatchlistService {
 
         val now  = System.currentTimeMillis()
         val list = current.toMutableList()
-        val idx  = list.indexOfFirst { it.anilistId == anilistId }
-        if (idx >= 0) {
-            val e = list[idx]
-            list[idx] = e.copy(
-                status   = AnimePaheEntry.STATUS_WATCHING,
-                ts       = now,
-                statusTs = now,
-                title    = e.title.ifBlank { title },
-                thumb    = if (e.thumb.isBlank() && thumb != null) thumb else e.thumb,
-            )
-        } else {
-            list.add(
-                AnimePaheEntry(
-                    title     = title,
-                    thumb     = thumb ?: "",
-                    status    = AnimePaheEntry.STATUS_WATCHING,
-                    ts        = now,
-                    statusTs  = now,
-                    anilistId = anilistId,
-                )
-            )
+        var changed = false
+        for (u in updates) {
+            // Match by AniList id; fall back to a normalized-title match so we update (and backfill
+            // the id on) entries that predate the anilistId field instead of creating duplicates.
+            var idx = list.indexOfFirst { it.anilistId == u.anilistId }
+            if (idx < 0) idx = list.indexOfFirst { it.anilistId == null && normTitle(it.title) == normTitle(u.title) }
+            if (idx >= 0) {
+                val e = list[idx]
+                val alreadyWatching = e.status == AnimePaheEntry.STATUS_WATCHING
+                val thumb = if (e.thumb.isBlank() && u.thumb != null) u.thumb else e.thumb
+                when {
+                    bumpExisting -> {
+                        list[idx] = e.copy(anilistId = u.anilistId, status = AnimePaheEntry.STATUS_WATCHING,
+                            ts = now, statusTs = now, title = e.title.ifBlank { u.title }, thumb = thumb); changed = true
+                    }
+                    !alreadyWatching -> {
+                        list[idx] = e.copy(anilistId = u.anilistId, status = AnimePaheEntry.STATUS_WATCHING,
+                            statusTs = now, title = e.title.ifBlank { u.title }, thumb = thumb); changed = true
+                    }
+                    e.anilistId == null -> { list[idx] = e.copy(anilistId = u.anilistId); changed = true }   // backfill id only
+                }
+            } else {
+                list.add(
+                    AnimePaheEntry(
+                        title = u.title, thumb = u.thumb ?: "",
+                        status = AnimePaheEntry.STATUS_WATCHING, ts = now, statusTs = now,
+                        anilistId = u.anilistId,
+                    )
+                ); changed = true
+            }
         }
-        val capped = list.sortedByDescending { it.sortTs }.take(70)   // rules cap items at 70
+        if (!changed) return@withContext Result.Ok(current)
 
+        writeItems(phrase, list.sortedByDescending { it.sortTs }.take(70))   // rules cap items at 70
+    }
+
+    /** PATCH the items array (key-only; the write rules allow it by document id). */
+    private fun writeItems(phrase: String, items: List<AnimePaheEntry>): Result {
         val docId = AnimePaheSyncKey.documentId(phrase)
         val url = "https://firestore.googleapis.com/v1/projects/" +
             "${BuildConfig.ANIMEPAHE_FIREBASE_PROJECT}/databases/(default)/documents/watchlists/" +
@@ -127,16 +155,16 @@ class AnimePaheWatchlistService {
             putJsonObject("fields") {
                 putJsonObject("items") {
                     putJsonObject("arrayValue") {
-                        put("values", buildJsonArray { capped.forEach { add(itemToValue(it)) } })
+                        put("values", buildJsonArray { items.forEach { add(itemToValue(it)) } })
                     }
                 }
             }
         }.toString()
 
         val req = Request.Builder().url(url).patch(body.toRequestBody(jsonType)).build()
-        try {
+        return try {
             http.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) Result.Ok(capped) else Result.Error("Firestore HTTP ${resp.code}")
+                if (resp.isSuccessful) Result.Ok(items) else Result.Error("Firestore HTTP ${resp.code}")
             }
         } catch (e: Exception) {
             Result.Error(e.message ?: "Network error")
@@ -163,6 +191,8 @@ class AnimePaheWatchlistService {
 
     private fun strVal(s: String): JsonObject = buildJsonObject { put("stringValue", s) }
     private fun intVal(n: Long): JsonObject = buildJsonObject { put("integerValue", n.toString()) }
+
+    private fun normTitle(s: String): String = s.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()
 
     /** Walk the Firestore typed-value envelope: fields.items.arrayValue.values[].mapValue.fields.* */
     private fun parseDocument(root: JsonObject): List<AnimePaheEntry> {

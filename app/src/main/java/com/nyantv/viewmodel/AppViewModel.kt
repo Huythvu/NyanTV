@@ -220,6 +220,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         applyAnimePahe(animePaheStore.loadSnapshot().items)   // instant, offline-friendly
+        pushLocalContinueToAnimePahe()                        // sync existing local watches up too
         viewModelScope.launch {
             when (val result = animePaheService.fetch(animePaheStore.syncPhrase)) {
                 is AnimePaheWatchlistService.Result.Ok -> {
@@ -231,6 +232,28 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     applyAnimePahe(emptyList())
                 }
                 is AnimePaheWatchlistService.Result.Error -> Unit   // keep the cached snapshot
+            }
+        }
+    }
+
+    /**
+     * Push the local watch history (Continue Watching) up to the shared AnimePahe watchlist as
+     * "watching". Anime only (needs an AniList id to join on); idempotent, so it only writes when
+     * something is actually new. Lets existing TV watches appear in the extension, not just future ones.
+     */
+    private fun pushLocalContinueToAnimePahe() {
+        if (!animePaheStore.isConfigured) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val updates = historyIndex.list()
+                .filter { it.serviceKey != "simkl" }
+                .mapNotNull { e ->
+                    val id = e.anilistId?.toIntOrNull() ?: return@mapNotNull null
+                    AnimePaheWatchlistService.WatchUpdate(id, e.title, e.poster)
+                }
+                .distinctBy { it.anilistId }
+                .take(50)
+            if (updates.isNotEmpty()) {
+                runCatching { animePaheService.upsertWatchingBatch(animePaheStore.syncPhrase, updates) }
             }
         }
     }
