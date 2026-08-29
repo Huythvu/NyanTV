@@ -776,6 +776,7 @@ private fun PlayerControls(
         }
 
         // ── Bottom bar ─────────────────────────────────────────────────────────
+        val seekBarFocusRequester = remember { FocusRequester() }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -784,7 +785,11 @@ private fun PlayerControls(
                 .padding(horizontal = 24.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            ProgressBar(state = state)
+            ProgressBar(
+                state          = state,
+                focusRequester = seekBarFocusRequester,
+                onSeek         = { vm.seekTo(it) },
+            )
 
             Row(
                 modifier          = Modifier.fillMaxWidth(),
@@ -1112,23 +1117,75 @@ private fun TvTextButton(label: String, onClick: () -> Unit) {
 // ── Progress bar ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun ProgressBar(state: PlayerUiState) {
+private fun ProgressBar(
+    state: PlayerUiState,
+    focusRequester: FocusRequester,
+    onSeek: (Long) -> Unit,
+) {
     val primary   = MaterialTheme.colorScheme.primary
     val buffColor = primary.copy(alpha = 0.35f)
     val bgColor   = Color.White.copy(alpha = 0.2f)
     val dur       = state.durationMs.takeIf { it > 0 } ?: return
 
-    val progress  = (state.positionMs.toFloat() / dur).coerceIn(0f, 1f)
+    // Focus the bar and hold ◀/▶ to scrub in 10s steps (accumulated in a preview), Enter to commit.
+    var focused   by remember { mutableStateOf(false) }
+    var scrubbing by remember { mutableStateOf(false) }
+    var previewMs by remember { mutableStateOf(0L) }
+    val shownMs   = if (scrubbing) previewMs else state.positionMs
+    val scrubStep = 10_000L
+
+    val progress  = (shownMs.toFloat() / dur).coerceIn(0f, 1f)
     val buffered  = (state.bufferedMs.toFloat() / dur).coerceIn(0f, 1f)
     val segments  = remember(state.skipTimes) {
         state.skipTimes?.toDisplaySegments() ?: emptyList()
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = Modifier
+            .focusRequester(focusRequester)
+            .onFocusChanged {
+                focused = it.isFocused
+                // Commit a pending scrub if focus leaves the bar mid-drag.
+                if (!it.isFocused && scrubbing) { onSeek(previewMs); scrubbing = false }
+            }
+            .focusable()
+            .onKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
+                // Accumulate from the latest preview (robust to fast key-repeat), starting from the
+                // live position on the first press.
+                fun scrub(deltaMs: Long): Boolean {
+                    val base = if (scrubbing) previewMs else state.positionMs
+                    scrubbing = true
+                    previewMs = (base + deltaMs).coerceIn(0L, dur)
+                    return true
+                }
+                when (e.key) {
+                    Key.DirectionLeft  -> scrub(-scrubStep)
+                    Key.DirectionRight -> scrub(scrubStep)
+                    Key.DirectionCenter, Key.Enter ->
+                        if (scrubbing) { onSeek(previewMs); scrubbing = false; true } else false
+                    else -> false
+                }
+            }
+    ) {
 
         Box(modifier = Modifier.fillMaxWidth().height(18.dp)) {
+            if (scrubbing) {
+                // Time bubble tracking the scrub playhead.
+                Box(Modifier.fillMaxWidth(progress).wrapContentWidth(Alignment.End)) {
+                    Surface(color = primary.copy(alpha = 0.92f), shape = RoundedCornerShape(4.dp)) {
+                        Text(
+                            formatMs(previewMs),
+                            color    = Color.Black.copy(alpha = 0.85f),
+                            style    = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+            }
             val active = state.activeSkip
-            if (active != null) {
+            if (!scrubbing && active != null) {
                 val midFrac = ((active.startSec + active.endSec) * 500f / dur)
                     .coerceIn(0f, 100f)
                 val seg = segments.firstOrNull { it.startSec == active.startSec }
@@ -1155,10 +1212,10 @@ private fun ProgressBar(state: PlayerUiState) {
             }
         }
 
-        Box(modifier = Modifier.fillMaxWidth().height(6.dp)) {
+        Box(modifier = Modifier.fillMaxWidth().height(if (focused) 10.dp else 6.dp)) {
             val totalMs = dur.toFloat()
 
-            Box(Modifier.fillMaxSize().background(bgColor, RoundedCornerShape(3.dp)))
+            Box(Modifier.fillMaxSize().background(if (focused) Color.White.copy(alpha = 0.3f) else bgColor, RoundedCornerShape(3.dp)))
 
             Box(Modifier.fillMaxWidth(buffered).fillMaxHeight().background(buffColor, RoundedCornerShape(3.dp)))
 
@@ -1179,13 +1236,13 @@ private fun ProgressBar(state: PlayerUiState) {
                 }
             }
 
-            // Playhead
+            // Playhead (larger when the bar is focused / being scrubbed)
             Box(
                 Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(progress)
                     .wrapContentWidth(Alignment.End)
-                    .size(6.dp)
+                    .size(if (focused) 12.dp else 6.dp)
                     .background(Color.White, RoundedCornerShape(50))
             )
         }
