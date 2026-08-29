@@ -72,12 +72,12 @@ class AnimePaheWatchlistService {
         }
     }
 
-    /** One anime to mark as watching in the shared list. */
-    data class WatchUpdate(val anilistId: Int, val title: String, val thumb: String?)
+    /** One anime to mark as watching in the shared list. [episode] is AniList-entry numbering. */
+    data class WatchUpdate(val anilistId: Int, val title: String, val thumb: String?, val episode: Int? = null)
 
-    /** Mark one anime watching from a real watch event (bumps recency). Presence + status only. */
-    suspend fun upsertWatching(phrase: String, anilistId: Int, title: String, thumb: String?): Result =
-        upsert(phrase, listOf(WatchUpdate(anilistId, title, thumb)), bumpExisting = true)
+    /** Mark one anime watching from a real watch event (bumps recency). */
+    suspend fun upsertWatching(phrase: String, anilistId: Int, title: String, thumb: String?, episode: Int?): Result =
+        upsert(phrase, listOf(WatchUpdate(anilistId, title, thumb, episode)), bumpExisting = true)
 
     /**
      * Ensure a batch of anime are present as "watching" (e.g. syncing existing local Continue
@@ -117,24 +117,22 @@ class AnimePaheWatchlistService {
             if (idx >= 0) {
                 val e = list[idx]
                 val alreadyWatching = e.status == AnimePaheEntry.STATUS_WATCHING
-                val thumb = if (e.thumb.isBlank() && u.thumb != null) u.thumb else e.thumb
-                when {
-                    bumpExisting -> {
-                        list[idx] = e.copy(anilistId = u.anilistId, status = AnimePaheEntry.STATUS_WATCHING,
-                            ts = now, statusTs = now, title = e.title.ifBlank { u.title }, thumb = thumb); changed = true
-                    }
-                    !alreadyWatching -> {
-                        list[idx] = e.copy(anilistId = u.anilistId, status = AnimePaheEntry.STATUS_WATCHING,
-                            statusTs = now, title = e.title.ifBlank { u.title }, thumb = thumb); changed = true
-                    }
-                    e.anilistId == null -> { list[idx] = e.copy(anilistId = u.anilistId); changed = true }   // backfill id only
-                }
+                val updated = e.copy(
+                    anilistId      = u.anilistId,
+                    status         = AnimePaheEntry.STATUS_WATCHING,
+                    ts             = if (bumpExisting) now else e.ts,
+                    statusTs       = if (bumpExisting || !alreadyWatching) now else e.statusTs,
+                    title          = e.title.ifBlank { u.title },
+                    thumb          = if (e.thumb.isBlank() && u.thumb != null) u.thumb else e.thumb,
+                    anilistEpisode = u.episode ?: e.anilistEpisode,
+                )
+                if (updated != e) { list[idx] = updated; changed = true }   // data-class equality → idempotent
             } else {
                 list.add(
                     AnimePaheEntry(
                         title = u.title, thumb = u.thumb ?: "",
                         status = AnimePaheEntry.STATUS_WATCHING, ts = now, statusTs = now,
-                        anilistId = u.anilistId,
+                        anilistId = u.anilistId, anilistEpisode = u.episode,
                     )
                 ); changed = true
             }
@@ -185,6 +183,7 @@ class AnimePaheWatchlistService {
                 put("statusTs", intVal(e.statusTs))
                 e.animeId?.let  { put("animeId",  intVal(it.toLong())) }
                 e.anilistId?.let { put("anilistId", intVal(it.toLong())) }
+                e.anilistEpisode?.let { put("anilistEpisode", intVal(it.toLong())) }
             }
         }
     }
@@ -219,6 +218,7 @@ class AnimePaheWatchlistService {
                 statusTs = f.int("statusTs") ?: 0L,
                 animeId  = f.int("animeId")?.toInt(),
                 anilistId = f.int("anilistId")?.toInt(),
+                anilistEpisode = f.int("anilistEpisode")?.toInt(),
             )
         }
     }

@@ -248,7 +248,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 .filter { it.serviceKey != "simkl" }
                 .mapNotNull { e ->
                     val id = e.anilistId?.toIntOrNull() ?: return@mapNotNull null
-                    AnimePaheWatchlistService.WatchUpdate(id, e.title, e.poster)
+                    AnimePaheWatchlistService.WatchUpdate(id, e.title, e.poster, e.episode.toInt().takeIf { it > 0 })
                 }
                 .distinctBy { it.anilistId }
                 .take(50)

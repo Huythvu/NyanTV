@@ -429,6 +429,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                         anilistId = alId,
                         title     = seriesTitle,
                         thumb     = mediaPosterUrl.ifBlank { null },
+                        episode   = episode.toInt().takeIf { it > 0 },
                     )
                 }
             }
