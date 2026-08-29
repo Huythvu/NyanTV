@@ -111,6 +111,12 @@ fun DetailScreen(
         )
     )
 
+    // The player VM is cached per anime (tab-scoped), so reset its search box when we leave this
+    // detail — otherwise a query typed in "change result" lingers on the next open.
+    DisposableEffect(Unit) {
+        onDispose { playerVm.resetSessionSearch() }
+    }
+
     val scope = rememberCoroutineScope()
 
     // Episodes the streaming source currently lists ≈ episodes aired so far. Used to cap the

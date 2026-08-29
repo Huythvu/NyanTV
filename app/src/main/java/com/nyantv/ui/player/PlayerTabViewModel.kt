@@ -158,6 +158,8 @@ class PlayerTabViewModel(
             .getSharedPreferences("nyantv_prefs", android.content.Context.MODE_PRIVATE)
             .getBoolean("search_all_extensions", false)
 
+    private val defaultQuery: String = mediaTitle   // what the "change" search box resets to
+
     init {
         refreshWatchProgress()
         loadEpisodeMetadata()
@@ -595,6 +597,15 @@ class PlayerTabViewModel(
 
     fun setSearchQuery(query: String)    { _state.update { it.copy(searchQuery = query) } }
     fun setEditingQuery(editing: Boolean){ _state.update { it.copy(isEditingQuery = editing) } }
+
+    /**
+     * Reset the in-entry "change result" search box back to the app default (the title). The player
+     * view-model is cached per anime (scoped to the tab, not the detail screen), so this is called
+     * when the detail screen is left — otherwise a previously-typed query would linger on reopen.
+     */
+    fun resetSessionSearch() {
+        _state.update { it.copy(searchQuery = defaultQuery, searchState = SearchState.Idle, isEditingQuery = false) }
+    }
 
     fun submitSearch() {
         val source = _state.value.selectedSource ?: return
