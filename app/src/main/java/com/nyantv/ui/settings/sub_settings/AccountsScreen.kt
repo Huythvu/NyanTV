@@ -179,6 +179,55 @@ fun AccountsScreen(vm: AppViewModel, navController: NavController) {
             }
         }
 
+        // ── AnimePahe Watchlist ──────────────────────────────────────────────────────────
+        val apEnabled by vm.animePaheEnabled.collectAsStateWithLifecycle()
+        val apPhrase  by vm.animePahePhrase.collectAsStateWithLifecycle()
+        val apValid   = vm.isValidSyncPhrase(apPhrase)
+
+        SectionCard(title = "AnimePahe Watchlist") {
+            Row(
+                modifier              = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Sync AnimePahe watchlist", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    Text("Show your AnimePahe extension's Currently Watching & Plan to Watch in the Continue Watching row",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+                CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                    Switch(
+                        checked = apEnabled,
+                        onCheckedChange = { vm.setAnimePaheEnabled(it) },
+                        modifier = Modifier.focusBorder(RoundedCornerShape(50))
+                    )
+                }
+            }
+            if (apEnabled) {
+                Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                    OutlinedTextField(
+                        value         = apPhrase,
+                        onValueChange = { vm.setAnimePahePhrase(it) },
+                        label         = { Text("Sync phrase (5 words)") },
+                        singleLine    = true,
+                        isError       = apPhrase.isNotBlank() && !apValid,
+                        modifier      = Modifier.fillMaxWidth().focusBorder(MaterialTheme.shapes.medium),
+                    )
+                    Text(
+                        text  = when {
+                            apPhrase.isBlank() -> "Enter the 5-word phrase from the extension's Sync screen."
+                            apValid            -> "Looks good — your watchlist syncs when the home screen opens."
+                            else               -> "That isn't a valid 5-word sync phrase."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (apPhrase.isNotBlank() && !apValid) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
+            }
+        }
+
         // ── MyAnimeList Titles ──────────────────────────────────────────────────────────
         val malEnglishTitles by vm.malEnglishTitles.collectAsStateWithLifecycle()
 

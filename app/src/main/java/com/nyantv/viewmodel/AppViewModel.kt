@@ -5,6 +5,10 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nyantv.data.*
+import com.nyantv.data.animepahe.AnimePaheEntry
+import com.nyantv.data.animepahe.AnimePaheSyncKey
+import com.nyantv.data.animepahe.AnimePaheWatchlistService
+import com.nyantv.data.animepahe.AnimePaheWatchlistStore
 import com.nyantv.player.WatchHistoryStore
 import com.nyantv.player.WatchHistoryIndexStore
 import com.nyantv.player.WatchedEntry
@@ -155,6 +159,90 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val _localContinue    = MutableStateFlow<List<Media>>(emptyList())
     val localContinue: StateFlow<List<Media>> = _localContinue.asStateFlow()
 
+    // ── AnimePahe Watchlist sync (companion extension → local Continue Watching) ──────
+    private val animePaheStore    = AnimePaheWatchlistStore(app)
+    private val animePaheService  = AnimePaheWatchlistService()
+    private val _animePaheWatching = MutableStateFlow<List<Media>>(emptyList())
+    private val _animePahePlan      = MutableStateFlow<List<Media>>(emptyList())
+
+    /** AnimePahe "plan to watch" entries — the Plan side of the Continue Watching toggle row. */
+    val animePahePlan: StateFlow<List<Media>> = _animePahePlan.asStateFlow()
+
+    /**
+     * The Continue Watching side of the row: local TV watch history with AnimePahe "watching"
+     * entries merged in (deduped by media id, local history taking precedence). Stage 1 is
+     * read-only; write-back from the player is Stage 2.
+     */
+    val continueWatching: StateFlow<List<Media>> =
+        combine(_localContinue, _animePaheWatching) { local, animePahe ->
+            val seen = HashSet<String>()
+            (local + animePahe).filter { seen.add(it.id) }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _animePaheEnabled = MutableStateFlow(animePaheStore.enabled)
+    val animePaheEnabled: StateFlow<Boolean> = _animePaheEnabled.asStateFlow()
+    private val _animePahePhrase  = MutableStateFlow(animePaheStore.syncPhrase)
+    val animePahePhrase: StateFlow<String> = _animePahePhrase.asStateFlow()
+
+    fun setAnimePahePhrase(value: String) {
+        _animePahePhrase.value = value
+        animePaheStore.syncPhrase = value
+    }
+
+    fun setAnimePaheEnabled(value: Boolean) {
+        _animePaheEnabled.value = value
+        animePaheStore.enabled = value
+        if (!value) animePaheStore.clearSnapshot()
+        refreshAnimePahe()
+    }
+
+    fun isValidSyncPhrase(value: String): Boolean = AnimePaheSyncKey.isValid(value)
+
+    /** Load the cached watchlist immediately, then refresh from Firestore when configured. */
+    fun refreshAnimePahe() {
+        if (!animePaheStore.isConfigured) {
+            applyAnimePahe(emptyList())
+            return
+        }
+        applyAnimePahe(animePaheStore.loadSnapshot().items)   // instant, offline-friendly
+        viewModelScope.launch {
+            when (val result = animePaheService.fetch(animePaheStore.syncPhrase)) {
+                is AnimePaheWatchlistService.Result.Ok -> {
+                    animePaheStore.saveSnapshot(result.items)
+                    applyAnimePahe(result.items)
+                }
+                is AnimePaheWatchlistService.Result.NotFound -> {
+                    animePaheStore.saveSnapshot(emptyList())
+                    applyAnimePahe(emptyList())
+                }
+                is AnimePaheWatchlistService.Result.Error -> Unit   // keep the cached snapshot
+            }
+        }
+    }
+
+    private fun applyAnimePahe(items: List<AnimePaheEntry>) {
+        _animePaheWatching.value = items.filter { it.isWatching }
+            .sortedByDescending { it.sortTs }.map { it.toMedia() }
+        _animePahePlan.value = items.filter { it.isPlan }
+            .sortedByDescending { it.sortTs }.map { it.toMedia() }
+    }
+
+    /**
+     * Map an AnimePahe entry to a [Media] card. When the extension has stored an AniList id we use it
+     * directly (so it dedups against tracked/local entries and opens the AniList detail); otherwise we
+     * fall back to an external id resolved lazily by title on click (see [resolveExtToDetail]).
+     */
+    private fun AnimePaheEntry.toMedia(): Media {
+        val id = anilistId?.toString()
+            ?: "${EXTERNAL_MEDIA_PREFIX}animepahe:${animeUrl.ifBlank { title }}"
+        return Media(
+            id          = id,
+            title       = title,
+            poster      = thumb.ifBlank { null },
+            serviceType = ServiceType.ANILIST,
+        ).also { if (it.id.isExternalMediaId()) registerExternalMedia(it) }
+    }
+
     /** Re-read the recently-watched index into [localContinue] (call on home show / player return). */
     fun refreshLocalContinue() {
         _localContinue.value = historyIndex.list().map { e ->
@@ -256,6 +344,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             bindService()
             loadHome()
             importExistingHistory()
+            refreshAnimePahe()
         }
     }
 

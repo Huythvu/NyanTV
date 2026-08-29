@@ -129,8 +129,11 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
     val simklPlanSeries by vm.simklShowPlanSeries.collectAsStateWithLifecycle()
 
     val localContinue by vm.localContinue.collectAsStateWithLifecycle()
+    val continueWatching by vm.continueWatching.collectAsStateWithLifecycle()
+    val animePahePlan by vm.animePahePlan.collectAsStateWithLifecycle()
     val airing        by vm.airingThisWeek.collectAsStateWithLifecycle()
     var showManage by remember { mutableStateOf(false) }
+    var showPlanTab by remember { mutableStateOf(false) }   // Continue Watching (false) vs Plan to Watch (true)
 
     val trackedMap = animeList.associateBy { it.id }
 
@@ -154,13 +157,15 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
             // Render rows in the user-configured order (Settings → Manage AniList Homescreen).
             anilistOrder.forEach { key ->
                 when (key) {
-                    "local_continue" -> if (anilistLocalCont && localContinue.isNotEmpty()) {
-                        SectionRow(
-                            title       = "Continue Watching",
-                            items       = localContinue.take(30),
-                            onItemClick = { navigate(it.id) },
-                            count       = localContinue.size,
-                            header      = { ContinueWatchingHeader(localContinue.size) { showManage = true } },
+                    "local_continue" -> if (anilistLocalCont && (continueWatching.isNotEmpty() || animePahePlan.isNotEmpty())) {
+                        LocalContinueSection(
+                            continueItems    = continueWatching,
+                            planItems        = animePahePlan,
+                            showPlan         = showPlanTab,
+                            onSelectContinue = { showPlanTab = false },
+                            onSelectPlan     = { showPlanTab = true },
+                            onManage         = { showManage = true },
+                            onItemClick      = { navigate(it.id) },
                         )
                     }
                     "continue" -> if (anilistContinue && watching.isNotEmpty()) {
@@ -207,13 +212,15 @@ fun HomeSections(vm: AppViewModel, navController: NavController, onDetailClick: 
             // Render rows in the user-configured order (Settings → Manage MyAnimeList Homescreen).
             malOrder.forEach { key ->
                 when (key) {
-                    "local_continue" -> if (malLocalCont && localContinue.isNotEmpty()) {
-                        SectionRow(
-                            title       = "Continue Watching",
-                            items       = localContinue.take(30),
-                            onItemClick = { navigate(it.id) },
-                            count       = localContinue.size,
-                            header      = { ContinueWatchingHeader(localContinue.size) { showManage = true } },
+                    "local_continue" -> if (malLocalCont && (continueWatching.isNotEmpty() || animePahePlan.isNotEmpty())) {
+                        LocalContinueSection(
+                            continueItems    = continueWatching,
+                            planItems        = animePahePlan,
+                            showPlan         = showPlanTab,
+                            onSelectContinue = { showPlanTab = false },
+                            onSelectPlan     = { showPlanTab = true },
+                            onManage         = { showManage = true },
+                            onItemClick      = { navigate(it.id) },
                         )
                     }
                     "continue" -> if (malContinue && watching.isNotEmpty()) {
@@ -307,22 +314,71 @@ private fun AiringHeader(newShows: Int) {
     }
 }
 
-// "Continue Watching   N        ✎" — the pencil opens the manage dialog for quick removal.
+/**
+ * The local "Continue Watching" row, with an optional [Continue Watching | Plan to Watch] toggle in
+ * its header. The Plan side (and the toggle) appears only when the AnimePahe watchlist contributes
+ * plan entries; without them this renders exactly like the original single Continue Watching row.
+ */
 @Composable
-private fun ContinueWatchingHeader(count: Int, onManage: () -> Unit) {
+private fun LocalContinueSection(
+    continueItems:    List<Media>,
+    planItems:        List<Media>,
+    showPlan:         Boolean,
+    onSelectContinue: () -> Unit,
+    onSelectPlan:     () -> Unit,
+    onManage:         () -> Unit,
+    onItemClick:      (Media) -> Unit,
+) {
+    val hasPlan = planItems.isNotEmpty()
+    // Fall back to the Plan side if the user is on Continue but there's nothing in progress.
+    val effectiveShowPlan = (showPlan || continueItems.isEmpty()) && hasPlan
+    val items = if (effectiveShowPlan) planItems else continueItems
+    SectionRow(
+        title       = if (effectiveShowPlan) "Plan to Watch" else "Continue Watching",
+        items       = items.take(30),
+        onItemClick = onItemClick,
+        count       = items.size,
+        header      = {
+            ContinueWatchingHeader(
+                activeCount      = items.size,
+                hasPlan          = hasPlan,
+                showPlan         = effectiveShowPlan,
+                onSelectContinue = onSelectContinue,
+                onSelectPlan     = onSelectPlan,
+                onManage         = onManage,
+            )
+        },
+    )
+}
+
+// "Continue Watching | Plan to Watch   N        ✎" — the pencil opens the manage dialog.
+@Composable
+private fun ContinueWatchingHeader(
+    activeCount:      Int,
+    hasPlan:          Boolean,
+    showPlan:         Boolean,
+    onSelectContinue: () -> Unit,
+    onSelectPlan:     () -> Unit,
+    onManage:         () -> Unit,
+) {
     Row(
         modifier              = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (hasPlan) {
+            HeaderTab("Continue Watching", selected = !showPlan, onClick = onSelectContinue)
+            HeaderTab("Plan to Watch",     selected = showPlan,  onClick = onSelectPlan)
+        } else {
+            Text(
+                text       = "Continue Watching",
+                style      = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color      = MaterialTheme.colorScheme.onBackground,
+            )
+        }
         Text(
-            text       = "Continue Watching",
-            style      = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color      = MaterialTheme.colorScheme.onBackground,
-        )
-        Text(
-            text  = count.toString(),
+            text  = activeCount.toString(),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
             modifier = Modifier.weight(1f),
@@ -347,6 +403,26 @@ private fun ContinueWatchingHeader(count: Int, onManage: () -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun HeaderTab(text: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text       = text,
+        style      = MaterialTheme.typography.titleMedium,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+        color      = if (selected) MaterialTheme.colorScheme.onBackground
+                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+        modifier   = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .focusBorder(RoundedCornerShape(6.dp))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication        = null,
+                onClick           = onClick,
+            )
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    )
 }
 
 @Composable

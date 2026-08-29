@@ -280,6 +280,7 @@ fun MainNavigation(
                     showPlayer = false
                     playerReturnCount++
                     vm.refreshLocalContinue()   // surface anything just watched in Continue Watching
+                    vm.refreshAnimePahe()       // pull any AnimePahe watchlist changes made elsewhere
                     scope.launch {
                         delay(100)
                         runCatching { returnFocusReq.requestFocus() }
