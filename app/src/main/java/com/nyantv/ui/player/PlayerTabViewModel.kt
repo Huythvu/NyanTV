@@ -599,13 +599,29 @@ class PlayerTabViewModel(
         }
     }
 
+    /**
+     * Order episodes for display. When episode numbers are unique we trust the numeric order (the
+     * common single-season / absolute-numbered case). But multi-season sources restart numbering
+     * each season, so a pure numeric sort interleaves them (S1E1, S2E1, S3E1, S1E2…). When we
+     * detect duplicate numbers we instead keep the SOURCE's own ordering — normalized to ascending
+     * (many sources list newest-first) — which spans seasons correctly.
+     */
+    private fun orderEpisodes(episodes: List<SEpisode>): List<SEpisode> {
+        val hasDuplicateNumbers = episodes
+            .groupingBy { it.episode_number }.eachCount().any { it.value > 1 }
+        if (!hasDuplicateNumbers) return episodes.sortedBy { it.episode_number }
+        return if (episodes.size >= 2 &&
+            episodes.first().episode_number > episodes.last().episode_number)
+            episodes.reversed() else episodes
+    }
+
     private fun loadEpisodes(source: SearchableSource, anime: SAnime, retryCount: Int = 0) {
         viewModelScope.launch {
             _state.update { it.copy(episodeState = EpisodeState.Loading) }
             runCatching { withContext(Dispatchers.IO) { source.getEpisodes(anime) } }
                 .onSuccess { episodes ->
                     _state.update {
-                        it.copy(episodeState = EpisodeState.Success(episodes.sortedBy { ep -> ep.episode_number }))
+                        it.copy(episodeState = EpisodeState.Success(orderEpisodes(episodes)))
                     }
                 }
                 .onFailure { e ->

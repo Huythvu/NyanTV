@@ -72,7 +72,9 @@ fun DetailScreen(
     val containerFocusReq = remember { FocusRequester() }
     val playerTabFocusReq = remember { FocusRequester() }
 
-    var media    by remember { mutableStateOf<Media?>(null) }
+    // Keyed on id so switching anime resets synchronously — otherwise the first composition of the
+    // new anime still holds the previous one's Media and seeds the player-tab VM with its title.
+    var media    by remember(id) { mutableStateOf<Media?>(null) }
     var netState by remember { mutableStateOf(NetworkState.LOADING) }
     var showEdit by remember { mutableStateOf(false) }
     var retryKey by remember { mutableIntStateOf(0) }
@@ -82,7 +84,7 @@ fun DetailScreen(
     val currentEntry by vm.currentMedia.collectAsStateWithLifecycle()
     val serviceType  by vm.serviceType.collectAsStateWithLifecycle()
     val serviceName  = serviceType.name.lowercase().replaceFirstChar { it.uppercase() }
-    var bannerUrl by remember { mutableStateOf<String?>(null) }
+    var bannerUrl by remember(id) { mutableStateOf<String?>(null) }
 
     val serviceKey = when (serviceType) {
         ServiceType.ANILIST, ServiceType.MAL -> "anilist_mal"
@@ -180,9 +182,9 @@ fun DetailScreen(
             .focusable()
             .background(MaterialTheme.colorScheme.background)
             .onKeyEvent { keyEvent ->
-                if (keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyUp && !showEdit) {
-                    onBack(); return@onKeyEvent true
-                }
+                // Back is handled by the BackHandler below — do NOT also catch it here. When the
+                // player overlay is on top it consumes Back's KeyDown; a raw KeyUp handler here
+                // would then fire too and pop the detail page as well ("double back").
                 if (keyEvent.type == KeyEventType.KeyDown &&
                     (keyEvent.key == Key.DirectionUp || keyEvent.key == Key.DirectionDown)) {
                     val now = System.currentTimeMillis()

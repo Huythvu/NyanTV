@@ -491,11 +491,23 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 .onSuccess { videos ->
                     val currentQuality = _state.value.streams
                         .getOrNull(_state.value.selectedStreamIndex)?.name
-                    val matchIndex = videos.indexOfFirst { v ->
-                        v.quality.ifBlank { "Stream" } == currentQuality
+                    // Try hard to keep the same server/quality across episodes instead of popping
+                    // the picker every time. Extension labels vary per episode (e.g. "1080p" vs
+                    // "Vidstreaming 1080p"), so an exact-string match alone misses constantly.
+                    var idx = videos.indexOfFirst { v -> v.quality.ifBlank { "Stream" } == currentQuality }
+                    if (idx == -1) {                        // 2) same resolution, different label text
+                        val token = currentQuality?.let { resolutionToken(it) }
+                        if (token != null) idx = videos.indexOfFirst { resolutionToken(it.quality) == token }
                     }
-                    if (matchIndex != -1) {
-                        loadEpisodeVideos(videos, matchIndex, episode, targetIndex)
+                    if (idx == -1) {                        // 3) remembered cross-session quality
+                        val saved = prefs.getString(PREF_QUALITY, null)
+                        if (saved != null) idx = videos.indexOfFirst { v -> v.quality.ifBlank { "Stream" } == saved }
+                    }
+                    if (idx == -1 && prefs.getBoolean("auto_select_server", false)) {
+                        idx = videos.indexOfFirst { it.quality.contains("1080") }.takeIf { it >= 0 } ?: 0
+                    }
+                    if (idx != -1) {
+                        loadEpisodeVideos(videos, idx, episode, targetIndex)
                     } else {
                         _state.update {
                             it.copy(
@@ -525,6 +537,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun dismissPendingEpisode() {
         _state.update { it.copy(pendingEpisodeVideos = emptyList()) }
     }
+
+    /** The resolution number in a stream label ("Vidstreaming 1080p" -> "1080"), or null. */
+    private fun resolutionToken(q: String): String? =
+        Regex("(2160|1440|1080|720|480|360)").find(q)?.value
 
     private var _pendingDelta = 0
 

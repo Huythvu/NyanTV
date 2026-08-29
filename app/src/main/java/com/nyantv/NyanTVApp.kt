@@ -76,6 +76,10 @@ class NyanTVApp : Application() {
 
         Coil.setImageLoader(
             ImageLoader.Builder(this)
+                // Load images through the same Cloudflare-aware client the extensions use (real
+                // WebView User-Agent + cookie jar). Some extension poster CDNs hotlink-protect on
+                // UA/cookies and 403 the default Coil client, so those thumbnails never rendered.
+                .okHttpClient { networkHelper.client }
                 .memoryCache {
                     MemoryCache.Builder(this)
                         .maxSizePercent(0.15)
