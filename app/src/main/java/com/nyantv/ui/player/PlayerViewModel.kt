@@ -22,6 +22,8 @@ import com.nyantv.player.TvWatchNextHelper
 import com.nyantv.player.WatchHistoryStore
 import com.nyantv.player.WatchHistoryIndexStore
 import com.nyantv.player.WatchedEntry
+import com.nyantv.data.animepahe.AnimePaheWatchlistService
+import com.nyantv.data.animepahe.AnimePaheWatchlistStore
 import com.nyantv.ui.utils.displayName
 import com.nyantv.ui.utils.resolveEpisodeMeta
 import eu.kanade.tachiyomi.animesource.model.SEpisode
@@ -119,6 +121,8 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     // ── Watch history ──────────────────────────────────────────────────────────
     private val watchHistoryStore   = WatchHistoryStore(app)
     private val historyIndex        = WatchHistoryIndexStore(app)
+    private val animePaheStore      = AnimePaheWatchlistStore(app)
+    private val animePaheService    = AnimePaheWatchlistService()
     private var serviceKey          = "anilist_mal"
     private var anilistId:  String? = null
     private var malId:      String? = null
@@ -413,6 +417,22 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
                 simklId    = if (serviceKey == "simkl") mediaId else null,
             )
         )
+
+        // Two-way sync (Stage 2a): reflect this TV watch in the shared AnimePahe watchlist — anime
+        // only, when the show is AniList-matched and sync is configured. Presence + status only.
+        val alId = anilistId?.toIntOrNull()
+        if (serviceKey != "simkl" && alId != null && animePaheStore.isConfigured) {
+            viewModelScope.launch {
+                runCatching {
+                    animePaheService.upsertWatching(
+                        phrase    = animePaheStore.syncPhrase,
+                        anilistId = alId,
+                        title     = seriesTitle,
+                        thumb     = mediaPosterUrl.ifBlank { null },
+                    )
+                }
+            }
+        }
     }
 
     private fun computeActiveSkip(positionSec: Int): ActiveSkip? {

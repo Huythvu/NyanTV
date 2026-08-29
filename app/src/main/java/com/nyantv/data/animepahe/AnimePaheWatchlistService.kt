@@ -5,12 +5,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 /**
@@ -28,6 +35,7 @@ class AnimePaheWatchlistService {
         .build()
 
     private val json = Json { ignoreUnknownKeys = true }
+    private val jsonType = "application/json".toMediaType()
 
     /** Result of a fetch attempt, so callers can distinguish "empty list" from "couldn't read". */
     sealed interface Result {
@@ -63,6 +71,98 @@ class AnimePaheWatchlistService {
             Result.Error(e.message ?: "Network error")
         }
     }
+
+    /**
+     * Mark an anime as "watching" in the shared watchlist (two-way sync, presence + status).
+     * Read-merge-write, last-write-wins: pull the doc, update the entry matching [anilistId] in place
+     * (preserving any AnimePahe link) or append a minimal one, cap at 70, and PATCH items back. Native
+     * link/episode fields are left for the extension to fill; no episode number is pushed (Stage 2a).
+     */
+    suspend fun upsertWatching(
+        phrase: String,
+        anilistId: Int,
+        title: String,
+        thumb: String?,
+    ): Result = withContext(Dispatchers.IO) {
+        if (!AnimePaheSyncKey.isValid(phrase)) return@withContext Result.Error("Sync phrase must be 5 valid words")
+
+        val current = when (val r = fetch(phrase)) {
+            is Result.Ok       -> r.items
+            is Result.NotFound -> emptyList()
+            is Result.Error    -> return@withContext r
+        }
+
+        val now  = System.currentTimeMillis()
+        val list = current.toMutableList()
+        val idx  = list.indexOfFirst { it.anilistId == anilistId }
+        if (idx >= 0) {
+            val e = list[idx]
+            list[idx] = e.copy(
+                status   = AnimePaheEntry.STATUS_WATCHING,
+                ts       = now,
+                statusTs = now,
+                title    = e.title.ifBlank { title },
+                thumb    = if (e.thumb.isBlank() && thumb != null) thumb else e.thumb,
+            )
+        } else {
+            list.add(
+                AnimePaheEntry(
+                    title     = title,
+                    thumb     = thumb ?: "",
+                    status    = AnimePaheEntry.STATUS_WATCHING,
+                    ts        = now,
+                    statusTs  = now,
+                    anilistId = anilistId,
+                )
+            )
+        }
+        val capped = list.sortedByDescending { it.sortTs }.take(70)   // rules cap items at 70
+
+        val docId = AnimePaheSyncKey.documentId(phrase)
+        val url = "https://firestore.googleapis.com/v1/projects/" +
+            "${BuildConfig.ANIMEPAHE_FIREBASE_PROJECT}/databases/(default)/documents/watchlists/" +
+            "$docId?key=${BuildConfig.ANIMEPAHE_FIREBASE_API_KEY}&updateMask.fieldPaths=items"
+
+        val body = buildJsonObject {
+            putJsonObject("fields") {
+                putJsonObject("items") {
+                    putJsonObject("arrayValue") {
+                        put("values", buildJsonArray { capped.forEach { add(itemToValue(it)) } })
+                    }
+                }
+            }
+        }.toString()
+
+        val req = Request.Builder().url(url).patch(body.toRequestBody(jsonType)).build()
+        try {
+            http.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) Result.Ok(capped) else Result.Error("Firestore HTTP ${resp.code}")
+            }
+        } catch (e: Exception) {
+            Result.Error(e.message ?: "Network error")
+        }
+    }
+
+    /** One item as a Firestore `values[]` element (a mapValue). */
+    private fun itemToValue(e: AnimePaheEntry): JsonObject = buildJsonObject {
+        putJsonObject("mapValue") {
+            putJsonObject("fields") {
+                put("title",    strVal(e.title))
+                put("episode",  strVal(e.episode))
+                put("playUrl",  strVal(e.playUrl))
+                put("animeUrl", strVal(e.animeUrl))
+                put("thumb",    strVal(e.thumb))
+                put("ts",       intVal(e.ts))
+                put("status",   strVal(e.status))
+                put("statusTs", intVal(e.statusTs))
+                e.animeId?.let  { put("animeId",  intVal(it.toLong())) }
+                e.anilistId?.let { put("anilistId", intVal(it.toLong())) }
+            }
+        }
+    }
+
+    private fun strVal(s: String): JsonObject = buildJsonObject { put("stringValue", s) }
+    private fun intVal(n: Long): JsonObject = buildJsonObject { put("integerValue", n.toString()) }
 
     /** Walk the Firestore typed-value envelope: fields.items.arrayValue.values[].mapValue.fields.* */
     private fun parseDocument(root: JsonObject): List<AnimePaheEntry> {
