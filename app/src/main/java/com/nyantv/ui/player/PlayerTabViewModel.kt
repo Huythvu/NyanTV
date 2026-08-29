@@ -328,16 +328,28 @@ class PlayerTabViewModel(
             val s = _state.value
             fun scoreOf(id: Long) = s.matchScores[id] ?: 0.0
             val selected = s.selectedSource
-            // Keep an already-confident selection.
-            if (selected != null && scoreOf(selected.id) >= MATCH_CONFIDENT) return
 
-            val best = s.sources.filter { it.id in s.matchedSources }.maxByOrNull { scoreOf(it.id) } ?: return
-            if (scoreOf(best.id) >= MATCH_CONFIDENT) {
-                if (selected?.id != best.id) applySource(best)   // sure enough → go now
-                return
+            // Order-first: prefer the highest-ranked source (extension order) that is a confident
+            // match. s.sources is already sorted by the user's extension order.
+            val confidentInOrder = s.sources.firstOrNull {
+                it.id in s.matchedSources && scoreOf(it.id) >= MATCH_CONFIDENT
             }
-            // Only weak matches so far → wait for the probe to settle, then take the best available.
+            if (confidentInOrder != null) {
+                // Don't jump onto it until every higher-ranked source has finished probing, so a
+                // top-of-order match still gets its chance to win.
+                val idx = s.sources.indexOf(confidentInOrder)
+                val higherPending = s.sources.take(idx).any { it.id !in probedSourceIds }
+                if (!higherPending) {
+                    if (selected?.id != confidentInOrder.id) applySource(confidentInOrder)
+                    return
+                }
+                return   // a higher-ranked source is still probing — wait for it
+            }
+
+            // No confident match yet → wait for the probe to settle, then take the best available
+            // (order breaks ties, since sources are already in order).
             if (s.probing) return
+            val best = s.sources.filter { it.id in s.matchedSources }.maxByOrNull { scoreOf(it.id) } ?: return
             if (selected?.id != best.id) applySource(best)
         }
     }
@@ -569,7 +581,15 @@ class PlayerTabViewModel(
                     }
                     _state.update { it.copy(searchState = SearchState.Results(page.animes)) }
                     if (_state.value.selectedAnime == null) {
-                        selectAnimeResult(page.animes.first(), autoSelected = true)
+                        // Pick the best title match, not blindly the first result (a source's own
+                        // search can rank a wrong title first, e.g. "…Stone Ocean" → "…Sorcerer's
+                        // Stone"). If nothing clears the threshold, leave it for the user to choose.
+                        val queries = (listOf(query) + searchTitles)
+                            .map { it.trim() }.filter { it.isNotBlank() }.distinct()
+                        val best = page.animes.maxByOrNull { bestTitleScore(it.title, queries) }
+                        if (best != null && bestTitleScore(best.title, queries) >= MATCH_THRESHOLD) {
+                            selectAnimeResult(best, autoSelected = true)
+                        }
                     }
                 }
                 .onFailure { e ->
