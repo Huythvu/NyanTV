@@ -41,9 +41,22 @@ class AnimePaheWatchlistStore(context: Context) {
 
     fun clearSnapshot() = prefs.edit { remove(KEY_SNAPSHOT) }
 
+    /** Cached AnimePahe→AniList resolutions, keyed by animeUrl. */
+    fun loadResolutions(): Map<String, AnimePaheResolution> {
+        val raw = prefs.getString(KEY_RESOLUTIONS, "") ?: ""
+        if (raw.isBlank()) return emptyMap()
+        return runCatching { json.decodeFromString<Map<String, AnimePaheResolution>>(raw) }
+            .getOrDefault(emptyMap())
+    }
+
+    fun saveResolutions(resolutions: Map<String, AnimePaheResolution>) {
+        prefs.edit { putString(KEY_RESOLUTIONS, json.encodeToString(resolutions)) }
+    }
+
     private companion object {
         const val KEY_PHRASE = "sync_phrase"
         const val KEY_ENABLED = "enabled"
         const val KEY_SNAPSHOT = "snapshot"
+        const val KEY_RESOLUTIONS = "resolutions"
     }
 }

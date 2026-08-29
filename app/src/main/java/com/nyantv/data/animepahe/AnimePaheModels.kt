@@ -44,3 +44,14 @@ data class AnimePaheWatchlistSnapshot(
     val items: List<AnimePaheEntry> = emptyList(),
     val fetchedAt: Long = 0L,
 )
+
+/**
+ * A resolved AnimePahe→AniList match, cached by animeUrl so we don't re-query AniList on every home
+ * open. [anilistId] null means we tried and found nothing (kept so failures aren't retried forever).
+ */
+@Serializable
+data class AnimePaheResolution(
+    val anilistId: Int? = null,
+    val title: String = "",
+    val poster: String? = null,
+)

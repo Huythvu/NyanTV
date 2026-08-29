@@ -5,7 +5,9 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nyantv.data.*
+import com.nyantv.data.animepahe.AniListMatcher
 import com.nyantv.data.animepahe.AnimePaheEntry
+import com.nyantv.data.animepahe.AnimePaheResolution
 import com.nyantv.data.animepahe.AnimePaheSyncKey
 import com.nyantv.data.animepahe.AnimePaheWatchlistService
 import com.nyantv.data.animepahe.AnimePaheWatchlistStore
@@ -162,6 +164,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ── AnimePahe Watchlist sync (companion extension → local Continue Watching) ──────
     private val animePaheStore    = AnimePaheWatchlistStore(app)
     private val animePaheService  = AnimePaheWatchlistService()
+    private val animePaheMatcher  = AniListMatcher()
+    private val animePaheResolutions: MutableMap<String, AnimePaheResolution> =
+        animePaheStore.loadResolutions().toMutableMap()
+    private var animePaheEntries: List<AnimePaheEntry> = emptyList()
     private val _animePaheWatching = MutableStateFlow<List<Media>>(emptyList())
     private val _animePahePlan      = MutableStateFlow<List<Media>>(emptyList())
 
@@ -221,26 +227,68 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun applyAnimePahe(items: List<AnimePaheEntry>) {
-        _animePaheWatching.value = items.filter { it.isWatching }
-            .sortedByDescending { it.sortTs }.map { it.toMedia() }
-        _animePahePlan.value = items.filter { it.isPlan }
-            .sortedByDescending { it.sortTs }.map { it.toMedia() }
+        animePaheEntries = items
+        rebuildAnimePaheFlows()                                   // instant, from cached resolutions
+        if (items.isNotEmpty()) viewModelScope.launch { enrichAnimePahe(items) }
+    }
+
+    private fun rebuildAnimePaheFlows() {
+        _animePaheWatching.value = animePaheEntries.filter { it.isWatching }
+            .sortedByDescending { it.sortTs }.map { mediaFor(it) }
+        _animePahePlan.value = animePaheEntries.filter { it.isPlan }
+            .sortedByDescending { it.sortTs }.map { mediaFor(it) }
     }
 
     /**
-     * Map an AnimePahe entry to a [Media] card. When the extension has stored an AniList id we use it
-     * directly (so it dedups against tracked/local entries and opens the AniList detail); otherwise we
-     * fall back to an external id resolved lazily by title on click (see [resolveExtToDetail]).
+     * Resolve each entry to a real AniList media (canonical title, poster, id) so the cards look
+     * native and dedup against tracked/local entries. Uses the stored AniList id when present, else a
+     * fuzzy title search; results are cached by animeUrl so this only hits the network for new entries.
      */
-    private fun AnimePaheEntry.toMedia(): Media {
-        val id = anilistId?.toString()
-            ?: "${EXTERNAL_MEDIA_PREFIX}animepahe:${animeUrl.ifBlank { title }}"
-        return Media(
-            id          = id,
-            title       = title,
-            poster      = thumb.ifBlank { null },
-            serviceType = ServiceType.ANILIST,
-        ).also { if (it.id.isExternalMediaId()) registerExternalMedia(it) }
+    private suspend fun enrichAnimePahe(items: List<AnimePaheEntry>) {
+        val unresolved = items.filter { it.animeUrl.isNotBlank() && it.animeUrl !in animePaheResolutions }
+        if (unresolved.isEmpty()) return
+
+        // Entries whose record already carries an AniList id: resolve them in one batched query.
+        val byId = unresolved.mapNotNull { it.anilistId }.distinct()
+        val idMedia = if (byId.isNotEmpty()) animePaheMatcher.byIds(byId) else emptyMap()
+
+        for (entry in unresolved) {
+            val media = entry.anilistId?.let { idMedia[it.toString()] }
+                ?: animePaheMatcher.searchByTitle(entry.title)
+            animePaheResolutions[entry.animeUrl] = AnimePaheResolution(
+                anilistId = media?.id?.toIntOrNull(),
+                title     = media?.title ?: entry.title,
+                poster    = media?.poster,
+            )
+        }
+        animePaheStore.saveResolutions(animePaheResolutions)
+        rebuildAnimePaheFlows()
+    }
+
+    /**
+     * Build a [Media] card for an entry from its cached AniList resolution. A resolved AniList id
+     * opens the tracker detail directly; otherwise we use an external id resolved lazily by title on
+     * click (see [resolveExtToDetail]). AnimePahe's own thumbnail host blocks hotlinking, so posters
+     * come from AniList — an unresolved entry simply has none.
+     */
+    private fun mediaFor(entry: AnimePaheEntry): Media {
+        val res = animePaheResolutions[entry.animeUrl]
+        val anilistId = res?.anilistId
+        return if (anilistId != null) {
+            Media(
+                id          = anilistId.toString(),
+                title       = res.title.ifBlank { entry.title },
+                poster      = res.poster,
+                serviceType = ServiceType.ANILIST,
+            )
+        } else {
+            Media(
+                id          = "${EXTERNAL_MEDIA_PREFIX}animepahe:${entry.animeUrl.ifBlank { entry.title }}",
+                title       = res?.title?.ifBlank { entry.title } ?: entry.title,
+                poster      = res?.poster,
+                serviceType = ServiceType.ANILIST,
+            ).also { registerExternalMedia(it) }
+        }
     }
 
     /** Re-read the recently-watched index into [localContinue] (call on home show / player return). */
