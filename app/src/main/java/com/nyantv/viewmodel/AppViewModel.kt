@@ -394,6 +394,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             importExistingHistory()
             refreshAnimePahe()
         }
+        // One-time: drop stale source probes so the search-matching fixes apply to anime already
+        // opened before this build, without the user rechecking each one by hand.
+        if (prefs.getInt("probe_cache_flush", 0) < 1) {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { com.nyantv.player.PlayerCache(app).clearAllProbes() }
+                prefs.edit { putInt("probe_cache_flush", 1) }
+            }
+        }
     }
 
 

@@ -154,4 +154,13 @@ class PlayerCache(private val context: Context) {
     suspend fun clearProbe(sourceId: Long, mediaId: String) {
         context.playerDataStore.edit { it.remove(probeKey(sourceId, mediaId)) }
     }
+
+    /** Drop every cached source probe (all anime). Used for a one-time flush after matching changes. */
+    suspend fun clearAllProbes() {
+        context.playerDataStore.edit { prefs ->
+            prefs.asMap().keys
+                .filter { it.name.startsWith("probe_") }
+                .forEach { prefs.remove(it) }
+        }
+    }
 }
