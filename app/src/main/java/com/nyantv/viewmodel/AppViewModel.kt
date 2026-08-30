@@ -301,23 +301,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
      * up to (episode - 1) watched — only ever extending forward, never regressing local progress.
      */
     private fun applyAnimePaheProgress(items: List<AnimePaheEntry>) {
+        var removedAny = false
         for (e in items) {
             val alId = e.anilistId ?: continue
+            val id = alId.toString()
+            if (e.deleted) { historyIndex.remove(id); removedAny = true; continue }   // honor deletion in local CW too
             val ep   = e.anilistEpisode ?: continue
             if (ep <= 1) continue
-            val id = alId.toString()
             val maxWatched = watchHistoryStore.getWatchedAnilistMal(id, null).maxOrNull() ?: 0
             if (ep - 1 <= maxWatched) continue                   // already at/ahead of this point
             for (n in (maxWatched + 1) until ep) {
                 watchHistoryStore.markWatchedAnilistMal(id, null, n)
             }
         }
+        if (removedAny) refreshLocalContinue()
     }
 
     private fun rebuildAnimePaheFlows() {
-        _animePaheWatching.value = animePaheEntries.filter { it.isWatching }
+        _animePaheWatching.value = animePaheEntries.filter { it.isWatching && !it.deleted }
             .sortedByDescending { it.sortTs }.map { mediaFor(it) }
-        _animePahePlan.value = animePaheEntries.filter { it.isPlan }
+        _animePahePlan.value = animePaheEntries.filter { it.isPlan && !it.deleted }
             .sortedByDescending { it.sortTs }.map { mediaFor(it) }
     }
 

@@ -26,6 +26,7 @@ data class AnimePaheEntry(
     val animeId: Int? = null,
     val anilistId: Int? = null,
     val anilistEpisode: Int? = null,   // last-watched episode in AniList-entry numbering (from NyanTV)
+    val deleted: Boolean = false,      // tombstone: a synced deletion, filtered from display
 ) {
     /** Most recent activity timestamp, matching the extension's merge ordering. */
     val sortTs: Long get() = maxOf(ts, statusTs)

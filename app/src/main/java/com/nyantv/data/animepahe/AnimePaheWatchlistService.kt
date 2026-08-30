@@ -6,6 +6,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -19,6 +20,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
+
+private const val TOMBSTONE_TTL_MS = 30L * 24 * 60 * 60 * 1000   // keep deletion markers ~30 days, then drop
 
 /**
  * Read-only client for the AnimePahe Watchlist Firestore document.
@@ -109,6 +112,7 @@ class AnimePaheWatchlistService {
                     anilistId = anilistId, status = status, statusTs = now,
                     title = e.title.ifBlank { title },
                     thumb = if (e.thumb.isBlank() && thumb != null) thumb else e.thumb,
+                    deleted = false,   // moving between lists revives a tombstoned entry
                 )
                 if (updated == e) return@withContext Result.Ok(current)
                 list[idx] = updated
@@ -118,17 +122,22 @@ class AnimePaheWatchlistService {
             writeItems(phrase, list.sortedByDescending { it.sortTs }.take(70))
         }
 
-    /** Remove an entry (by AniList id, or a normalized-title match for id-less legacy entries). */
+    /** Delete an entry by writing a tombstone (deleted=true, fresh statusTs) so it propagates via merge. */
     suspend fun remove(phrase: String, anilistId: Int, title: String): Result = withContext(Dispatchers.IO) {
         if (!AnimePaheSyncKey.isValid(phrase)) return@withContext Result.Error("Sync phrase must be 5 valid words")
         val current = when (val r = fetch(phrase)) {
             is Result.Ok -> r.items; is Result.NotFound -> return@withContext Result.Ok(emptyList()); is Result.Error -> return@withContext r
         }
-        val filtered = current.filterNot {
-            it.anilistId == anilistId || (it.anilistId == null && normTitle(it.title) == normTitle(title))
+        val now = System.currentTimeMillis()
+        val list = current.toMutableList()
+        var changed = false
+        for (i in list.indices) {
+            val e = list[i]
+            val match = e.anilistId == anilistId || (e.anilistId == null && normTitle(e.title) == normTitle(title))
+            if (match && !e.deleted) { list[i] = e.copy(deleted = true, statusTs = now); changed = true }
         }
-        if (filtered.size == current.size) return@withContext Result.Ok(current)
-        writeItems(phrase, filtered)
+        if (!changed) return@withContext Result.Ok(current)
+        writeItems(phrase, list)
     }
 
     private suspend fun upsert(
@@ -153,7 +162,9 @@ class AnimePaheWatchlistService {
             // the id on) entries that predate the anilistId field instead of creating duplicates.
             var idx = list.indexOfFirst { it.anilistId == u.anilistId }
             if (idx < 0) idx = list.indexOfFirst { it.anilistId == null && normTitle(it.title) == normTitle(u.title) }
-            if (idx >= 0) {
+            if (idx >= 0 && !(list[idx].deleted && !bumpExisting)) {
+                // A passive bulk push (bumpExisting=false) must NOT revive a tombstone — respect
+                // deletions made on another client; only a real watch event revives.
                 val e = list[idx]
                 val alreadyWatching = e.status == AnimePaheEntry.STATUS_WATCHING
                 val updated = e.copy(
@@ -164,9 +175,10 @@ class AnimePaheWatchlistService {
                     title          = e.title.ifBlank { u.title },
                     thumb          = if (e.thumb.isBlank() && u.thumb != null) u.thumb else e.thumb,
                     anilistEpisode = u.episode ?: e.anilistEpisode,
+                    deleted        = false,   // a real watch revives a tombstoned entry
                 )
                 if (updated != e) { list[idx] = updated; changed = true }   // data-class equality → idempotent
-            } else {
+            } else if (idx < 0) {
                 list.add(
                     AnimePaheEntry(
                         title = u.title, thumb = u.thumb ?: "",
@@ -182,7 +194,9 @@ class AnimePaheWatchlistService {
     }
 
     /** PATCH the items array (key-only; the write rules allow it by document id). */
-    private fun writeItems(phrase: String, items: List<AnimePaheEntry>): Result {
+    private fun writeItems(phrase: String, rawItems: List<AnimePaheEntry>): Result {
+        val now = System.currentTimeMillis()
+        val items = rawItems.filterNot { it.deleted && now - it.statusTs > TOMBSTONE_TTL_MS }  // GC old tombstones
         val docId = AnimePaheSyncKey.documentId(phrase)
         val url = "https://firestore.googleapis.com/v1/projects/" +
             "${BuildConfig.ANIMEPAHE_FIREBASE_PROJECT}/databases/(default)/documents/watchlists/" +
@@ -223,6 +237,7 @@ class AnimePaheWatchlistService {
                 e.animeId?.let  { put("animeId",  intVal(it.toLong())) }
                 e.anilistId?.let { put("anilistId", intVal(it.toLong())) }
                 e.anilistEpisode?.let { put("anilistEpisode", intVal(it.toLong())) }
+                if (e.deleted) put("deleted", buildJsonObject { put("booleanValue", true) })
             }
         }
     }
@@ -258,6 +273,7 @@ class AnimePaheWatchlistService {
                 animeId  = f.int("animeId")?.toInt(),
                 anilistId = f.int("anilistId")?.toInt(),
                 anilistEpisode = f.int("anilistEpisode")?.toInt(),
+                deleted  = f["deleted"]?.jsonObject?.get("booleanValue")?.jsonPrimitive?.booleanOrNull ?: false,
             )
         }
     }
