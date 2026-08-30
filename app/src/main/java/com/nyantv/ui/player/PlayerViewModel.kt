@@ -282,15 +282,32 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     private var episodeMeta: Map<String, AniZipEpisodeMeta> = emptyMap()
     private var currentEpisodeIndex: Int = -1
     private var onLoadEpisodeVideos: (suspend (SEpisode) -> List<Video>)? = null
+    /**
+     * Choose a stream/quality without prompting: prefer [preferred] (the current episode's quality,
+     * for continuity), then the saved preference, then 1080p, then the highest available — matching by
+     * exact name first, then by resolution number so slightly different server labels still match.
+     */
+    private fun bestQualityIndex(names: List<String>, preferred: String?): Int {
+        if (names.isEmpty()) return 0
+        fun res(q: String?) = q?.let { Regex("(\\d{3,4})").find(it)?.value?.toIntOrNull() }
+        fun byName(n: String?) = n?.let { name -> names.indexOfFirst { it == name }.takeIf { i -> i >= 0 } }
+        fun byRes(r: Int?)     = r?.let { rr -> names.indexOfFirst { res(it) == rr }.takeIf { i -> i >= 0 } }
+        val saved = prefs.getString(PREF_QUALITY, null)
+        return byName(preferred) ?: byRes(res(preferred))
+            ?: byName(saved) ?: byRes(res(saved))
+            ?: byRes(1080)
+            ?: names.indices.maxByOrNull { res(names[it]) ?: 0 }
+            ?: 0
+    }
+
     fun loadTracks(snapshot: PlayerArgs.Snapshot) {
         _state.update { it.copy(error = null) }
 
         val streams   = snapshot.streams
         val subtitles = snapshot.subtitleTracks
 
-        val savedQuality = prefs.getString(PREF_QUALITY, null)
-        val bestIdx = savedQuality
-            ?.let { name -> streams.indexOfFirst { it.name == name }.takeIf { it >= 0 } }
+        val bestIdx = bestQualityIndex(streams.map { it.name }, null)
+            .takeIf { streams.isNotEmpty() }
             ?: snapshot.initialStreamIndex.coerceIn(0, (streams.size - 1).coerceAtLeast(0))
 
         val initialSubIdx = preferredSubtitleIndex(subtitles)
@@ -510,22 +527,12 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
             _state.update { it.copy(episodeNavigating = true) }
             runCatching { loader(episode) }
                 .onSuccess { videos ->
+                    // Keep the current quality across episodes; fall back to saved / 1080p / highest.
+                    // Auto-select rather than prompting every episode.
                     val currentQuality = _state.value.streams
                         .getOrNull(_state.value.selectedStreamIndex)?.name
-                    val matchIndex = videos.indexOfFirst { v ->
-                        v.quality.ifBlank { "Stream" } == currentQuality
-                    }
-                    if (matchIndex != -1) {
-                        loadEpisodeVideos(videos, matchIndex, episode, targetIndex)
-                    } else {
-                        _state.update {
-                            it.copy(
-                                episodeNavigating    = false,
-                                pendingEpisodeVideos = videos,
-                                pendingEpisodeName   = episode.displayName(episodeMeta),
-                            )
-                        }
-                    }
+                    val idx = bestQualityIndex(videos.map { it.quality.ifBlank { "Stream" } }, currentQuality)
+                    loadEpisodeVideos(videos, idx, episode, targetIndex)
                 }
                 .onFailure {
                     _state.update { it.copy(episodeNavigating = false) }
