@@ -17,6 +17,13 @@ export default async function handler(req, res) {
     return;
   }
 
+  // Server-side exchange (web mode) failed — report it once and clear the entry.
+  if (entry.status === 'error') {
+    await kv.del(pairKey(code));
+    res.status(200).json({ status: 'error', error: entry.error ?? 'sign-in failed' });
+    return;
+  }
+
   if (entry.status !== 'done') {
     res.status(200).json({ status: 'pending' });
     return;

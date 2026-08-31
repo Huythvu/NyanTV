@@ -28,9 +28,32 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Hand the raw auth code (and the redirect_uri it was issued for) back to the TV. The TV does the
-  // code->token exchange itself: it warms up a Cloudflare clearance cookie via its WebView-backed
-  // network client first, which a datacenter request here can't do — so the exchange runs there.
+  // "token" mode (browser/extension client): exchange the code for a token here, server-side, so
+  // the client never needs the secret. The waiting client polls and gets the token directly.
+  if (entry.mode === 'token' && typeof provider.exchangeCode === 'function') {
+    try {
+      const tok = await provider.exchangeCode(authCode, entry.codeVerifier ?? null);
+      await kv.set(
+        pairKey(pairCode),
+        { status: 'done', provider: entry.provider, ...tok },
+        { ex: PAIR_TTL_SECONDS },
+      );
+      res.status(200).send(page("You're signed in ✅", 'Return to the app — it will continue automatically. You can close this tab.'));
+    } catch (e) {
+      await kv.set(
+        pairKey(pairCode),
+        { status: 'error', provider: entry.provider, error: String(e.message || e).slice(0, 200) },
+        { ex: PAIR_TTL_SECONDS },
+      );
+      res.status(502).send(page('Sign-in failed', 'Something went wrong finishing sign-in. Close this tab and try again.'));
+    }
+    return;
+  }
+
+  // Default (TV/device flow): hand the raw auth code (and the redirect_uri it was issued for) back
+  // to the device. The device does the code->token exchange itself: it warms up a Cloudflare
+  // clearance cookie via its WebView-backed network client first, which a datacenter request here
+  // can't do — so the exchange runs there.
   await kv.set(
     pairKey(pairCode),
     {
@@ -38,7 +61,7 @@ export default async function handler(req, res) {
       provider: entry.provider,
       code: authCode,
       redirectUri: provider.redirectUri(),
-      // PKCE providers (MAL) need the verifier at exchange time; pass it through to the TV.
+      // PKCE providers (MAL) need the verifier at exchange time; pass it through to the device.
       codeVerifier: entry.codeVerifier ?? null,
     },
     { ex: PAIR_TTL_SECONDS },

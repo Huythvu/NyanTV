@@ -26,6 +26,11 @@ export default async function handler(req, res) {
   // the verifier travels back to the TV for the exchange.
   const entry = { status: 'pending', provider };
   if (prov.usesPkce) entry.codeVerifier = generateVerifier();
+  // "token" mode = the browser/extension client wants the relay to do the token exchange
+  // server-side (so the client never holds a secret). Anything else keeps the TV/device flow, where
+  // the raw auth code is handed back for on-device exchange.
+  const mode = (req.query.mode || req.body?.mode || '').toString().toLowerCase();
+  if (mode === 'token') entry.mode = 'token';
   await kv.set(pairKey(code), entry, { ex: PAIR_TTL_SECONDS });
 
   const base = process.env.PUBLIC_BASE_URL || `https://${req.headers.host}`;

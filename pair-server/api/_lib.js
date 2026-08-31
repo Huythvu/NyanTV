@@ -139,7 +139,51 @@ export const PROVIDERS = {
       }
       return u.toString();
     },
-    // No exchangeCode: MAL tokens are exchanged on the TV (see MalService.exchangePairedCode).
+    // Server-side exchange for the "web" (browser/extension) flow, so a client that can't safely
+    // hold the secret (a Chrome extension) never has to. The TV flow still exchanges on-device and
+    // doesn't call this. MAL has no Cloudflare gate, so a plain server request works.
+    async exchangeCode(code, codeVerifier) {
+      const body = new URLSearchParams({
+        client_id: this.clientId(),
+        client_secret: process.env.MAL_CLIENT_SECRET || '',
+        grant_type: 'authorization_code',
+        code,
+        code_verifier: codeVerifier || '',
+        redirect_uri: this.redirectUri(),
+      });
+      const resp = await fetch(this.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      });
+      if (!resp.ok) throw new Error(`MAL token exchange failed (${resp.status}): ${(await resp.text()).slice(0, 160)}`);
+      const data = await resp.json();
+      return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token ?? null,
+        expiresIn: data.expires_in ?? null,
+      };
+    },
+    async refreshToken(refreshToken) {
+      const body = new URLSearchParams({
+        client_id: this.clientId(),
+        client_secret: process.env.MAL_CLIENT_SECRET || '',
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      });
+      const resp = await fetch(this.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      });
+      if (!resp.ok) throw new Error(`MAL refresh failed (${resp.status})`);
+      const data = await resp.json();
+      return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token ?? refreshToken,
+        expiresIn: data.expires_in ?? null,
+      };
+    },
   },
 };
 
