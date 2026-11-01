@@ -147,9 +147,13 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
 
     @Suppress("DEPRECATION")
     override suspend fun getVideoList(episode: SEpisode): List<Video> {
-        return try {
+        // Prefer the lib-16 hoster API when the source actually overrides getHosterList; otherwise
+        // use the legacy path. Decided by whether getHosterList is overridden (not by catching
+        // IllegalStateException), so a real IllegalStateException thrown from a lib-16 source's
+        // getHosterList is surfaced instead of being misread as "no hoster support".
+        return if (supportsHosterList()) {
             getHosterList(episode).flatMap { hoster -> getVideoList(hoster) }
-        } catch (e: IllegalStateException) {
+        } else {
             fetchVideoList(episode).awaitSingle()
         }
     }
@@ -177,7 +181,12 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
         return GET(baseUrl + episode.url, headers)
     }
 
-    protected abstract fun videoListParse(response: Response): List<Video>
+    // Non-abstract so a lib-16 source that only implements the hoster API (getHosterList /
+    // getVideoList(hoster)) and doesn't override this still loads. Legacy sources override it; the
+    // default is only reachable via the legacy fetchVideoList path, which supportsHosterList() gates
+    // off for hoster-based sources.
+    protected open fun videoListParse(response: Response): List<Video> =
+        throw IllegalStateException("videoListParse not implemented; this source uses the hoster API")
 
     protected open fun List<Video>.sort(): List<Video> = this
 
