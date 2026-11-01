@@ -152,7 +152,10 @@ abstract class AnimeHttpSource : AnimeCatalogueSource {
         // IllegalStateException), so a real IllegalStateException thrown from a lib-16 source's
         // getHosterList is surfaced instead of being misread as "no hoster support".
         return if (supportsHosterList()) {
-            getHosterList(episode).flatMap { hoster -> getVideoList(hoster) }
+            // A non-lazy hoster carries its videos in videoList; a lazy one leaves it null and is
+            // resolved on demand via getVideoList(hoster). Honor both so sources that pre-populate
+            // videoList don't require a getVideoList(hoster) implementation.
+            getHosterList(episode).flatMap { hoster -> hoster.videoList ?: getVideoList(hoster) }
         } else {
             fetchVideoList(episode).awaitSingle()
         }
