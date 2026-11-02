@@ -1,35 +1,124 @@
 // Shared helpers for the NyanTV pairing relay. Files prefixed with "_" are not routed by Vercel.
 //
-// Minimal Redis/KV client over the Upstash REST API — zero dependencies. Works with either the
-// Vercel-injected names (KV_REST_API_*) or the Upstash-native ones (UPSTASH_REDIS_REST_*), so it
-// doesn't matter which storage integration is connected.
-const KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '';
-const KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '';
+// ── Shared store: Firestore ───────────────────────────────────────────────────────────────────
+// The relay needs a store that survives inactivity. Upstash's free tier archives an idle database,
+// and the relay only touches storage when someone logs in — so a quiet stretch would silently break
+// the next login. Firestore on the Spark (free) plan never archives, and it's already the backend
+// for the companion AnimePahe watchlist, so this consolidates to one service.
+//
+// The relay authenticates as a Firebase service account (server-only — public clients can neither
+// read nor write the pairing collection; service-account access uses IAM and bypasses security
+// rules, so the default-deny rules stay as they are). Each pairing entry is stored as a single JSON
+// blob plus an `expireAt` timestamp. A Firestore TTL policy on `expireAt` garbage-collects old
+// entries; reads ALSO enforce expiry, so a stale entry is never returned even in the window before
+// TTL sweeps it (TTL deletion can lag up to ~24h and must not be relied on for correctness).
+//
+// Zero dependencies: the service-account JWT is signed with Node's built-in crypto and exchanged for
+// a short-lived access token, which is cached in module scope for the life of a warm instance.
+import crypto from 'crypto';
 
-async function kvCommand(args) {
-  if (!KV_URL || !KV_TOKEN) throw new Error('KV store not configured (missing REST url/token env vars)');
-  const resp = await fetch(KV_URL, {
+const FS_COLLECTION = process.env.FIRESTORE_PAIR_COLLECTION || 'pairing';
+
+function serviceAccount() {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!raw) throw new Error('Firestore not configured (missing FIREBASE_SERVICE_ACCOUNT env var)');
+  let sa;
+  try {
+    sa = JSON.parse(raw);
+  } catch {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT is not valid JSON (paste the whole service-account key)');
+  }
+  if (!sa.client_email || !sa.private_key) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT missing client_email/private_key');
+  }
+  return sa;
+}
+
+function projectId() {
+  return serviceAccount().project_id || process.env.FIREBASE_PROJECT_ID || '';
+}
+
+const b64url = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+
+let _tokenCache = { token: '', exp: 0 };
+
+async function getAccessToken() {
+  const now = Math.floor(Date.now() / 1000);
+  if (_tokenCache.token && _tokenCache.exp - 60 > now) return _tokenCache.token;
+
+  const sa = serviceAccount();
+  const signingInput =
+    `${b64url({ alg: 'RS256', typ: 'JWT' })}.` +
+    b64url({
+      iss: sa.client_email,
+      scope: 'https://www.googleapis.com/auth/datastore',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600,
+    });
+  const signature = crypto.createSign('RSA-SHA256').update(signingInput).sign(sa.private_key, 'base64url');
+  const assertion = `${signingInput}.${signature}`;
+
+  const resp = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${KV_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(args),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion,
+    }).toString(),
   });
-  if (!resp.ok) throw new Error(`KV ${args[0]} failed: ${resp.status} ${(await resp.text()).slice(0, 120)}`);
-  return (await resp.json()).result;
+  if (!resp.ok) throw new Error(`Firestore auth failed (${resp.status}): ${(await resp.text()).slice(0, 160)}`);
+  const data = await resp.json();
+  _tokenCache = { token: data.access_token, exp: now + (data.expires_in || 3600) };
+  return _tokenCache.token;
+}
+
+// Firestore REST document URL. The key (e.g. "pair:ABCD2345") becomes the document id in
+// FS_COLLECTION; encodeURIComponent keeps the ':' legal in the URL path.
+function docUrl(key) {
+  const pid = projectId();
+  if (!pid) throw new Error('Firestore project id missing (set project_id in the service account or FIREBASE_PROJECT_ID)');
+  return `https://firestore.googleapis.com/v1/projects/${pid}/databases/(default)/documents/${FS_COLLECTION}/${encodeURIComponent(key)}`;
+}
+
+async function authHeader() {
+  return { Authorization: `Bearer ${await getAccessToken()}` };
 }
 
 export const kv = {
   async get(key) {
-    const r = await kvCommand(['GET', key]);
-    if (r == null) return null;
-    try { return JSON.parse(r); } catch { return r; }
+    const resp = await fetch(docUrl(key), { headers: await authHeader() });
+    if (resp.status === 404) return null;
+    if (!resp.ok) throw new Error(`Firestore get failed: ${resp.status} ${(await resp.text()).slice(0, 120)}`);
+    const fields = (await resp.json()).fields || {};
+    const expireAt = fields.expireAt?.timestampValue;
+    if (expireAt && new Date(expireAt).getTime() <= Date.now()) {
+      // Expired but not yet swept by the TTL policy — treat as gone, and best-effort clean it up.
+      kv.del(key).catch(() => {});
+      return null;
+    }
+    const data = fields.data?.stringValue;
+    if (data == null) return null;
+    try { return JSON.parse(data); } catch { return data; }
   },
   async set(key, value, opts = {}) {
-    const args = ['SET', key, JSON.stringify(value)];
-    if (opts.ex) args.push('EX', String(opts.ex));
-    return kvCommand(args);
+    const fields = { data: { stringValue: JSON.stringify(value) } };
+    if (opts.ex) {
+      fields.expireAt = { timestampValue: new Date(Date.now() + opts.ex * 1000).toISOString() };
+    }
+    // PATCH on the document path creates-or-overwrites the doc with exactly these fields.
+    const resp = await fetch(docUrl(key), {
+      method: 'PATCH',
+      headers: { ...(await authHeader()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    });
+    if (!resp.ok) throw new Error(`Firestore set failed: ${resp.status} ${(await resp.text()).slice(0, 120)}`);
+    return 'OK';
   },
   async del(key) {
-    return kvCommand(['DEL', key]);
+    const resp = await fetch(docUrl(key), { method: 'DELETE', headers: await authHeader() });
+    if (!resp.ok && resp.status !== 404) throw new Error(`Firestore del failed: ${resp.status}`);
+    return 1;
   },
 };
 
