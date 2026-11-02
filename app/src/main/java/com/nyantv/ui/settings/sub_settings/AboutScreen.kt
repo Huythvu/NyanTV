@@ -29,9 +29,11 @@ import androidx.core.net.toUri
 @Composable
 fun AboutScreen(navController: NavController) {
     val context = LocalContext.current
-    val version = remember {
-        context.packageManager.getPackageInfo(context.packageName, 0).versionName
+    val pInfo = remember {
+        context.packageManager.getPackageInfo(context.packageName, 0)
     }
+    val version = pInfo.versionName
+    val build = remember { androidx.core.content.pm.PackageInfoCompat.getLongVersionCode(pInfo) }
 
     fun openUrl(url: String) {
         context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
@@ -69,7 +71,7 @@ fun AboutScreen(navController: NavController) {
                 )
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("NyanTV", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                    Text("v$version", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                    Text("v$version (build $build)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                 }
 
                 Spacer(Modifier.height(4.dp))
@@ -96,6 +98,16 @@ fun AboutScreen(navController: NavController) {
                     }
                 }
             }
+        }
+
+        // ── Release ──────────────────────────────────────────────────────────────
+        AboutSection(title = "Release", subtitle = "Confirm your build and see what changed") {
+            AboutTile(
+                icon = Icons.Filled.History,
+                title = "Version history",
+                subtitle = "Changelog · shows which build you're running",
+                onClick = { navController.navigate("settings/changelog") }
+            )
         }
 
         // ── Social ─────────────────────────────────────────────────────────────
