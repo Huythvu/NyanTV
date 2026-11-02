@@ -16,13 +16,20 @@ data class ChangelogEntry(
 
 val CHANGELOG: List<ChangelogEntry> = listOf(
     ChangelogEntry(
+        version = "1.3.1",
+        code = 5,
+        date = "2026-11-02",
+        changes = listOf(
+            "Fixed the video-playback crash on lib-16 sources (KissKH, Anikoto) by aligning the Video model to the current library",
+        ),
+    ),
+    ChangelogEntry(
         version = "1.3.0",
         code = 4,
         date = "2026-11-02",
         changes = listOf(
             "Compatibility with newer (extensions-lib 16) anime extensions — KissKH, AniHQ, Anichi, AniDB, Anikoto and others now load instead of crashing on the Hoster constructor",
             "Fixed lib-16 episode-list errors (SEpisode fillermark) and the network helper crash (RequestsKt.get / get\$default)",
-            "Fixed the video-playback crash on lib-16 sources (KissKH, Anikoto) by aligning the Video model to the current library",
             "More robust video playback through the hoster API, with correct eager/lazy hoster handling",
             "Player: no longer asks for server/quality every episode — uses your quality by default and remembers manual changes",
             "Player: in-entry search stays on the current anime when browsing related shows, and resets when you leave the detail",

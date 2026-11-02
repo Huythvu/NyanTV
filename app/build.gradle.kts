@@ -24,8 +24,8 @@ android {
         applicationId = "com.nyantv"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3.0"
+        versionCode = 5
+        versionName = "1.3.1"
 
         buildConfigField("String", "ANILIST_CLIENT_ID",     "\"${secret("ANILIST_CLIENT_ID")}\"")
         buildConfigField("String", "ANILIST_CLIENT_SECRET", "\"${secret("ANILIST_CLIENT_SECRET")}\"")
