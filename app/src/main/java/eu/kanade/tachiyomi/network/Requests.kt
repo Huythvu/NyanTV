@@ -160,3 +160,12 @@ suspend fun OkHttpClient.head(
 ): Response {
     return newCall(HEAD(url.toString(), headers, cache)).awaitSuccess()
 }
+
+suspend fun OkHttpClient.delete(
+    url: String,
+    headers: Headers = DEFAULT_HEADERS,
+    body: RequestBody = DEFAULT_BODY,
+    cache: CacheControl = DEFAULT_CACHE_CONTROL,
+): Response {
+    return newCall(DELETE(url, headers, body, cache)).awaitSuccess()
+}

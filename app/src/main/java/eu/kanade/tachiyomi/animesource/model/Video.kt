@@ -26,7 +26,14 @@ data class TimeStamp(
     val type: ChapterType = ChapterType.Other,
 )
 
-open class Video(
+/**
+ * extensions-lib 16 Video model. The primary constructor shape is fixed to match the library
+ * extensions are compiled against — reordering or adding/removing a parameter changes the
+ * Kotlin-generated `<init>$default` and `copy$default` descriptors and breaks every lib-16 source
+ * with a NoSuchMethodError. Legacy (lib 14) binaries are supported through the secondary
+ * constructors, the deprecated `quality`/`url` accessors, and the hidden legacy `copy` below.
+ */
+data class Video(
     var videoUrl: String = "",
     val videoTitle: String = "",
     val resolution: Int? = null,
@@ -36,23 +43,31 @@ open class Video(
     val subtitleTracks: List<Track> = emptyList(),
     val audioTracks: List<Track> = emptyList(),
     val timestamps: List<TimeStamp> = emptyList(),
+    val mpvArgs: List<Pair<String, String>> = emptyList(),
+    val ffmpegStreamArgs: List<Pair<String, String>> = emptyList(),
+    val ffmpegVideoArgs: List<Pair<String, String>> = emptyList(),
     val internalData: String = "",
     val initialized: Boolean = false,
-    // TODO(1.6): Remove after ext lib bump
-    val videoPageUrl: String = "",
 ) {
+    // Deliberately NOT a primary-constructor parameter: keeping it out preserves the exact lib-16
+    // constructor/copy synthetics. Public (upstream hides it behind `url`) because NyanTV reads
+    // videoPageUrl directly in its player code.
+    var videoPageUrl: String = ""
 
-    // TODO(1.6): Remove after ext lib bump
+    @Transient
+    @Volatile
+    var status: State = State.QUEUE
+
+    // ── Legacy (extensions-lib 14) binary compatibility ──────────────────────────────────────────
+
     @Deprecated("Use videoTitle instead", ReplaceWith("videoTitle"))
     val quality: String
         get() = videoTitle
 
-    // TODO(1.6): Remove after ext lib bump
     @Deprecated("Use videoPageUrl instead", ReplaceWith("videoPageUrl"))
     val url: String
         get() = videoPageUrl
 
-    // TODO(1.6): Remove after ext lib bump
     constructor(
         url: String,
         quality: String,
@@ -61,41 +76,15 @@ open class Video(
         subtitleTracks: List<Track> = emptyList(),
         audioTracks: List<Track> = emptyList(),
     ) : this(
-        videoPageUrl = url,
-        videoTitle = quality,
         videoUrl = videoUrl ?: "null",
+        videoTitle = quality,
         headers = headers,
         subtitleTracks = subtitleTracks,
         audioTracks = audioTracks,
-    )
+    ) {
+        videoPageUrl = url
+    }
 
-    // TODO(1.6): Remove after ext lib bump
-    constructor(
-        videoUrl: String = "",
-        videoTitle: String = "",
-        resolution: Int? = null,
-        bitrate: Int? = null,
-        headers: Headers? = null,
-        preferred: Boolean = false,
-        subtitleTracks: List<Track> = emptyList(),
-        audioTracks: List<Track> = emptyList(),
-        timestamps: List<TimeStamp> = emptyList(),
-        internalData: String = "",
-    ) : this(
-        videoUrl = videoUrl,
-        videoTitle = videoTitle,
-        resolution = resolution,
-        bitrate = bitrate,
-        headers = headers,
-        preferred = preferred,
-        subtitleTracks = subtitleTracks,
-        audioTracks = audioTracks,
-        timestamps = timestamps,
-        internalData = internalData,
-        videoPageUrl = "",
-    )
-
-    // TODO(1.6): Remove after ext lib bump
     @Suppress("UNUSED_PARAMETER")
     constructor(
         url: String,
@@ -105,68 +94,17 @@ open class Video(
         headers: Headers? = null,
     ) : this(url, quality, videoUrl, headers)
 
-    @Transient
-    @Volatile
-    var status: State = State.QUEUE
-        set(value) {
-            field = value
-        }
-
+    // Legacy lib-14 copy(url, quality, videoUrl, ...). HIDDEN so it stays callable from old extension
+    // binaries but is invisible to Kotlin source and doesn't clash with the data class copy().
+    @Deprecated("Use the data class copy with videoUrl/videoTitle", level = DeprecationLevel.HIDDEN)
     fun copy(
-        videoUrl: String = this.videoUrl,
-        videoTitle: String = this.videoTitle,
-        resolution: Int? = this.resolution,
-        bitrate: Int? = this.bitrate,
+        url: String,
+        quality: String,
+        videoUrl: String?,
         headers: Headers? = this.headers,
-        preferred: Boolean = this.preferred,
         subtitleTracks: List<Track> = this.subtitleTracks,
         audioTracks: List<Track> = this.audioTracks,
-        timestamps: List<TimeStamp> = this.timestamps,
-        internalData: String = this.internalData,
-    ): Video {
-        return Video(
-            videoUrl = videoUrl,
-            videoTitle = videoTitle,
-            resolution = resolution,
-            bitrate = bitrate,
-            headers = headers,
-            preferred = preferred,
-            subtitleTracks = subtitleTracks,
-            audioTracks = audioTracks,
-            timestamps = timestamps,
-            internalData = internalData,
-        )
-    }
-
-    fun copy(
-        videoUrl: String = this.videoUrl,
-        videoTitle: String = this.videoTitle,
-        resolution: Int? = this.resolution,
-        bitrate: Int? = this.bitrate,
-        headers: Headers? = this.headers,
-        preferred: Boolean = this.preferred,
-        subtitleTracks: List<Track> = this.subtitleTracks,
-        audioTracks: List<Track> = this.audioTracks,
-        timestamps: List<TimeStamp> = this.timestamps,
-        internalData: String = this.internalData,
-        initialized: Boolean = this.initialized,
-        videoPageUrl: String = this.videoPageUrl,
-    ): Video {
-        return Video(
-            videoUrl = videoUrl,
-            videoTitle = videoTitle,
-            resolution = resolution,
-            bitrate = bitrate,
-            headers = headers,
-            preferred = preferred,
-            subtitleTracks = subtitleTracks,
-            audioTracks = audioTracks,
-            timestamps = timestamps,
-            internalData = internalData,
-            initialized = initialized,
-            videoPageUrl = videoPageUrl,
-        )
-    }
+    ): Video = Video(url, quality, videoUrl, headers, subtitleTracks, audioTracks)
 
     enum class State {
         QUEUE,
@@ -189,7 +127,6 @@ data class SerializableVideo(
     val timestamps: List<TimeStamp> = emptyList(),
     val internalData: String = "",
     val initialized: Boolean = false,
-    // TODO(1.6): Remove after ext lib bump
     val videoPageUrl: String = "",
 ) {
 
@@ -218,22 +155,20 @@ data class SerializableVideo(
             Json.decodeFromString<List<SerializableVideo>>(this)
                 .map { sVid ->
                     Video(
-                        sVid.videoUrl,
-                        sVid.videoTitle,
-                        sVid.resolution,
-                        sVid.bitrate,
-                        sVid.headers
+                        videoUrl = sVid.videoUrl,
+                        videoTitle = sVid.videoTitle,
+                        resolution = sVid.resolution,
+                        bitrate = sVid.bitrate,
+                        headers = sVid.headers
                             ?.flatMap { it.toList() }
                             ?.let { Headers.headersOf(*it.toTypedArray()) },
-                        sVid.preferred,
-                        sVid.subtitleTracks,
-                        sVid.audioTracks,
-                        sVid.timestamps,
-                        sVid.internalData,
-                        sVid.initialized,
-                        sVid.videoPageUrl,
-                    )
+                        preferred = sVid.preferred,
+                        subtitleTracks = sVid.subtitleTracks,
+                        audioTracks = sVid.audioTracks,
+                        timestamps = sVid.timestamps,
+                        internalData = sVid.internalData,
+                        initialized = sVid.initialized,
+                    ).also { it.videoPageUrl = sVid.videoPageUrl }
                 }
     }
 }
-
